@@ -1,6 +1,10 @@
 mod machine_id;
+mod auth_checker;
+mod account_manager;
 
-use machine_id::{MachineIdRestorer, BackupInfo, MachineIds, RestoreResult};
+use machine_id::{MachineIdRestorer, BackupInfo, MachineIds, RestoreResult, ResetResult};
+use auth_checker::{AuthChecker, AuthCheckResult, TokenInfo};
+use account_manager::{AccountManager, AccountListResult, SwitchAccountResult};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -21,9 +25,31 @@ async fn get_available_backups() -> Result<Vec<BackupInfo>, String> {
 async fn extract_backup_ids(backup_path: String) -> Result<MachineIds, String> {
     let restorer = MachineIdRestorer::new()
         .map_err(|e| format!("Failed to initialize restorer: {}", e))?;
-    
+
     restorer.extract_ids_from_backup(&backup_path)
         .map_err(|e| format!("Failed to extract IDs from backup: {}", e))
+}
+
+#[tauri::command]
+async fn delete_backup(backup_path: String) -> Result<serde_json::Value, String> {
+    use std::fs;
+
+    match fs::remove_file(&backup_path) {
+        Ok(_) => {
+            println!("✅ 成功删除备份文件: {}", backup_path);
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "备份文件删除成功"
+            }))
+        },
+        Err(e) => {
+            println!("❌ 删除备份文件失败: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("删除失败: {}", e)
+            }))
+        }
+    }
 }
 
 #[tauri::command]
@@ -126,6 +152,108 @@ async fn check_cursor_installation() -> Result<bool, String> {
     Ok(restorer.db_path.exists() || restorer.sqlite_path.exists())
 }
 
+#[tauri::command]
+async fn reset_machine_ids() -> Result<ResetResult, String> {
+    let restorer = MachineIdRestorer::new()
+        .map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+    
+    restorer.reset_machine_ids()
+        .map_err(|e| format!("Failed to reset machine IDs: {}", e))
+}
+
+#[tauri::command]
+async fn complete_cursor_reset() -> Result<ResetResult, String> {
+    let restorer = MachineIdRestorer::new()
+        .map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+    
+    restorer.complete_cursor_reset()
+        .map_err(|e| format!("Failed to complete Cursor reset: {}", e))
+}
+
+#[tauri::command]
+async fn get_current_machine_ids() -> Result<Option<MachineIds>, String> {
+    let restorer = MachineIdRestorer::new()
+        .map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+    
+    restorer.get_current_machine_ids()
+        .map_err(|e| format!("Failed to get current machine IDs: {}", e))
+}
+
+#[tauri::command]
+async fn get_machine_id_file_content() -> Result<Option<String>, String> {
+    let restorer = MachineIdRestorer::new()
+        .map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+    
+    restorer.get_machine_id_file_content()
+        .map_err(|e| format!("Failed to get machine ID file content: {}", e))
+}
+
+#[tauri::command]
+async fn get_backup_directory_info() -> Result<(String, Vec<String>), String> {
+    let restorer = MachineIdRestorer::new()
+        .map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    restorer.get_backup_directory_info()
+        .map_err(|e| format!("Failed to get backup directory info: {}", e))
+}
+
+#[tauri::command]
+async fn check_user_authorization(token: String) -> Result<AuthCheckResult, String> {
+    AuthChecker::check_user_authorized(&token)
+        .await
+        .map_err(|e| format!("Failed to check user authorization: {}", e))
+}
+
+#[tauri::command]
+async fn get_token_auto() -> Result<TokenInfo, String> {
+    Ok(AuthChecker::get_token_auto())
+}
+
+#[tauri::command]
+async fn debug_cursor_paths() -> Result<Vec<String>, String> {
+    AuthChecker::debug_cursor_paths()
+        .map_err(|e| format!("Failed to debug cursor paths: {}", e))
+}
+
+// Account Management Commands
+#[tauri::command]
+async fn get_account_list() -> Result<AccountListResult, String> {
+    Ok(AccountManager::get_account_list())
+}
+
+#[tauri::command]
+async fn add_account(email: String, token: String) -> Result<serde_json::Value, String> {
+    match AccountManager::add_account(email.clone(), token) {
+        Ok(()) => Ok(serde_json::json!({
+            "success": true,
+            "message": format!("Account {} added successfully", email)
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "success": false,
+            "message": format!("Failed to add account: {}", e)
+        }))
+    }
+}
+
+#[tauri::command]
+async fn switch_account(email: String) -> Result<SwitchAccountResult, String> {
+    Ok(AccountManager::switch_account(email))
+}
+
+#[tauri::command]
+async fn remove_account(email: String) -> Result<serde_json::Value, String> {
+    match AccountManager::remove_account(email.clone()) {
+        Ok(()) => Ok(serde_json::json!({
+            "success": true,
+            "message": format!("Account {} removed successfully", email)
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "success": false,
+            "message": format!("Failed to remove account: {}", e)
+        }))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -135,9 +263,22 @@ pub fn run() {
             greet,
             get_available_backups,
             extract_backup_ids,
+            delete_backup,
             restore_machine_ids,
             get_cursor_paths,
-            check_cursor_installation
+            check_cursor_installation,
+            reset_machine_ids,
+            complete_cursor_reset,
+            get_current_machine_ids,
+            get_machine_id_file_content,
+            get_backup_directory_info,
+            check_user_authorization,
+            get_token_auto,
+            debug_cursor_paths,
+            get_account_list,
+            add_account,
+            switch_account,
+            remove_account
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
