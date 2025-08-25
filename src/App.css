@@ -1,0 +1,106 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 rounded;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-gray-500;
+}
+
+/* Smooth animations */
+* {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Code blocks */
+code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.875rem;
+}
+
+/* Loading animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Button hover effects */
+button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+button:not(:disabled):active {
+  transform: translateY(0);
+}
+
+/* Card hover effects */
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+/* Status indicators */
+.status-success {
+  @apply bg-green-100 border-green-300 text-green-800;
+}
+
+.status-error {
+  @apply bg-red-100 border-red-300 text-red-800;
+}
+
+.status-warning {
+  @apply bg-yellow-100 border-yellow-300 text-yellow-800;
+}
+
+.status-info {
+  @apply bg-blue-100 border-blue-300 text-blue-800;
+}
+
+/* Typography */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  @apply font-semibold;
+}
+
+/* Focus styles */
+button:focus,
+input:focus {
+  @apply outline-none ring-2 ring-blue-500 ring-opacity-50;
+}
+
+/* Responsive breakpoints */
+@media (max-width: 640px) {
+  .container {
+    @apply px-4;
+  }
+
+  .grid-cols-2 {
+    @apply grid-cols-1;
+  }
+}
