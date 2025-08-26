@@ -4,7 +4,7 @@ mod account_manager;
 
 use machine_id::{MachineIdRestorer, BackupInfo, MachineIds, RestoreResult, ResetResult};
 use auth_checker::{AuthChecker, AuthCheckResult, TokenInfo};
-use account_manager::{AccountManager, AccountListResult, SwitchAccountResult};
+use account_manager::{AccountManager, AccountListResult, SwitchAccountResult, LogoutResult};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -222,8 +222,8 @@ async fn get_account_list() -> Result<AccountListResult, String> {
 }
 
 #[tauri::command]
-async fn add_account(email: String, token: String) -> Result<serde_json::Value, String> {
-    match AccountManager::add_account(email.clone(), token) {
+async fn add_account(email: String, token: String, refresh_token: Option<String>) -> Result<serde_json::Value, String> {
+    match AccountManager::add_account(email.clone(), token, refresh_token) {
         Ok(()) => Ok(serde_json::json!({
             "success": true,
             "message": format!("Account {} added successfully", email)
@@ -241,6 +241,35 @@ async fn switch_account(email: String) -> Result<SwitchAccountResult, String> {
 }
 
 #[tauri::command]
+async fn switch_account_with_token(email: String, token: String, auth_type: Option<String>) -> Result<SwitchAccountResult, String> {
+    Ok(AccountManager::switch_account_with_token(email, token, auth_type))
+}
+
+#[tauri::command]
+async fn edit_account(email: String, new_token: Option<String>, new_refresh_token: Option<String>) -> Result<serde_json::Value, String> {
+    println!("🔍 [DEBUG] edit_account called with email: {}, new_token: {:?}, new_refresh_token: {:?}",
+             email, new_token.as_ref().map(|t| format!("{}...", &t[..t.len().min(10)])),
+             new_refresh_token.as_ref().map(|t| format!("{}...", &t[..t.len().min(10)])));
+
+    match AccountManager::edit_account(email.clone(), new_token, new_refresh_token) {
+        Ok(()) => {
+            println!("✅ [DEBUG] Account {} updated successfully", email);
+            Ok(serde_json::json!({
+                "success": true,
+                "message": format!("Account {} updated successfully", email)
+            }))
+        },
+        Err(e) => {
+            println!("❌ [DEBUG] Failed to update account {}: {}", email, e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to update account: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
 async fn remove_account(email: String) -> Result<serde_json::Value, String> {
     match AccountManager::remove_account(email.clone()) {
         Ok(()) => Ok(serde_json::json!({
@@ -252,6 +281,11 @@ async fn remove_account(email: String) -> Result<serde_json::Value, String> {
             "message": format!("Failed to remove account: {}", e)
         }))
     }
+}
+
+#[tauri::command]
+async fn logout_current_account() -> Result<LogoutResult, String> {
+    Ok(AccountManager::logout_current_account())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -277,8 +311,11 @@ pub fn run() {
             debug_cursor_paths,
             get_account_list,
             add_account,
+            edit_account,
             switch_account,
-            remove_account
+            switch_account_with_token,
+            remove_account,
+            logout_current_account
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

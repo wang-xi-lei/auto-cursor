@@ -1,6 +1,7 @@
 export interface AccountInfo {
   email: string;
   token: string;
+  refresh_token?: string;
   is_current: boolean;
   created_at: string;
 }
@@ -23,7 +24,18 @@ export interface AddAccountResult {
   message: string;
 }
 
+export interface EditAccountResult {
+  success: boolean;
+  message: string;
+}
+
 export interface RemoveAccountResult {
   success: boolean;
   message: string;
+}
+
+export interface LogoutResult {
+  success: boolean;
+  message: string;
+  details: string[];
 }

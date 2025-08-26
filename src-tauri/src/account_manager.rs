@@ -10,6 +10,7 @@ use std::path::PathBuf;
 pub struct AccountInfo {
     pub email: String,
     pub token: String,
+    pub refresh_token: Option<String>,
     pub is_current: bool,
     pub created_at: String,
 }
@@ -24,6 +25,13 @@ pub struct AccountListResult {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SwitchAccountResult {
+    pub success: bool,
+    pub message: String,
+    pub details: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LogoutResult {
     pub success: bool,
     pub message: String,
     pub details: Vec<String>,
@@ -155,6 +163,7 @@ impl AccountManager {
             Ok(Some(AccountInfo {
                 email,
                 token,
+                refresh_token: None, // Current account doesn't have refresh token stored separately
                 is_current: true,
                 created_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             }))
@@ -274,7 +283,7 @@ impl AccountManager {
     }
 
     /// Add a new account
-    pub fn add_account(email: String, token: String) -> Result<()> {
+    pub fn add_account(email: String, token: String, refresh_token: Option<String>) -> Result<()> {
         let mut accounts = Self::load_accounts()?;
 
         // Check if account already exists
@@ -285,6 +294,7 @@ impl AccountManager {
         let new_account = AccountInfo {
             email,
             token,
+            refresh_token,
             is_current: false,
             created_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         };
@@ -334,7 +344,70 @@ impl AccountManager {
         }
     }
 
-    /// Switch to a different account
+    /// Switch to a different account using email and token directly
+    pub fn switch_account_with_token(
+        email: String,
+        token: String,
+        auth_type: Option<String>,
+    ) -> SwitchAccountResult {
+        let mut details = Vec::new();
+        let auth_type = auth_type.unwrap_or_else(|| "Auth_0".to_string());
+
+        details.push(format!(
+            "Switching to account: {} (auth type: {})",
+            email, auth_type
+        ));
+
+        // 1. Inject email to SQLite database
+        match Self::inject_email_to_sqlite(&email) {
+            Ok(()) => {
+                details.push("Successfully injected email to SQLite database".to_string());
+            }
+            Err(e) => {
+                details.push(format!("Warning: Failed to inject email to SQLite: {}", e));
+            }
+        }
+
+        // 2. Inject token to SQLite database with auth type
+        match Self::inject_token_to_sqlite_with_auth_type(&token, &auth_type) {
+            Ok(()) => {
+                details.push(
+                    "Successfully injected token and auth type to SQLite database".to_string(),
+                );
+            }
+            Err(e) => {
+                return SwitchAccountResult {
+                    success: false,
+                    message: format!("Failed to inject token: {}", e),
+                    details,
+                };
+            }
+        }
+
+        // 3. Update storage.json if possible
+        match Self::update_storage_json(&email, &token) {
+            Ok(()) => {
+                details.push("Successfully updated storage.json".to_string());
+            }
+            Err(e) => {
+                details.push(format!("Warning: Failed to update storage.json: {}", e));
+            }
+        }
+
+        // Wait for database updates to complete (CRITICAL!)
+        println!("🔍 [DEBUG] Waiting for database updates to complete...");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        println!("✅ [DEBUG] Database update wait completed");
+        details.push("Waited for database updates to complete".to_string());
+
+        SwitchAccountResult {
+            success: true,
+            message: format!("Successfully switched to account: {}", email),
+            details,
+        }
+    }
+
+    /// Switch to a different account (legacy method - looks up from saved accounts)
     pub fn switch_account(email: String) -> SwitchAccountResult {
         let mut details = Vec::new();
 
@@ -363,22 +436,53 @@ impl AccountManager {
 
         details.push(format!("Switching to account: {}", email));
 
+        // 0. Force close Cursor processes (CRITICAL!)
+        println!("🔍 [DEBUG] Checking if Cursor is running...");
+        if Self::is_cursor_running() {
+            println!("🔍 [DEBUG] Cursor is running, force closing...");
+            match Self::force_close_cursor() {
+                Ok(()) => {
+                    println!("✅ [DEBUG] Successfully closed Cursor");
+                    details.push("Successfully closed Cursor processes".to_string());
+                }
+                Err(e) => {
+                    println!("❌ [DEBUG] Failed to close Cursor: {}", e);
+                    details.push(format!("Warning: Failed to close Cursor: {}", e));
+                }
+            }
+        } else {
+            println!("✅ [DEBUG] Cursor is not running");
+            details.push("Cursor is not running".to_string());
+        }
+
         // 1. Inject email to SQLite database
+        println!(
+            "🔍 [DEBUG] Starting email injection for: {}",
+            target_account.email
+        );
         match Self::inject_email_to_sqlite(&target_account.email) {
             Ok(()) => {
+                println!("✅ [DEBUG] Email injection successful");
                 details.push("Successfully injected email to SQLite database".to_string());
             }
             Err(e) => {
+                println!("❌ [DEBUG] Email injection failed: {}", e);
                 details.push(format!("Warning: Failed to inject email to SQLite: {}", e));
             }
         }
 
         // 2. Inject token to SQLite database
+        println!(
+            "🔍 [DEBUG] Starting token injection, token length: {}",
+            target_account.token.len()
+        );
         match Self::inject_token_to_sqlite(&target_account.token) {
             Ok(()) => {
+                println!("✅ [DEBUG] Token injection successful");
                 details.push("Successfully injected token to SQLite database".to_string());
             }
             Err(e) => {
+                println!("❌ [DEBUG] Token injection failed: {}", e);
                 return SwitchAccountResult {
                     success: false,
                     message: format!("Failed to inject token: {}", e),
@@ -419,6 +523,12 @@ impl AccountManager {
             }
         }
 
+        // Wait for database updates to complete (CRITICAL!)
+        println!("🔍 [DEBUG] Legacy switch - Waiting for database updates to complete...");
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        println!("✅ [DEBUG] Legacy switch - Database update wait completed");
+        details.push("Waited for database updates to complete".to_string());
+
         SwitchAccountResult {
             success: true,
             message: format!("Successfully switched to account: {}", email),
@@ -426,61 +536,249 @@ impl AccountManager {
         }
     }
 
-    /// Inject email to SQLite database
+    /// Inject email to SQLite database with complete email fields
     fn inject_email_to_sqlite(email: &str) -> Result<()> {
+        println!(
+            "🔍 [DEBUG] inject_email_to_sqlite called with email: {}",
+            email
+        );
+
         let (_, sqlite_path) = Self::get_cursor_paths()?;
+        println!("🔍 [DEBUG] SQLite path: {:?}", sqlite_path);
 
         if !sqlite_path.exists() {
+            println!(
+                "❌ [DEBUG] SQLite database not found at path: {:?}",
+                sqlite_path
+            );
             return Err(anyhow!("SQLite database not found"));
         }
 
+        println!("🔍 [DEBUG] Opening SQLite connection...");
         let conn = Connection::open(&sqlite_path)?;
+        println!("✅ [DEBUG] SQLite connection opened successfully");
 
-        // Try to update existing email records
-        let update_queries = vec![
-            "UPDATE ItemTable SET value = ? WHERE key LIKE '%email%'",
-            "UPDATE ItemTable SET value = ? WHERE key LIKE '%cursorAuth%' AND value LIKE '%email%'",
+        // Set database optimization parameters (skip PRAGMA for now to avoid issues)
+        println!("🔍 [DEBUG] Email - Skipping PRAGMA settings to avoid compatibility issues");
+
+        // Begin transaction
+        println!("🔍 [DEBUG] Email - Beginning transaction...");
+        conn.execute("BEGIN TRANSACTION", [])?;
+        println!("✅ [DEBUG] Email - Transaction begun successfully");
+
+        // Complete list of email fields to update - based on CursorPool_Client implementation
+        let email_fields = vec![
+            ("cursorAuth/cachedEmail", email), // Primary email field
+            ("cursor.email", email),           // Additional email field
         ];
 
-        let mut updated = false;
-        for query in update_queries {
-            match conn.execute(query, [email]) {
-                Ok(rows_affected) => {
-                    if rows_affected > 0 {
-                        updated = true;
-                        println!("Updated {} rows with query: {}", rows_affected, query);
+        let mut success_count = 0;
+
+        for (key, value) in email_fields {
+            println!("🔍 [DEBUG] Processing email field: {} = {}", key, value);
+
+            // Check if record exists using direct query
+            println!("🔍 [DEBUG] Checking if record exists for key: {}", key);
+            let exists: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM ItemTable WHERE key = ?",
+                [key],
+                |row| row.get(0),
+            )?;
+            println!("🔍 [DEBUG] Record exists check result: {}", exists);
+
+            if exists > 0 {
+                // Update existing record
+                println!(
+                    "🔍 [DEBUG] Email - Updating existing record for key: {}",
+                    key
+                );
+                match conn.execute("UPDATE ItemTable SET value = ? WHERE key = ?", [value, key]) {
+                    Ok(rows_affected) => {
+                        if rows_affected > 0 {
+                            println!(
+                                "✅ [DEBUG] Updated email field: {} (rows affected: {})",
+                                key, rows_affected
+                            );
+                            success_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ [DEBUG] Failed to update email field {}: {}", key, e);
                     }
                 }
-                Err(e) => {
-                    println!("Query failed: {}, error: {}", query, e);
+            } else {
+                // Insert new record
+                println!("🔍 [DEBUG] Email - Inserting new record for key: {}", key);
+                match conn.execute(
+                    "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
+                    [key, value],
+                ) {
+                    Ok(_) => {
+                        println!("✅ [DEBUG] Inserted new email field: {}", key);
+                        success_count += 1;
+                    }
+                    Err(e) => {
+                        println!("❌ [DEBUG] Failed to insert email field {}: {}", key, e);
+                    }
                 }
             }
         }
 
-        // If no existing records were updated, insert new ones
-        if !updated {
-            // Insert email record
-            conn.execute(
-                "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)",
-                ["cursorAuth/cachedEmail", email],
-            )?;
-
-            // Insert email in JSON format for cursorAuth
-            let auth_data = serde_json::json!({
-                "email": email,
-                "cachedEmail": email
-            });
-            conn.execute(
-                "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)",
-                ["cursorAuth", &auth_data.to_string()],
-            )?;
+        if success_count > 0 {
+            // Commit transaction
+            println!(
+                "🔍 [DEBUG] Email - Committing transaction with {} successful updates",
+                success_count
+            );
+            conn.execute("COMMIT", [])?;
+            println!(
+                "✅ [DEBUG] Successfully updated {} email fields",
+                success_count
+            );
+        } else {
+            // Rollback transaction
+            println!("❌ [DEBUG] Email - Rolling back transaction, no successful updates");
+            conn.execute("ROLLBACK", [])?;
+            return Err(anyhow!("Failed to update any email fields"));
         }
 
         Ok(())
     }
 
-    /// Inject token to SQLite database
+    /// Inject token to SQLite database with complete authentication fields
     fn inject_token_to_sqlite(token: &str) -> Result<()> {
+        println!(
+            "🔍 [DEBUG] inject_token_to_sqlite called with token length: {}",
+            token.len()
+        );
+
+        let (_, sqlite_path) = Self::get_cursor_paths()?;
+        println!(
+            "🔍 [DEBUG] Token injection - SQLite path: {:?}",
+            sqlite_path
+        );
+
+        if !sqlite_path.exists() {
+            println!(
+                "❌ [DEBUG] Token injection - SQLite database not found at path: {:?}",
+                sqlite_path
+            );
+            return Err(anyhow!("SQLite database not found"));
+        }
+
+        println!("🔍 [DEBUG] Token injection - Opening SQLite connection...");
+        let conn = Connection::open(&sqlite_path)?;
+        println!("✅ [DEBUG] Token injection - SQLite connection opened successfully");
+
+        // Process token - handle formats like "user_01XXX%3A%3Atoken" or "user_01XXX::token"
+        let processed_token = if token.contains("%3A%3A") {
+            token.split("%3A%3A").nth(1).unwrap_or(token)
+        } else if token.contains("::") {
+            token.split("::").nth(1).unwrap_or(token)
+        } else {
+            token
+        };
+
+        println!(
+            "Processing token: original length {}, processed length {}",
+            token.len(),
+            processed_token.len()
+        );
+
+        // Set database optimization parameters (skip PRAGMA for now to avoid issues)
+        println!("🔍 [DEBUG] Token - Skipping PRAGMA settings to avoid compatibility issues");
+
+        // Begin transaction
+        println!("🔍 [DEBUG] Token - Beginning transaction...");
+        conn.execute("BEGIN TRANSACTION", [])?;
+        println!("✅ [DEBUG] Token - Transaction begun successfully");
+
+        // Complete list of authentication fields to update - this is the key fix!
+        let auth_fields = vec![
+            ("cursorAuth/accessToken", processed_token),
+            ("cursorAuth/refreshToken", processed_token), // refreshToken = accessToken
+            ("cursor.accessToken", processed_token),      // Additional token field
+            ("cursorAuth/cachedSignUpType", "Auth_0"),    // Authentication type - CRITICAL!
+        ];
+
+        let mut success_count = 0;
+
+        for (key, value) in auth_fields {
+            println!("🔍 [DEBUG] Processing token field: {} = {}", key, value);
+
+            // Check if record exists using direct query
+            println!(
+                "🔍 [DEBUG] Token - Checking if record exists for key: {}",
+                key
+            );
+            let exists: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM ItemTable WHERE key = ?",
+                [key],
+                |row| row.get(0),
+            )?;
+            println!("🔍 [DEBUG] Token - Record exists check result: {}", exists);
+
+            if exists > 0 {
+                // Update existing record
+                println!(
+                    "🔍 [DEBUG] Token - Updating existing record for key: {}",
+                    key
+                );
+                match conn.execute("UPDATE ItemTable SET value = ? WHERE key = ?", [value, key]) {
+                    Ok(rows_affected) => {
+                        if rows_affected > 0 {
+                            println!(
+                                "✅ [DEBUG] Updated token field: {} (rows affected: {})",
+                                key, rows_affected
+                            );
+                            success_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        println!("❌ [DEBUG] Failed to update token field {}: {}", key, e);
+                    }
+                }
+            } else {
+                // Insert new record
+                println!("🔍 [DEBUG] Token - Inserting new record for key: {}", key);
+                match conn.execute(
+                    "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
+                    [key, value],
+                ) {
+                    Ok(_) => {
+                        println!("✅ [DEBUG] Inserted new token field: {}", key);
+                        success_count += 1;
+                    }
+                    Err(e) => {
+                        println!("❌ [DEBUG] Failed to insert token field {}: {}", key, e);
+                    }
+                }
+            }
+        }
+
+        if success_count > 0 {
+            // Commit transaction
+            println!(
+                "🔍 [DEBUG] Token - Committing transaction with {} successful updates",
+                success_count
+            );
+            conn.execute("COMMIT", [])?;
+            println!(
+                "✅ [DEBUG] Successfully updated {} authentication fields",
+                success_count
+            );
+        } else {
+            // Rollback transaction
+            println!("❌ [DEBUG] Token - Rolling back transaction, no successful updates");
+            conn.execute("ROLLBACK", [])?;
+            return Err(anyhow!("Failed to update any authentication fields"));
+        }
+
+        Ok(())
+    }
+
+    /// Inject token to SQLite database with custom auth type
+    fn inject_token_to_sqlite_with_auth_type(token: &str, auth_type: &str) -> Result<()> {
         let (_, sqlite_path) = Self::get_cursor_paths()?;
 
         if !sqlite_path.exists() {
@@ -489,86 +787,467 @@ impl AccountManager {
 
         let conn = Connection::open(&sqlite_path)?;
 
-        // Update existing token records
-        let update_queries = vec![
-            "UPDATE ItemTable SET value = ? WHERE key LIKE '%token%'",
-            "UPDATE ItemTable SET value = ? WHERE key LIKE '%accessToken%'",
+        // Process token - handle formats like "user_01XXX%3A%3Atoken" or "user_01XXX::token"
+        let processed_token = if token.contains("%3A%3A") {
+            token.split("%3A%3A").nth(1).unwrap_or(token)
+        } else if token.contains("::") {
+            token.split("::").nth(1).unwrap_or(token)
+        } else {
+            token
+        };
+
+        println!(
+            "Processing token with auth type {}: original length {}, processed length {}",
+            auth_type,
+            token.len(),
+            processed_token.len()
+        );
+
+        // Set database optimization parameters (skip PRAGMA for now to avoid issues)
+        println!("🔍 [DEBUG] Token with auth type - Skipping PRAGMA settings to avoid compatibility issues");
+
+        // Begin transaction
+        conn.execute("BEGIN TRANSACTION", [])?;
+
+        // Complete list of authentication fields to update with custom auth type
+        let auth_fields = vec![
+            ("cursorAuth/accessToken", processed_token),
+            ("cursorAuth/refreshToken", processed_token), // refreshToken = accessToken
+            ("cursor.accessToken", processed_token),      // Additional token field
+            ("cursorAuth/cachedSignUpType", auth_type),   // Custom authentication type
         ];
 
-        let mut updated = false;
-        for query in update_queries {
-            match conn.execute(query, [token]) {
-                Ok(rows_affected) => {
-                    if rows_affected > 0 {
-                        updated = true;
-                        println!("Updated {} rows with query: {}", rows_affected, query);
+        let mut success_count = 0;
+
+        for (key, value) in auth_fields {
+            // Check if record exists using direct query
+            let exists: i64 = conn.query_row(
+                "SELECT COUNT(*) FROM ItemTable WHERE key = ?",
+                [key],
+                |row| row.get(0),
+            )?;
+
+            if exists > 0 {
+                // Update existing record
+                match conn.execute("UPDATE ItemTable SET value = ? WHERE key = ?", [value, key]) {
+                    Ok(rows_affected) => {
+                        if rows_affected > 0 {
+                            println!("Updated field: {} (rows affected: {})", key, rows_affected);
+                            success_count += 1;
+                        }
+                    }
+                    Err(e) => {
+                        println!("Failed to update field {}: {}", key, e);
                     }
                 }
-                Err(e) => {
-                    println!("Query failed: {}, error: {}", query, e);
+            } else {
+                // Insert new record
+                match conn.execute(
+                    "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
+                    [key, value],
+                ) {
+                    Ok(_) => {
+                        println!("Inserted new field: {}", key);
+                        success_count += 1;
+                    }
+                    Err(e) => {
+                        println!("Failed to insert field {}: {}", key, e);
+                    }
                 }
             }
         }
 
-        // If no existing records were updated, insert new ones
-        if !updated {
-            // Insert token record
-            conn.execute(
-                "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)",
-                ["cursorAuth/accessToken", token],
-            )?;
-
-            // Insert token in JSON format
-            let token_data = serde_json::json!({
-                "token": token,
-                "accessToken": token
-            });
-            conn.execute(
-                "INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)",
-                ["cursorAuth/tokenData", &token_data.to_string()],
-            )?;
+        if success_count > 0 {
+            // Commit transaction
+            conn.execute("COMMIT", [])?;
+            println!(
+                "Successfully updated {} authentication fields with auth type {}",
+                success_count, auth_type
+            );
+        } else {
+            // Rollback transaction
+            conn.execute("ROLLBACK", [])?;
+            return Err(anyhow!("Failed to update any authentication fields"));
         }
 
         Ok(())
     }
 
-    /// Update storage.json with new email and token
+    /// Check if Cursor is running
+    fn is_cursor_running() -> bool {
+        use std::process::Command;
+
+        #[cfg(target_os = "windows")]
+        {
+            let output = Command::new("tasklist")
+                .args(&["/FI", "IMAGENAME eq Cursor.exe"])
+                .output();
+
+            if let Ok(output) = output {
+                let output_str = String::from_utf8_lossy(&output.stdout);
+                return output_str.contains("Cursor.exe");
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let output = Command::new("pgrep").args(&["-f", "Cursor"]).output();
+
+            if let Ok(output) = output {
+                return !output.stdout.is_empty();
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let output = Command::new("pgrep").args(&["-f", "cursor"]).output();
+
+            if let Ok(output) = output {
+                return !output.stdout.is_empty();
+            }
+        }
+
+        false
+    }
+
+    /// Force close Cursor processes
+    fn force_close_cursor() -> Result<()> {
+        use std::process::Command;
+
+        #[cfg(target_os = "windows")]
+        {
+            let output = Command::new("taskkill")
+                .args(&["/F", "/IM", "Cursor.exe"])
+                .output();
+
+            match output {
+                Ok(_) => {
+                    println!("✅ [DEBUG] Windows: Cursor processes terminated");
+                    Ok(())
+                }
+                Err(e) => {
+                    println!("❌ [DEBUG] Windows: Failed to terminate Cursor: {}", e);
+                    Err(anyhow!("Failed to terminate Cursor on Windows: {}", e))
+                }
+            }
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let output = Command::new("pkill").args(&["-f", "Cursor"]).output();
+
+            match output {
+                Ok(_) => {
+                    println!("✅ [DEBUG] macOS: Cursor processes terminated");
+                    Ok(())
+                }
+                Err(e) => {
+                    println!("❌ [DEBUG] macOS: Failed to terminate Cursor: {}", e);
+                    Err(anyhow!("Failed to terminate Cursor on macOS: {}", e))
+                }
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            let output = Command::new("pkill").args(&["-f", "cursor"]).output();
+
+            match output {
+                Ok(_) => {
+                    println!("✅ [DEBUG] Linux: Cursor processes terminated");
+                    Ok(())
+                }
+                Err(e) => {
+                    println!("❌ [DEBUG] Linux: Failed to terminate Cursor: {}", e);
+                    Err(anyhow!("Failed to terminate Cursor on Linux: {}", e))
+                }
+            }
+        }
+    }
+
+    /// Update storage.json with new email and token (CRITICAL for authentication!)
     fn update_storage_json(email: &str, token: &str) -> Result<()> {
+        println!(
+            "🔍 [DEBUG] Updating storage.json with email: {}, token length: {}",
+            email,
+            token.len()
+        );
+
         let (storage_path, _) = Self::get_cursor_paths()?;
+        println!("🔍 [DEBUG] Storage.json path: {:?}", storage_path);
 
         if !storage_path.exists() {
+            println!(
+                "❌ [DEBUG] storage.json not found at path: {:?}",
+                storage_path
+            );
             return Err(anyhow!("storage.json not found"));
         }
 
         let content = fs::read_to_string(&storage_path)?;
         let mut data: serde_json::Value = serde_json::from_str(&content)?;
+        println!("✅ [DEBUG] Successfully read and parsed storage.json");
 
-        // Update email fields
+        // Process token - handle formats like "user_01XXX%3A%3Atoken" or "user_01XXX::token"
+        let processed_token = if token.contains("%3A%3A") {
+            token.split("%3A%3A").nth(1).unwrap_or(token)
+        } else if token.contains("::") {
+            token.split("::").nth(1).unwrap_or(token)
+        } else {
+            token
+        };
+        println!(
+            "🔍 [DEBUG] Processed token length: {}",
+            processed_token.len()
+        );
+
+        // Update ALL critical authentication fields in storage.json
         if let Some(obj) = data.as_object_mut() {
+            // Core authentication fields - CRITICAL!
             obj.insert(
                 "cursorAuth/cachedEmail".to_string(),
                 serde_json::Value::String(email.to_string()),
             );
             obj.insert(
                 "cursorAuth/accessToken".to_string(),
-                serde_json::Value::String(token.to_string()),
+                serde_json::Value::String(processed_token.to_string()),
+            );
+            obj.insert(
+                "cursorAuth/refreshToken".to_string(),
+                serde_json::Value::String(processed_token.to_string()),
+            );
+            obj.insert(
+                "cursorAuth/cachedSignUpType".to_string(),
+                serde_json::Value::String("Auth_0".to_string()),
             );
 
-            // Update any existing email fields
-            for (key, value) in obj.iter_mut() {
-                if key.to_lowercase().contains("email") && value.is_string() {
-                    *value = serde_json::Value::String(email.to_string());
+            // Additional fields for compatibility
+            obj.insert(
+                "cursor.email".to_string(),
+                serde_json::Value::String(email.to_string()),
+            );
+            obj.insert(
+                "cursor.accessToken".to_string(),
+                serde_json::Value::String(processed_token.to_string()),
+            );
+
+            println!("✅ [DEBUG] Updated all authentication fields in storage.json");
+        }
+
+        let updated_content = serde_json::to_string_pretty(&data)?;
+        fs::write(&storage_path, updated_content)?;
+        println!("✅ [DEBUG] Successfully wrote updated storage.json");
+
+        Ok(())
+    }
+
+    /// Logout current account - clear all authentication data
+    pub fn logout_current_account() -> LogoutResult {
+        let mut details = Vec::new();
+        let mut success = true;
+
+        println!("🔍 [DEBUG] Starting logout process...");
+
+        // 1. Force close Cursor if running
+        if Self::is_cursor_running() {
+            details.push("Cursor is running, attempting to close...".to_string());
+            match Self::force_close_cursor() {
+                Ok(()) => {
+                    details.push("Successfully closed Cursor".to_string());
+                    // Wait for process to fully terminate
+                    std::thread::sleep(std::time::Duration::from_millis(1000));
                 }
-                if key.to_lowercase().contains("token") && value.is_string() {
-                    *value = serde_json::Value::String(token.to_string());
+                Err(e) => {
+                    details.push(format!("Warning: Failed to close Cursor: {}", e));
+                }
+            }
+        } else {
+            details.push("Cursor is not running".to_string());
+        }
+
+        // 2. Clear SQLite database authentication data
+        match Self::clear_sqlite_auth_data() {
+            Ok(()) => {
+                details.push("Successfully cleared SQLite authentication data".to_string());
+            }
+            Err(e) => {
+                success = false;
+                details.push(format!("Failed to clear SQLite data: {}", e));
+            }
+        }
+
+        // 3. Clear storage.json authentication data
+        match Self::clear_storage_json_auth_data() {
+            Ok(()) => {
+                details.push("Successfully cleared storage.json authentication data".to_string());
+            }
+            Err(e) => {
+                details.push(format!("Warning: Failed to clear storage.json: {}", e));
+            }
+        }
+
+        // 4. Wait for changes to be written
+        std::thread::sleep(std::time::Duration::from_millis(500));
+
+        LogoutResult {
+            success,
+            message: if success {
+                "Successfully logged out. Please restart Cursor to complete the logout process."
+                    .to_string()
+            } else {
+                "Logout completed with some warnings. Please restart Cursor.".to_string()
+            },
+            details,
+        }
+    }
+
+    /// Clear authentication data from SQLite database
+    fn clear_sqlite_auth_data() -> Result<()> {
+        println!("🔍 [DEBUG] Clearing SQLite authentication data...");
+
+        let (_, sqlite_path) = Self::get_cursor_paths()?;
+
+        if !sqlite_path.exists() {
+            println!("❌ [DEBUG] SQLite database not found");
+            return Err(anyhow!("SQLite database not found"));
+        }
+
+        let conn = Connection::open(&sqlite_path)?;
+        println!("✅ [DEBUG] SQLite connection opened successfully");
+
+        // Begin transaction
+        conn.execute("BEGIN TRANSACTION", [])?;
+
+        // List of authentication fields to clear
+        let auth_fields = vec![
+            "cursorAuth/accessToken",
+            "cursorAuth/refreshToken",
+            "cursorAuth/cachedEmail",
+            "cursorAuth/cachedSignUpType",
+            "cursor.email",
+            "cursor.accessToken",
+        ];
+
+        let mut cleared_count = 0;
+        for field in auth_fields {
+            match conn.execute("DELETE FROM ItemTable WHERE key = ?", [field]) {
+                Ok(changes) => {
+                    if changes > 0 {
+                        println!("✅ [DEBUG] Cleared field: {}", field);
+                        cleared_count += 1;
+                    } else {
+                        println!("ℹ️ [DEBUG] Field not found: {}", field);
+                    }
+                }
+                Err(e) => {
+                    println!("❌ [DEBUG] Failed to clear field {}: {}", field, e);
+                }
+            }
+        }
+
+        // Commit transaction
+        conn.execute("COMMIT", [])?;
+        println!("✅ [DEBUG] Transaction committed successfully");
+        println!("📊 [DEBUG] Cleared {} authentication fields", cleared_count);
+
+        Ok(())
+    }
+
+    /// Clear authentication data from storage.json
+    fn clear_storage_json_auth_data() -> Result<()> {
+        println!("🔍 [DEBUG] Clearing storage.json authentication data...");
+
+        let (storage_path, _) = Self::get_cursor_paths()?;
+
+        if !storage_path.exists() {
+            println!("❌ [DEBUG] storage.json not found");
+            return Err(anyhow!("storage.json not found"));
+        }
+
+        let content = fs::read_to_string(&storage_path)?;
+        let mut data: serde_json::Value = serde_json::from_str(&content)?;
+        println!("✅ [DEBUG] Successfully read storage.json");
+
+        // List of authentication fields to remove
+        let auth_fields = vec![
+            "cursorAuth/cachedEmail",
+            "cursorAuth/accessToken",
+            "cursorAuth/refreshToken",
+            "cursorAuth/cachedSignUpType",
+            "cursor.email",
+            "cursor.accessToken",
+        ];
+
+        let mut removed_count = 0;
+        if let Some(obj) = data.as_object_mut() {
+            for field in auth_fields {
+                if obj.remove(field).is_some() {
+                    println!("✅ [DEBUG] Removed field: {}", field);
+                    removed_count += 1;
+                } else {
+                    println!("ℹ️ [DEBUG] Field not found: {}", field);
                 }
             }
         }
 
         let updated_content = serde_json::to_string_pretty(&data)?;
         fs::write(&storage_path, updated_content)?;
+        println!("✅ [DEBUG] Successfully updated storage.json");
+        println!("📊 [DEBUG] Removed {} authentication fields", removed_count);
 
         Ok(())
+    }
+
+    /// Edit an existing account
+    pub fn edit_account(
+        email: String,
+        new_token: Option<String>,
+        new_refresh_token: Option<String>,
+    ) -> Result<()> {
+        println!(
+            "🔍 [DEBUG] AccountManager::edit_account called for email: {}",
+            email
+        );
+
+        let mut accounts = Self::load_accounts()?;
+        println!("🔍 [DEBUG] Loaded {} accounts", accounts.len());
+
+        let account = accounts.iter_mut().find(|acc| acc.email == email);
+
+        match account {
+            Some(acc) => {
+                println!("🔍 [DEBUG] Found account to edit: {}", acc.email);
+
+                let mut updated = false;
+                if let Some(token) = new_token {
+                    println!("🔍 [DEBUG] Updating token (length: {})", token.len());
+                    acc.token = token;
+                    updated = true;
+                }
+                if let Some(refresh_token) = new_refresh_token {
+                    println!(
+                        "🔍 [DEBUG] Updating refresh_token (length: {})",
+                        refresh_token.len()
+                    );
+                    acc.refresh_token = Some(refresh_token);
+                    updated = true;
+                }
+
+                if updated {
+                    println!("🔍 [DEBUG] Saving updated accounts to file...");
+                    Self::save_accounts(&accounts)?;
+                    println!("✅ [DEBUG] Account updated and saved successfully");
+                } else {
+                    println!("ℹ️ [DEBUG] No changes to save");
+                }
+
+                Ok(())
+            }
+            None => {
+                println!("❌ [DEBUG] Account not found: {}", email);
+                Err(anyhow!("Account not found"))
+            }
+        }
     }
 
     /// Remove an account
