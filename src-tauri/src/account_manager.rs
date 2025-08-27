@@ -11,6 +11,7 @@ pub struct AccountInfo {
     pub email: String,
     pub token: String,
     pub refresh_token: Option<String>,
+    pub workos_cursor_session_token: Option<String>,
     pub is_current: bool,
     pub created_at: String,
 }
@@ -164,6 +165,7 @@ impl AccountManager {
                 email,
                 token,
                 refresh_token: None, // Current account doesn't have refresh token stored separately
+                workos_cursor_session_token: None,
                 is_current: true,
                 created_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             }))
@@ -283,7 +285,12 @@ impl AccountManager {
     }
 
     /// Add a new account
-    pub fn add_account(email: String, token: String, refresh_token: Option<String>) -> Result<()> {
+    pub fn add_account(
+        email: String,
+        token: String,
+        refresh_token: Option<String>,
+        workos_cursor_session_token: Option<String>,
+    ) -> Result<()> {
         let mut accounts = Self::load_accounts()?;
 
         // Check if account already exists
@@ -295,6 +302,7 @@ impl AccountManager {
             email,
             token,
             refresh_token,
+            workos_cursor_session_token,
             is_current: false,
             created_at: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
         };
@@ -1203,6 +1211,7 @@ impl AccountManager {
         email: String,
         new_token: Option<String>,
         new_refresh_token: Option<String>,
+        new_workos_cursor_session_token: Option<String>,
     ) -> Result<()> {
         println!(
             "🔍 [DEBUG] AccountManager::edit_account called for email: {}",
@@ -1230,6 +1239,14 @@ impl AccountManager {
                         refresh_token.len()
                     );
                     acc.refresh_token = Some(refresh_token);
+                    updated = true;
+                }
+                if let Some(workos_token) = new_workos_cursor_session_token {
+                    println!(
+                        "🔍 [DEBUG] Updating workos_cursor_session_token (length: {})",
+                        workos_token.len()
+                    );
+                    acc.workos_cursor_session_token = Some(workos_token);
                     updated = true;
                 }
 

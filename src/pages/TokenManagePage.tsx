@@ -17,11 +17,13 @@ export const TokenManagePage: React.FC = () => {
   const [newEmail, setNewEmail] = useState("");
   const [newToken, setNewToken] = useState("");
   const [newRefreshToken, setNewRefreshToken] = useState("");
+  const [newWorkosSessionToken, setNewWorkosSessionToken] = useState("");
   const [editingAccount, setEditingAccount] = useState<AccountInfo | null>(
     null
   );
   const [editToken, setEditToken] = useState("");
   const [editRefreshToken, setEditRefreshToken] = useState("");
+  const [editWorkosSessionToken, setEditWorkosSessionToken] = useState("");
   const [quickSwitchEmail, setQuickSwitchEmail] = useState("");
   const [quickSwitchToken, setQuickSwitchToken] = useState("");
   const [quickSwitchAuthType, setQuickSwitchAuthType] = useState("Auth_0");
@@ -68,13 +70,15 @@ export const TokenManagePage: React.FC = () => {
       const result = await AccountService.addAccount(
         newEmail,
         newToken,
-        newRefreshToken || undefined
+        newRefreshToken || undefined,
+        newWorkosSessionToken || undefined
       );
       if (result.success) {
         setToast({ message: "账户添加成功", type: "success" });
         setNewEmail("");
         setNewToken("");
         setNewRefreshToken("");
+        setNewWorkosSessionToken("");
         setShowAddForm(false);
         await loadAccounts();
       } else {
@@ -246,37 +250,91 @@ export const TokenManagePage: React.FC = () => {
     });
   };
 
+  const handleDeleteCursorAccount = async (account: AccountInfo) => {
+    if (!account.workos_cursor_session_token) {
+      setToast({
+        message: "该账户没有 WorkOS Session Token，无法注销",
+        type: "error",
+      });
+      return;
+    }
+
+    setConfirmDialog({
+      show: true,
+      title: "注销 Cursor 账户",
+      message: `确定要注销账户 ${account.email} 吗？此操作将永久删除该 Cursor 账户，无法撤销！`,
+      onConfirm: async () => {
+        try {
+          const result = await AccountService.deleteAccount(
+            account.workos_cursor_session_token!
+          );
+          if (result.success) {
+            setToast({
+              message: "账户注销成功！",
+              type: "success",
+            });
+            await loadAccounts();
+          } else {
+            setToast({ message: result.message, type: "error" });
+          }
+        } catch (error) {
+          console.error("Failed to delete cursor account:", error);
+          setToast({ message: "注销账户失败", type: "error" });
+        }
+        setConfirmDialog({ ...confirmDialog, show: false });
+      },
+    });
+  };
+
   const handleEditAccount = (account: AccountInfo) => {
+    console.log("🔍 [DEBUG] handleEditAccount called with account:", account);
+
     setEditingAccount(account);
     setEditToken(account.token);
     setEditRefreshToken(account.refresh_token || "");
+    setEditWorkosSessionToken(account.workos_cursor_session_token || "");
     setShowEditForm(true);
   };
 
   const handleSaveEdit = async () => {
     if (!editingAccount) return;
+    console.log(
+      "🔍 [DEBUG] handleSaveEdit called with editingAccount:",
+      editingAccount
+    );
 
     try {
       // Determine what to update
       const tokenChanged = editToken !== editingAccount.token;
       const refreshTokenChanged =
         editRefreshToken !== (editingAccount.refresh_token || "");
+      const workosSessionTokenChanged =
+        editWorkosSessionToken !==
+        (editingAccount.workos_cursor_session_token || "");
 
       console.log("Edit save:", {
         email: editingAccount.email,
         tokenChanged,
         refreshTokenChanged,
+        workosSessionTokenChanged,
         editToken: editToken.substring(0, 10) + "...",
         editRefreshToken: editRefreshToken.substring(0, 10) + "...",
+        editWorkosSessionToken: editWorkosSessionToken.substring(0, 10) + "...",
         originalToken: editingAccount.token.substring(0, 10) + "...",
         originalRefreshToken:
           (editingAccount.refresh_token || "").substring(0, 10) + "...",
+        originalWorkosSessionToken:
+          (editingAccount.workos_cursor_session_token || "").substring(0, 10) +
+          "...",
       });
 
       const result = await AccountService.editAccount(
         editingAccount.email,
         tokenChanged ? editToken : undefined,
-        refreshTokenChanged ? editRefreshToken || undefined : undefined
+        refreshTokenChanged ? editRefreshToken || undefined : undefined,
+        workosSessionTokenChanged
+          ? editWorkosSessionToken || undefined
+          : undefined
       );
 
       if (result.success) {
@@ -285,6 +343,7 @@ export const TokenManagePage: React.FC = () => {
         setEditingAccount(null);
         setEditToken("");
         setEditRefreshToken("");
+        setEditWorkosSessionToken("");
         await loadAccounts();
       } else {
         setToast({ message: result.message, type: "error" });
@@ -300,6 +359,7 @@ export const TokenManagePage: React.FC = () => {
     setEditingAccount(null);
     setEditToken("");
     setEditRefreshToken("");
+    setEditWorkosSessionToken("");
   };
 
   const formatDate = (dateString: string) => {
@@ -420,6 +480,18 @@ export const TokenManagePage: React.FC = () => {
                     placeholder="请输入Refresh Token (可选)"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    WorkOS Session Token (可选)
+                  </label>
+                  <textarea
+                    value={newWorkosSessionToken}
+                    onChange={(e) => setNewWorkosSessionToken(e.target.value)}
+                    rows={3}
+                    className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    placeholder="请输入WorkOS Session Token (可选，用于注销账户)"
+                  />
+                </div>
                 <div className="flex space-x-3">
                   <button
                     type="button"
@@ -435,6 +507,7 @@ export const TokenManagePage: React.FC = () => {
                       setNewEmail("");
                       setNewToken("");
                       setNewRefreshToken("");
+                      setNewWorkosSessionToken("");
                     }}
                     className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
@@ -560,6 +633,16 @@ export const TokenManagePage: React.FC = () => {
                             {account.refresh_token.substring(0, 20)}...
                           </p>
                         )}
+                        {account.workos_cursor_session_token && (
+                          <p className="text-xs text-gray-500">
+                            WorkOS Session Token:{" "}
+                            {account.workos_cursor_session_token.substring(
+                              0,
+                              20
+                            )}
+                            ...
+                          </p>
+                        )}
                       </div>
                       <div className="flex space-x-2">
                         <button
@@ -569,6 +652,15 @@ export const TokenManagePage: React.FC = () => {
                         >
                           ✏️ 编辑
                         </button>
+                        {account.workos_cursor_session_token && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteCursorAccount(account)}
+                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-red-700 bg-red-100 border border-transparent rounded hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                          >
+                            🚨 注销账户
+                          </button>
+                        )}
                         {!account.is_current && (
                           <>
                             <button
@@ -629,6 +721,18 @@ export const TokenManagePage: React.FC = () => {
                   rows={3}
                   className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="请输入Refresh Token (可选)"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  WorkOS Session Token (可选)
+                </label>
+                <textarea
+                  value={editWorkosSessionToken}
+                  onChange={(e) => setEditWorkosSessionToken(e.target.value)}
+                  rows={3}
+                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  placeholder="请输入WorkOS Session Token (可选，用于注销账户)"
                 />
               </div>
               <div className="flex justify-end space-x-3">

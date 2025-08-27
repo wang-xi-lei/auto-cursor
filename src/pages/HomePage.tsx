@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { CursorService } from "../services/cursorService";
+
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { Button } from "../components/Button";
 
@@ -10,6 +11,8 @@ export const HomePage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
+
+  const [debugLoading, setDebugLoading] = useState(false);
 
   useEffect(() => {
     checkCursorInstallation();
@@ -53,24 +56,28 @@ export const HomePage: React.FC = () => {
       </div>
 
       {/* Status Card */}
-      <div className="bg-white shadow rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-4">
+      <div className="p-6 bg-white rounded-lg shadow">
+        <h2 className="mb-4 text-lg font-medium text-gray-900">
           🔍 Cursor 安装状态
         </h2>
-        
+
         {cursorInstalled === true ? (
           <div className="space-y-4">
             <div className="flex items-center">
-              <span className="text-green-500 text-xl mr-2">✅</span>
-              <span className="text-green-700 font-medium">Cursor 已安装</span>
+              <span className="mr-2 text-xl text-green-500">✅</span>
+              <span className="font-medium text-green-700">Cursor 已安装</span>
             </div>
-            
+
             {cursorPaths && (
-              <div className="bg-green-50 p-4 rounded-md">
-                <h3 className="font-medium text-green-800 mb-2">安装路径:</h3>
+              <div className="p-4 rounded-md bg-green-50">
+                <h3 className="mb-2 font-medium text-green-800">安装路径:</h3>
                 <div className="space-y-1 text-sm text-green-700">
-                  <p><strong>应用路径:</strong> {cursorPaths[0]}</p>
-                  <p><strong>配置路径:</strong> {cursorPaths[1]}</p>
+                  <p>
+                    <strong>应用路径:</strong> {cursorPaths[0]}
+                  </p>
+                  <p>
+                    <strong>配置路径:</strong> {cursorPaths[1]}
+                  </p>
                 </div>
               </div>
             )}
@@ -78,15 +85,17 @@ export const HomePage: React.FC = () => {
         ) : (
           <div className="space-y-4">
             <div className="flex items-center">
-              <span className="text-red-500 text-xl mr-2">❌</span>
-              <span className="text-red-700 font-medium">未检测到 Cursor 安装</span>
+              <span className="mr-2 text-xl text-red-500">❌</span>
+              <span className="font-medium text-red-700">
+                未检测到 Cursor 安装
+              </span>
             </div>
-            
-            <div className="bg-red-50 p-4 rounded-md">
-              <p className="text-red-700 text-sm mb-2">
+
+            <div className="p-4 rounded-md bg-red-50">
+              <p className="mb-2 text-sm text-red-700">
                 请确保 Cursor 已正确安装并至少运行过一次。
               </p>
-              
+
               <Button
                 variant="secondary"
                 size="sm"
@@ -94,11 +103,14 @@ export const HomePage: React.FC = () => {
               >
                 {showDebug ? "隐藏" : "显示"}调试信息
               </Button>
-              
+
               {showDebug && debugInfo.length > 0 && (
                 <div className="mt-3 space-y-1">
                   {debugInfo.map((info, index) => (
-                    <p key={index} className="text-xs text-red-600 bg-red-100 p-2 rounded">
+                    <p
+                      key={index}
+                      className="p-2 text-xs text-red-600 bg-red-100 rounded"
+                    >
                       {info}
                     </p>
                   ))}
@@ -111,16 +123,16 @@ export const HomePage: React.FC = () => {
 
       {/* Action Cards */}
       {cursorInstalled && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Machine ID Management */}
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="p-6 bg-white rounded-lg shadow">
             <div className="flex items-center mb-4">
-              <span className="text-2xl mr-3">🔧</span>
+              <span className="mr-3 text-2xl">🔧</span>
               <h3 className="text-lg font-medium text-gray-900">
                 Machine ID 管理
               </h3>
             </div>
-            <p className="text-gray-600 mb-4">
+            <p className="mb-4 text-gray-600">
               查看、备份、恢复或重置 Cursor 的 Machine ID
             </p>
             <Link to="/machine-id">
@@ -131,14 +143,12 @@ export const HomePage: React.FC = () => {
           </div>
 
           {/* Auth Check */}
-          <div className="bg-white shadow rounded-lg p-6">
+          <div className="p-6 bg-white rounded-lg shadow">
             <div className="flex items-center mb-4">
-              <span className="text-2xl mr-3">🔐</span>
-              <h3 className="text-lg font-medium text-gray-900">
-                授权检查
-              </h3>
+              <span className="mr-3 text-2xl">🔐</span>
+              <h3 className="text-lg font-medium text-gray-900">授权检查</h3>
             </div>
-            <p className="text-gray-600 mb-4">
+            <p className="mb-4 text-gray-600">
               检查 Cursor 账户授权状态和订阅信息
             </p>
             <Link to="/auth-check">

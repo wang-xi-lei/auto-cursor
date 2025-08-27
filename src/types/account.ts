@@ -2,6 +2,7 @@ export interface AccountInfo {
   email: string;
   token: string;
   refresh_token?: string;
+  workos_cursor_session_token?: string;
   is_current: boolean;
   created_at: string;
 }

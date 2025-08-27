@@ -14,12 +14,38 @@ export class AccountService {
     return await invoke<AccountListResult>("get_account_list");
   }
 
+  // Real delete account API - calls cursor.com/api/dashboard/delete-account via Rust backend
+  static async deleteAccount(workosSessionToken: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🔄 通过 Rust 后端调用 Cursor 删除账户 API...');
+
+      const result = await invoke<any>("delete_cursor_account", {
+        workosCursorSessionToken: workosSessionToken
+      });
+
+      console.log('📥 Rust 后端响应:', result);
+
+      return {
+        success: result.success || false,
+        message: result.message || '未知响应'
+      };
+    } catch (error) {
+      console.error('调用 Rust 后端失败:', error);
+
+      return {
+        success: false,
+        message: `❌ 调用后端失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+  }
+
   // Add a new account
-  static async addAccount(email: string, token: string, refreshToken?: string): Promise<AddAccountResult> {
+  static async addAccount(email: string, token: string, refreshToken?: string, workosSessionToken?: string): Promise<AddAccountResult> {
     return await invoke<AddAccountResult>("add_account", {
       email,
       token,
-      refresh_token: refreshToken || null
+      refreshToken: refreshToken || null,
+      workosCursorSessionToken: workosSessionToken || null
     });
   }
 
@@ -45,12 +71,14 @@ export class AccountService {
   static async editAccount(
     email: string,
     newToken?: string,
-    newRefreshToken?: string
+    newRefreshToken?: string,
+    newWorkosSessionToken?: string
   ): Promise<EditAccountResult> {
     return await invoke<EditAccountResult>("edit_account", {
       email,
       newToken: newToken || null,
-      newRefreshToken: newRefreshToken || null
+      newRefreshToken: newRefreshToken || null,
+      newWorkosCursorSessionToken: newWorkosSessionToken || null
     });
   }
 
