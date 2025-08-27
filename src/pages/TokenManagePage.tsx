@@ -11,6 +11,9 @@ export const TokenManagePage: React.FC = () => {
     null
   );
   const [loading, setLoading] = useState(true);
+  const [cancelSubscriptionLoading, setCancelSubscriptionLoading] = useState<
+    string | null
+  >(null); // 存储正在处理的账户邮箱
   const [showAddForm, setShowAddForm] = useState(false);
   const [showQuickSwitchForm, setShowQuickSwitchForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -40,6 +43,47 @@ export const TokenManagePage: React.FC = () => {
 
   useEffect(() => {
     loadAccounts();
+
+    // 设置取消订阅事件监听器
+    let cleanupListeners: (() => void) | null = null;
+
+    const setupListeners = async () => {
+      const { listen } = await import("@tauri-apps/api/event");
+
+      const successUnlisten = await listen(
+        "cancel-subscription-success",
+        () => {
+          console.log("Cancel subscription success event received");
+          setCancelSubscriptionLoading(null);
+          setToast({
+            message: "取消订阅页面已打开，请继续完成操作",
+            type: "success",
+          });
+        }
+      );
+
+      const failedUnlisten = await listen("cancel-subscription-failed", () => {
+        console.log("Cancel subscription failed event received");
+        setCancelSubscriptionLoading(null);
+        setToast({
+          message: "未找到取消订阅按钮，请手动操作",
+          type: "error",
+        });
+      });
+
+      cleanupListeners = () => {
+        successUnlisten();
+        failedUnlisten();
+      };
+    };
+
+    setupListeners();
+
+    return () => {
+      if (cleanupListeners) {
+        cleanupListeners();
+      }
+    };
   }, []);
 
   const loadAccounts = async () => {
@@ -284,6 +328,46 @@ export const TokenManagePage: React.FC = () => {
         setConfirmDialog({ ...confirmDialog, show: false });
       },
     });
+  };
+
+  const handleCancelSubscription = async (account: AccountInfo) => {
+    if (!account.workos_cursor_session_token) {
+      setToast({
+        message: "该账户没有 WorkOS Session Token，无法取消订阅",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      setCancelSubscriptionLoading(account.email);
+      setToast({
+        message: "正在打开取消订阅页面，请稍候...",
+        type: "success",
+      });
+
+      const result = await AccountService.openCancelSubscriptionPage(
+        account.workos_cursor_session_token
+      );
+
+      if (result.success) {
+        // 不要关闭 toast，等待 Rust 端的事件响应
+        // setToast 会在事件监听器中处理
+      } else {
+        setCancelSubscriptionLoading(null);
+        setToast({
+          message: result.message,
+          type: "error",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to open cancel subscription page:", error);
+      setCancelSubscriptionLoading(null);
+      setToast({
+        message: "打开取消订阅页面失败",
+        type: "error",
+      });
+    }
   };
 
   const handleEditAccount = (account: AccountInfo) => {
@@ -653,13 +737,31 @@ export const TokenManagePage: React.FC = () => {
                           ✏️ 编辑
                         </button>
                         {account.workos_cursor_session_token && (
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCursorAccount(account)}
-                            className="inline-flex items-center px-3 py-1 text-xs font-medium text-red-700 bg-red-100 border border-transparent rounded hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                          >
-                            🚨 注销账户
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleCancelSubscription(account)}
+                              disabled={
+                                cancelSubscriptionLoading === account.email
+                              }
+                              className={`inline-flex items-center px-3 py-1 text-xs font-medium border border-transparent rounded focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                cancelSubscriptionLoading === account.email
+                                  ? "text-gray-500 bg-gray-100 cursor-not-allowed"
+                                  : "text-orange-700 bg-orange-100 hover:bg-orange-200 focus:ring-orange-500"
+                              }`}
+                            >
+                              {cancelSubscriptionLoading === account.email
+                                ? "🔄 处理中..."
+                                : "📋 取消订阅"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCursorAccount(account)}
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium text-red-700 bg-red-100 border border-transparent rounded hover:bg-red-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                            >
+                              🚨 注销账户
+                            </button>
+                          </>
                         )}
                         {!account.is_current && (
                           <>

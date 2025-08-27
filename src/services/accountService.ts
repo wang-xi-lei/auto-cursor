@@ -91,4 +91,31 @@ export class AccountService {
   static async logoutCurrentAccount(): Promise<LogoutResult> {
     return await invoke<LogoutResult>("logout_current_account");
   }
+
+  // Open cancel subscription page with WorkOS Session Token
+  static async openCancelSubscriptionPage(workosSessionToken: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🔄 Opening cancel subscription page...');
+
+      const result = await invoke<any>("open_cancel_subscription_page", {
+        workosCursorSessionToken: workosSessionToken
+      });
+
+      console.log('📥 Open page result:', result);
+
+      return {
+        success: result.success || false,
+        message: result.message || '未知响应'
+      };
+    } catch (error) {
+      console.error('Failed to open cancel subscription page:', error);
+
+      return {
+        success: false,
+        message: `❌ 打开页面失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+  }
+
+
 }

@@ -5,6 +5,7 @@ mod machine_id;
 use account_manager::{AccountListResult, AccountManager, LogoutResult, SwitchAccountResult};
 use auth_checker::{AuthCheckResult, AuthChecker, TokenInfo};
 use machine_id::{BackupInfo, MachineIdRestorer, MachineIds, ResetResult, RestoreResult};
+use tauri::{Emitter, Manager};
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -331,6 +332,297 @@ async fn logout_current_account() -> Result<LogoutResult, String> {
 }
 
 #[tauri::command]
+async fn open_cancel_subscription_page(
+    app: tauri::AppHandle,
+    workos_cursor_session_token: String,
+) -> Result<serde_json::Value, String> {
+    println!("🔄 Opening cancel subscription page with WorkOS token...");
+
+    let url = "https://cursor.com/";
+
+    // 先尝试关闭已存在的窗口
+    if let Some(existing_window) = app.get_webview_window("cancel_subscription") {
+        println!("🔄 Closing existing cancel subscription window...");
+        if let Err(e) = existing_window.close() {
+            println!("❌ Failed to close existing window: {}", e);
+        } else {
+            println!("✅ Existing window closed successfully");
+        }
+        // 等待一小段时间确保窗口完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    // 创建新的 WebView 窗口（默认隐藏）
+    let webview_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "cancel_subscription",
+        tauri::WebviewUrl::External(url.parse().unwrap()),
+    )
+    .title("Cursor - 取消订阅")
+    .inner_size(1200.0, 800.0)
+    .resizable(true)
+    .visible(false) // 默认隐藏窗口
+    .build();
+
+    match webview_window {
+        Ok(window) => {
+            // 等待页面加载完成后注入 cookie
+            let token = workos_cursor_session_token.clone();
+            let window_clone = window.clone();
+
+            // 使用 tauri::async_runtime::spawn 来处理异步操作
+            tauri::async_runtime::spawn(async move {
+                // 等待一段时间让页面加载
+                tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+
+                // 第一步：注入 cookie
+                let cookie_script = format!(
+                    r#"
+                    document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
+                    console.log('Cookie injected successfully');
+                    "#,
+                    token
+                );
+
+                if let Err(e) = window_clone.eval(&cookie_script) {
+                    println!("❌ Failed to inject cookie: {}", e);
+                    return;
+                } else {
+                    println!("✅ Cookie injected successfully");
+                }
+
+                // 第二步：跳转到billing页面
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                let navigation_script = r#"
+                    console.log('Navigating to billing page...');
+                    window.location.href = 'https://cursor.com/dashboard?tab=billing';
+                "#;
+
+                if let Err(e) = window_clone.eval(navigation_script) {
+                    println!("❌ Failed to navigate: {}", e);
+                    return;
+                } else {
+                    println!("✅ Navigation initiated");
+                }
+            });
+
+            // 监听页面导航事件，在新页面加载后注入按钮点击脚本
+            let window_for_button_click = window.clone();
+
+            // 使用另一个异步任务来处理按钮点击
+            tauri::async_runtime::spawn(async move {
+                // 等待页面跳转和加载
+                tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+
+                // 首先检查当前页面URL是否正确
+                let url_check_script = r#"
+                    console.log('Current URL:', window.location.href);
+                    if (!window.location.href.includes('cursor.com/dashboard')) {
+                        console.log('Not on dashboard page, navigating...');
+                        window.location.href = 'https://cursor.com/dashboard?tab=billing';
+                        false; // 表示需要重新导航
+                    } else {
+                        console.log('Already on dashboard page');
+                        true; // 表示可以继续查找按钮
+                    }
+                "#;
+
+                // 检查页面URL
+                match window_for_button_click.eval(url_check_script) {
+                    Ok(_) => {
+                        // 等待一段时间让页面稳定
+                        tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+                    }
+                    Err(e) => {
+                        println!("❌ Failed to check URL: {}", e);
+                        return;
+                    }
+                }
+
+                // 注入查找并点击按钮的脚本
+                let button_click_script = r#"
+                    console.log('Looking for cancel subscription button...');
+
+                    function findAndClickCancelButton() {
+                        console.log('Current page URL:', window.location.href);
+                        console.log('Page title:', document.title);
+
+                        // 确保我们在正确的页面上
+                        if (!window.location.href.includes('cursor.com/dashboard')) {
+                            console.log('Not on dashboard page, redirecting...');
+                            window.location.href = 'https://cursor.com/dashboard?tab=billing';
+                            return false;
+                        }
+
+                        // 等待页面元素加载
+                        if (document.readyState !== 'complete') {
+                            console.log('Page not fully loaded, waiting...');
+                            return false;
+                        }
+
+                        // 查找具有指定类名的按钮
+                        const buttons = document.querySelectorAll('button.dashboard-outline-button.dashboard-outline-button-medium');
+                        console.log('Found buttons with target classes:', buttons.length);
+
+                        // 打印所有按钮的文本内容用于调试
+                        buttons.forEach((btn, index) => {
+                            console.log(`Button ${index}: "${btn.textContent?.trim()}"`);
+                        });
+
+                        for (let button of buttons) {
+                            const buttonText = button.textContent?.trim() || '';
+                            console.log('Checking button text:', buttonText);
+
+                            // 查找包含取消订阅相关文本的按钮
+                            if (buttonText && (
+                                buttonText.toLowerCase().includes('cancel') ||
+                                buttonText.toLowerCase().includes('unsubscribe') ||
+                                buttonText.toLowerCase().includes('manage subscription') ||
+                                buttonText.toLowerCase().includes('manage') ||
+                                buttonText.toLowerCase().includes('subscription') ||
+                                buttonText.includes('取消') ||
+                                buttonText.includes('订阅')
+                            )) {
+                                console.log('Found potential cancel subscription button:', buttonText);
+                                button.click();
+                                console.log('Button clicked');
+
+                                // 等待一段时间后再次点击确保操作生效
+                                setTimeout(() => {
+                                    button.click();
+                                    console.log('Button clicked again');
+                                     window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
+                                    // 通知 Rust 端显示窗口
+                                    setTimeout(() => {
+                                        button.click();
+                                        window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
+                                        console.log('Notified Rust to show window');
+                                    }, 500);
+                                }, 500);
+                                return true;
+                            }
+                        }
+
+                        // 如果没找到，尝试查找所有相关按钮
+                        console.log('No buttons found with specified classes, searching all buttons...');
+                        const allButtons = document.querySelectorAll('button');
+                        console.log('Total buttons found:', allButtons.length);
+
+                        for (let button of allButtons) {
+                            const buttonText = button.textContent?.trim() || '';
+                            if (buttonText && (
+                                buttonText.toLowerCase().includes('cancel') ||
+                                buttonText.toLowerCase().includes('unsubscribe') ||
+                                buttonText.toLowerCase().includes('manage subscription') ||
+                                buttonText.toLowerCase().includes('manage') ||
+                                buttonText.toLowerCase().includes('subscription') ||
+                                buttonText.includes('取消') ||
+                                buttonText.includes('订阅')
+                            )) {
+                                console.log('Found cancel button in all buttons:', buttonText);
+                                button.click();
+                                console.log('All buttons search - button clicked');
+
+                                // 通知 Rust 端显示窗口
+                                setTimeout(() => {
+                                    window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
+                                    console.log('All buttons search - notified Rust to show window');
+                                }, 500);
+                                return true;
+                            }
+                        }
+
+                        return false;
+                    }
+
+                    // 智能等待并查找按钮
+                    function waitAndFindButton(maxAttempts = 15) {
+                        let attempts = 0;
+
+                        function tryFind() {
+                            attempts++;
+                            console.log(`Searching for button, attempt ${attempts}/${maxAttempts}`);
+
+                            if (findAndClickCancelButton()) {
+                                console.log('Button found and clicked successfully!');
+                                return;
+                            }
+
+                            if (attempts < maxAttempts) {
+                                setTimeout(tryFind, 1000); // 每1000ms尝试一次
+                            } else {
+                                console.log('Max attempts reached, button not found');
+                                // 通知 Rust 端操作失败
+                                window.__TAURI_INTERNALS__.invoke('cancel_subscription_failed');
+                            }
+                        }
+
+                        tryFind();
+                    }
+
+                    // 开始查找按钮
+                    waitAndFindButton();
+                "#;
+
+                if let Err(e) = window_for_button_click.eval(button_click_script) {
+                    println!("❌ Failed to inject button click script: {}", e);
+                } else {
+                    println!("✅ Button click script injected successfully");
+                }
+            });
+
+            println!("✅ Successfully opened WebView window");
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "已打开取消订阅页面，正在自动登录..."
+            }))
+        }
+        Err(e) => {
+            println!("❌ Failed to create WebView window: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("无法打开内置浏览器: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn show_cancel_subscription_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("cancel_subscription") {
+        // 延迟1500ms再显示窗口
+        tokio::time::sleep(tokio::time::Duration::from_millis(2500)).await;
+
+        window
+            .show()
+            .map_err(|e| format!("Failed to show window: {}", e))?;
+        println!("✅ Cancel subscription window shown");
+
+        // 发送事件通知前端操作成功
+        if let Err(e) = app.emit("cancel-subscription-success", ()) {
+            println!("❌ Failed to emit success event: {}", e);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn cancel_subscription_failed(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("cancel_subscription") {
+        window
+            .close()
+            .map_err(|e| format!("Failed to close window: {}", e))?;
+        println!("❌ Cancel subscription failed, window closed");
+
+        // 发送事件通知前端操作失败
+        if let Err(e) = app.emit("cancel-subscription-failed", ()) {
+            println!("❌ Failed to emit failed event: {}", e);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn delete_cursor_account(
     workos_cursor_session_token: String,
 ) -> Result<serde_json::Value, String> {
@@ -473,6 +765,9 @@ pub fn run() {
             switch_account_with_token,
             remove_account,
             logout_current_account,
+            open_cancel_subscription_page,
+            show_cancel_subscription_window,
+            cancel_subscription_failed,
             delete_cursor_account
         ])
         .run(tauri::generate_context!())
