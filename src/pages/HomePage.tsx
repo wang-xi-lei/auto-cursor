@@ -4,6 +4,7 @@ import { CursorService } from "../services/cursorService";
 
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { Button } from "../components/Button";
+import logoSvg from "../assets/logo.svg";
 
 export const HomePage: React.FC = () => {
   const [cursorInstalled, setCursorInstalled] = useState<boolean | null>(null);
@@ -47,11 +48,19 @@ export const HomePage: React.FC = () => {
     <div className="space-y-6">
       {/* Header */}
       <div className="text-center">
-        <h1 className="text-3xl font-bold text-gray-900">
-          Cursor Machine ID Restorer
-        </h1>
-        <p className="mt-2 text-lg text-gray-600">
-          管理和恢复 Cursor 的 Machine ID
+        <div className="flex items-center justify-center mb-4">
+          <img
+            src={logoSvg}
+            alt="Cursor Manager Logo"
+            className="w-16 h-16 mr-4"
+          />
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Cursor Manager</h1>
+            <p className="text-lg text-gray-600">AI 代码助手管理工具</p>
+          </div>
+        </div>
+        <p className="mt-2 text-base text-gray-500">
+          管理和恢复 Cursor 的 Machine ID、查看使用统计、账号管理
         </p>
       </div>
 
