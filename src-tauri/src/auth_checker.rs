@@ -1,13 +1,13 @@
+use anyhow::{anyhow, Result};
+use base64::{engine::general_purpose, Engine as _};
+use dirs;
+use regex::Regex;
+use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::time::{SystemTime, UNIX_EPOCH};
-use anyhow::{Result, anyhow};
-use base64::{Engine as _, engine::general_purpose};
-use std::path::PathBuf;
 use std::fs;
-use dirs;
-use rusqlite::Connection;
-use regex::Regex;
+use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserAuthInfo {
@@ -28,6 +28,164 @@ pub struct AccountInfo {
     pub subscription_status: Option<String>,
     pub trial_days_remaining: Option<i32>,
     pub usage_info: Option<String>,
+    pub aggregated_usage: Option<AggregatedUsageData>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AggregatedUsageData {
+    pub aggregations: Vec<ModelUsage>,
+    pub total_input_tokens: String,
+    pub total_output_tokens: String,
+    pub total_cache_write_tokens: String,
+    pub total_cache_read_tokens: String,
+    pub total_cost_cents: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelUsage {
+    pub model_intent: String,
+    pub input_tokens: String,
+    pub output_tokens: String,
+    pub cache_write_tokens: String,
+    pub cache_read_tokens: String,
+    pub total_cents: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageRequest {
+    pub start_date: u64,
+    pub end_date: u64,
+    pub team_id: i32,
+}
+
+// 用户分析数据结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserAnalyticsData {
+    #[serde(rename = "dailyMetrics")]
+    pub daily_metrics: Vec<DailyMetric>,
+    pub period: Period,
+    #[serde(rename = "totalMembersInTeam")]
+    pub total_members_in_team: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DailyMetric {
+    pub date: String,
+    #[serde(rename = "activeUsers", default)]
+    pub active_users: Option<i32>,
+    #[serde(rename = "acceptedLinesAdded", default)]
+    pub accepted_lines_added: Option<i32>,
+    #[serde(rename = "acceptedLinesDeleted", default)]
+    pub accepted_lines_deleted: Option<i32>,
+    #[serde(rename = "totalApplies", default)]
+    pub total_applies: Option<i32>,
+    #[serde(rename = "totalAccepts", default)]
+    pub total_accepts: Option<i32>,
+    #[serde(rename = "totalTabsShown", default)]
+    pub total_tabs_shown: Option<i32>,
+    #[serde(rename = "totalTabsAccepted", default)]
+    pub total_tabs_accepted: Option<i32>,
+    #[serde(rename = "composerRequests", default)]
+    pub composer_requests: Option<i32>,
+    #[serde(rename = "agentRequests", default)]
+    pub agent_requests: Option<i32>,
+    #[serde(rename = "subscriptionIncludedReqs", default)]
+    pub subscription_included_reqs: Option<i32>,
+    #[serde(rename = "modelUsage", default)]
+    pub model_usage: Option<Vec<ModelCount>>,
+    #[serde(rename = "extensionUsage", default)]
+    pub extension_usage: Option<Vec<NameCount>>,
+    #[serde(rename = "tabExtensionUsage", default)]
+    pub tab_extension_usage: Option<Vec<NameCount>>,
+    #[serde(rename = "clientVersionUsage", default)]
+    pub client_version_usage: Option<Vec<NameCount>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Period {
+    #[serde(rename = "startDate")]
+    pub start_date: String,
+    #[serde(rename = "endDate")]
+    pub end_date: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelCount {
+    pub name: String,
+    pub count: i32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NameCount {
+    pub name: String,
+    pub count: i32,
+}
+
+// 过滤的使用事件数据结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilteredUsageEventsData {
+    #[serde(rename = "totalUsageEventsCount")]
+    pub total_usage_events_count: i32,
+    #[serde(rename = "usageEventsDisplay")]
+    pub usage_events_display: Vec<UsageEventDisplay>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UsageEventDisplay {
+    pub timestamp: String,
+    pub model: String,
+    pub kind: String,
+    #[serde(rename = "requestsCosts", default)]
+    pub requests_costs: Option<f64>,
+    #[serde(rename = "usageBasedCosts")]
+    pub usage_based_costs: String,
+    #[serde(rename = "isTokenBasedCall")]
+    pub is_token_based_call: bool,
+    #[serde(rename = "tokenUsage", default)]
+    pub token_usage: Option<TokenUsageDetail>,
+    #[serde(rename = "owningUser")]
+    pub owning_user: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenUsageDetail {
+    #[serde(rename = "inputTokens")]
+    pub input_tokens: Option<i32>,
+    #[serde(rename = "outputTokens")]
+    pub output_tokens: Option<i32>,
+    #[serde(rename = "cacheWriteTokens")]
+    pub cache_write_tokens: Option<i32>,
+    #[serde(rename = "cacheReadTokens")]
+    pub cache_read_tokens: Option<i32>,
+    #[serde(rename = "totalCents")]
+    pub total_cents: Option<f64>,
+}
+
+// 过滤使用事件请求结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FilteredUsageRequest {
+    #[serde(rename = "teamId")]
+    pub team_id: i32,
+    #[serde(rename = "startDate")]
+    pub start_date: String,
+    #[serde(rename = "endDate")]
+    pub end_date: String,
+    pub page: i32,
+    #[serde(rename = "pageSize")]
+    pub page_size: i32,
+}
+
+// 用户分析请求结构
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserAnalyticsRequest {
+    #[serde(rename = "teamId")]
+    pub team_id: i32,
+    #[serde(rename = "userId")]
+    pub user_id: i32,
+    #[serde(rename = "startDate")]
+    pub start_date: String,
+    #[serde(rename = "endDate")]
+    pub end_date: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -55,8 +213,7 @@ impl AuthChecker {
 
     /// Find Cursor installation paths by searching common locations
     fn find_cursor_paths() -> Result<Vec<PathBuf>> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow!("Could not find home directory"))?;
+        let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
 
         let mut possible_paths = Vec::new();
 
@@ -110,7 +267,7 @@ impl AuthChecker {
         // Try each found path to see if it contains the expected structure
         for base_path in &cursor_paths {
             let storage_path = base_path.join("User/globalStorage/storage.json");
-            let sqlite_path = base_path.join("User/globalStorage/state.vscdb");  // 修正：指向具体的 SQLite 文件
+            let sqlite_path = base_path.join("User/globalStorage/state.vscdb"); // 修正：指向具体的 SQLite 文件
             let session_path = base_path.join("Session Storage");
 
             // If at least one of these paths exists, use this base path
@@ -122,7 +279,7 @@ impl AuthChecker {
         // If no valid structure found, return the first path anyway for error reporting
         let base_path = &cursor_paths[0];
         let storage_path = base_path.join("User/globalStorage/storage.json");
-        let sqlite_path = base_path.join("User/globalStorage/state.vscdb");  // 修正：指向具体的 SQLite 文件
+        let sqlite_path = base_path.join("User/globalStorage/state.vscdb"); // 修正：指向具体的 SQLite 文件
         let session_path = base_path.join("Session Storage");
 
         Ok((storage_path, sqlite_path, session_path))
@@ -138,7 +295,10 @@ impl AuthChecker {
         let storage_data: serde_json::Value = serde_json::from_str(&content)?;
 
         // Try to get cursorAuth/accessToken first (most likely location)
-        if let Some(token) = storage_data.get("cursorAuth/accessToken").and_then(|v| v.as_str()) {
+        if let Some(token) = storage_data
+            .get("cursorAuth/accessToken")
+            .and_then(|v| v.as_str())
+        {
             if !token.is_empty() && token.len() > 20 {
                 return Ok(Some(token.to_string()));
             }
@@ -169,9 +329,7 @@ impl AuthChecker {
         let conn = Connection::open(sqlite_path)?;
 
         let mut stmt = conn.prepare("SELECT value FROM ItemTable WHERE key LIKE '%token%'")?;
-        let rows = stmt.query_map([], |row| {
-            Ok(row.get::<_, String>(0)?)
-        })?;
+        let rows = stmt.query_map([], |row| Ok(row.get::<_, String>(0)?))?;
 
         for row in rows {
             if let Ok(value) = row {
@@ -231,33 +389,53 @@ impl AuthChecker {
 
     /// Try to get token from environment variables
     fn get_token_from_env() -> Option<String> {
-        std::env::var("CURSOR_TOKEN").ok()
+        std::env::var("CURSOR_TOKEN")
+            .ok()
             .or_else(|| std::env::var("CURSOR_AUTH_TOKEN").ok())
             .filter(|token| !token.is_empty())
     }
 
     /// Debug method to show all possible Cursor paths
     pub fn debug_cursor_paths() -> Result<Vec<String>> {
-        let home_dir = dirs::home_dir()
-            .ok_or_else(|| anyhow!("Could not find home directory"))?;
+        let home_dir = dirs::home_dir().ok_or_else(|| anyhow!("Could not find home directory"))?;
 
         let mut debug_info = Vec::new();
         debug_info.push(format!("Home directory: {}", home_dir.display()));
 
         let cursor_paths = Self::find_cursor_paths()?;
-        debug_info.push(format!("Found {} Cursor installation paths:", cursor_paths.len()));
+        debug_info.push(format!(
+            "Found {} Cursor installation paths:",
+            cursor_paths.len()
+        ));
 
         for (i, path) in cursor_paths.iter().enumerate() {
-            debug_info.push(format!("  {}. {} (exists: {})", i + 1, path.display(), path.exists()));
+            debug_info.push(format!(
+                "  {}. {} (exists: {})",
+                i + 1,
+                path.display(),
+                path.exists()
+            ));
 
             // Check subdirectories
             let storage_path = path.join("User/globalStorage/storage.json");
             let sqlite_path = path.join("User/workspaceStorage");
             let session_path = path.join("Session Storage");
 
-            debug_info.push(format!("     Storage: {} (exists: {})", storage_path.display(), storage_path.exists()));
-            debug_info.push(format!("     SQLite:  {} (exists: {})", sqlite_path.display(), sqlite_path.exists()));
-            debug_info.push(format!("     Session: {} (exists: {})", session_path.display(), session_path.exists()));
+            debug_info.push(format!(
+                "     Storage: {} (exists: {})",
+                storage_path.display(),
+                storage_path.exists()
+            ));
+            debug_info.push(format!(
+                "     SQLite:  {} (exists: {})",
+                sqlite_path.display(),
+                sqlite_path.exists()
+            ));
+            debug_info.push(format!(
+                "     Session: {} (exists: {})",
+                session_path.display(),
+                session_path.exists()
+            ));
 
             // List contents of User directory if it exists
             let user_dir = path.join("User");
@@ -265,7 +443,8 @@ impl AuthChecker {
                 debug_info.push(format!("     User directory contents:"));
                 if let Ok(entries) = fs::read_dir(&user_dir) {
                     for entry in entries.flatten() {
-                        debug_info.push(format!("       - {}", entry.file_name().to_string_lossy()));
+                        debug_info
+                            .push(format!("       - {}", entry.file_name().to_string_lossy()));
                     }
                 }
             }
@@ -392,51 +571,54 @@ impl AuthChecker {
     /// Generate Cursor checksum from token using the algorithm
     fn generate_cursor_checksum(token: &str) -> Result<String> {
         let clean_token = token.trim();
-        
+
         // Generate machineId and macMachineId
         let machine_id = Self::generate_hashed64_hex(clean_token, "machineId");
         let mac_machine_id = Self::generate_hashed64_hex(clean_token, "macMachineId");
-        
+
         // Get timestamp and convert to byte array
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)?
-            .as_millis() as u64 / 1000000;
-        
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_millis() as u64 / 1000000;
+
         // Convert timestamp to bytes and take last 6 bytes
         let timestamp_bytes = timestamp.to_be_bytes();
         let byte_array = timestamp_bytes[2..].to_vec(); // Take last 6 bytes
-        
+
         // Obfuscate bytes and encode as base64
         let obfuscated_bytes = Self::obfuscate_bytes(byte_array);
         let encoded_checksum = general_purpose::STANDARD.encode(&obfuscated_bytes);
-        
+
         // Combine final checksum
-        Ok(format!("{}{}/{}", encoded_checksum, machine_id, mac_machine_id))
+        Ok(format!(
+            "{}{}/{}",
+            encoded_checksum, machine_id, mac_machine_id
+        ))
     }
 
     /// Clean and validate token
     fn clean_token(token: &str) -> Result<String> {
         let mut clean_token = token.to_string();
-        
+
         // Handle URL encoded tokens
         if clean_token.contains("%3A%3A") {
-            clean_token = clean_token.split("%3A%3A")
+            clean_token = clean_token
+                .split("%3A%3A")
                 .nth(1)
                 .ok_or_else(|| anyhow!("Invalid token format"))?
                 .to_string();
         } else if clean_token.contains("::") {
-            clean_token = clean_token.split("::")
+            clean_token = clean_token
+                .split("::")
                 .nth(1)
                 .ok_or_else(|| anyhow!("Invalid token format"))?
                 .to_string();
         }
-        
+
         clean_token = clean_token.trim().to_string();
-        
+
         if clean_token.is_empty() || clean_token.len() < 10 {
             return Err(anyhow!("Token is too short or empty"));
         }
-        
+
         Ok(clean_token)
     }
 
@@ -479,7 +661,10 @@ impl AuthChecker {
                             if key.to_lowercase().contains("email") {
                                 if let Some(email_str) = value.as_str() {
                                     if email_str.contains('@') {
-                                        println!("📧 从storage.json的{}字段找到邮箱: {}", key, email_str);
+                                        println!(
+                                            "📧 从storage.json的{}字段找到邮箱: {}",
+                                            key, email_str
+                                        );
                                         return Some(email_str.to_string());
                                     }
                                 }
@@ -512,13 +697,18 @@ impl AuthChecker {
                                     for row_result in rows {
                                         if let Ok(value) = row_result {
                                             // If it's a string and contains @, it might be an email
-                                            if value.contains('@') && value.len() > 5 && value.len() < 100 {
+                                            if value.contains('@')
+                                                && value.len() > 5
+                                                && value.len() < 100
+                                            {
                                                 println!("📧 从SQLite直接找到邮箱: {}", value);
                                                 return Some(value);
                                             }
 
                                             // Try to parse as JSON
-                                            if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&value) {
+                                            if let Ok(json_data) =
+                                                serde_json::from_str::<serde_json::Value>(&value)
+                                            {
                                                 if let Some(obj) = json_data.as_object() {
                                                     // Check for email field
                                                     if let Some(email) = obj.get("email") {
@@ -529,8 +719,12 @@ impl AuthChecker {
                                                     }
 
                                                     // Check for cachedEmail field
-                                                    if let Some(cached_email) = obj.get("cachedEmail") {
-                                                        if let Some(email_str) = cached_email.as_str() {
+                                                    if let Some(cached_email) =
+                                                        obj.get("cachedEmail")
+                                                    {
+                                                        if let Some(email_str) =
+                                                            cached_email.as_str()
+                                                        {
                                                             println!("📧 从SQLite JSON cachedEmail字段找到邮箱: {}", email_str);
                                                             return Some(email_str.to_string());
                                                         }
@@ -563,7 +757,10 @@ impl AuthChecker {
         #[cfg(target_os = "macos")]
         {
             let home_dir = std::env::var("HOME").ok()?;
-            let sqlite_path = format!("{}/Library/Application Support/Cursor/User/globalStorage/state.vscdb", home_dir);
+            let sqlite_path = format!(
+                "{}/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
+                home_dir
+            );
             println!("🔍 检查macOS SQLite路径: {}", sqlite_path);
             if std::path::Path::new(&sqlite_path).exists() {
                 println!("✅ 找到SQLite文件: {}", sqlite_path);
@@ -608,7 +805,10 @@ impl AuthChecker {
         #[cfg(target_os = "macos")]
         {
             let home_dir = std::env::var("HOME").ok()?;
-            let storage_path = format!("{}/Library/Application Support/Cursor/User/globalStorage/storage.json", home_dir);
+            let storage_path = format!(
+                "{}/Library/Application Support/Cursor/User/globalStorage/storage.json",
+                home_dir
+            );
             println!("🔍 检查macOS存储路径: {}", storage_path);
             if std::path::Path::new(&storage_path).exists() {
                 println!("✅ 找到存储文件: {}", storage_path);
@@ -636,7 +836,10 @@ impl AuthChecker {
         #[cfg(target_os = "linux")]
         {
             let home_dir = std::env::var("HOME").ok()?;
-            let storage_path = format!("{}/.config/Cursor/User/globalStorage/storage.json", home_dir);
+            let storage_path = format!(
+                "{}/.config/Cursor/User/globalStorage/storage.json",
+                home_dir
+            );
             println!("🔍 检查Linux存储路径: {}", storage_path);
             if std::path::Path::new(&storage_path).exists() {
                 println!("✅ 找到存储文件: {}", storage_path);
@@ -648,8 +851,450 @@ impl AuthChecker {
         }
     }
 
+    /// Get aggregated usage data from Cursor API
+    async fn get_aggregated_usage_data(
+        workos_session_token: &str,
+        start_date: u64,
+        end_date: u64,
+        team_id: i32,
+        details: &mut Vec<String>,
+    ) -> Result<Option<AggregatedUsageData>> {
+        let client = reqwest::Client::new();
+
+        details.push("Attempting to get aggregated usage data...".to_string());
+        println!("🔍 正在获取聚合用量数据...");
+
+        let mut usage_headers = reqwest::header::HeaderMap::new();
+        usage_headers.insert("Accept", "*/*".parse()?);
+        usage_headers.insert("Accept-Encoding", "gzip, deflate, br, zstd".parse()?);
+        usage_headers.insert(
+            "Accept-Language",
+            "en,zh-CN;q=0.9,zh;q=0.8,eu;q=0.7".parse()?,
+        );
+        usage_headers.insert("Content-Type", "application/json".parse()?);
+        usage_headers.insert("Origin", "https://cursor.com".parse()?);
+        usage_headers.insert("Referer", "https://cursor.com/cn/dashboard".parse()?);
+        usage_headers.insert(
+            "Sec-CH-UA",
+            "\"Not;A=Brand\";v=\"99\", \"Google Chrome\";v=\"139\", \"Chromium\";v=\"139\""
+                .parse()?,
+        );
+        usage_headers.insert("Sec-CH-UA-Arch", "\"x86\"".parse()?);
+        usage_headers.insert("Sec-CH-UA-Bitness", "\"64\"".parse()?);
+        usage_headers.insert("Sec-CH-UA-Mobile", "?0".parse()?);
+        usage_headers.insert("Sec-CH-UA-Platform", "\"macOS\"".parse()?);
+        usage_headers.insert("Sec-CH-UA-Platform-Version", "\"15.3.1\"".parse()?);
+        usage_headers.insert("Sec-Fetch-Dest", "empty".parse()?);
+        usage_headers.insert("Sec-Fetch-Mode", "cors".parse()?);
+        usage_headers.insert("Sec-Fetch-Site", "same-origin".parse()?);
+        usage_headers.insert(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".parse()?,
+        );
+        // Use WorkOS Session Token from account list
+        usage_headers.insert(
+            "Cookie",
+            format!("WorkosCursorSessionToken={}", workos_session_token).parse()?,
+        );
+
+        let request_body = serde_json::json!({
+            "startDate": start_date,
+            "endDate": end_date,
+            "teamId": team_id
+        });
+
+        let usage_response = client
+            .post("https://cursor.com/api/dashboard/get-aggregated-usage-events")
+            .headers(usage_headers)
+            .json(&request_body)
+            .timeout(std::time::Duration::from_secs(40))
+            .send()
+            .await;
+
+        match usage_response {
+            Ok(resp) => {
+                let status = resp.status();
+                println!("📡 聚合用量API响应状态: {}", status);
+                details.push(format!("Aggregated usage API response status: {}", status));
+
+                if status.is_success() {
+                    match resp.text().await {
+                        Ok(body) => {
+                            println!("📦 聚合用量响应数据长度: {} bytes", body.len());
+                            println!("📝 聚合用量响应内容: {}", body);
+                            details.push(format!(
+                                "Aggregated usage response body length: {} bytes",
+                                body.len()
+                            ));
+
+                            // Try to parse JSON response
+                            if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body)
+                            {
+                                println!("✅ 成功解析聚合用量JSON数据");
+
+                                // Parse aggregated usage data according to the new structure
+                                let mut aggregations = Vec::new();
+
+                                if let Some(agg_array) =
+                                    json_data.get("aggregations").and_then(|v| v.as_array())
+                                {
+                                    for agg in agg_array {
+                                        if let Some(model_intent) =
+                                            agg.get("modelIntent").and_then(|v| v.as_str())
+                                        {
+                                            let model_usage = ModelUsage {
+                                                model_intent: model_intent.to_string(),
+                                                input_tokens: agg
+                                                    .get("inputTokens")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("0")
+                                                    .to_string(),
+                                                output_tokens: agg
+                                                    .get("outputTokens")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("0")
+                                                    .to_string(),
+                                                cache_write_tokens: agg
+                                                    .get("cacheWriteTokens")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("0")
+                                                    .to_string(),
+                                                cache_read_tokens: agg
+                                                    .get("cacheReadTokens")
+                                                    .and_then(|v| v.as_str())
+                                                    .unwrap_or("0")
+                                                    .to_string(),
+                                                total_cents: agg
+                                                    .get("totalCents")
+                                                    .and_then(|v| v.as_f64())
+                                                    .unwrap_or(0.0),
+                                            };
+                                            aggregations.push(model_usage);
+                                        }
+                                    }
+                                }
+
+                                let aggregated_usage = AggregatedUsageData {
+                                    aggregations,
+                                    total_input_tokens: json_data
+                                        .get("totalInputTokens")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("0")
+                                        .to_string(),
+                                    total_output_tokens: json_data
+                                        .get("totalOutputTokens")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("0")
+                                        .to_string(),
+                                    total_cache_write_tokens: json_data
+                                        .get("totalCacheWriteTokens")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("0")
+                                        .to_string(),
+                                    total_cache_read_tokens: json_data
+                                        .get("totalCacheReadTokens")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("0")
+                                        .to_string(),
+                                    total_cost_cents: json_data
+                                        .get("totalCostCents")
+                                        .and_then(|v| v.as_f64())
+                                        .unwrap_or(0.0),
+                                };
+
+                                return Ok(Some(aggregated_usage));
+                            } else {
+                                println!("❌ 无法解析聚合用量JSON数据");
+                                details
+                                    .push("Failed to parse aggregated usage JSON data".to_string());
+                            }
+                        }
+                        Err(e) => {
+                            println!("❌ 读取聚合用量响应体失败: {}", e);
+                            details.push(format!(
+                                "Failed to read aggregated usage response body: {}",
+                                e
+                            ));
+                        }
+                    }
+                } else {
+                    println!("❌ 聚合用量API失败，状态码: {}", status);
+                    details.push(format!(
+                        "Aggregated usage API failed with status: {}",
+                        status
+                    ));
+                }
+            }
+            Err(e) => {
+                println!("❌ 聚合用量API请求失败: {}", e);
+                details.push(format!("Aggregated usage API request failed: {}", e));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Get user analytics data from Cursor API
+    async fn get_user_analytics_data(
+        workos_session_token: &str,
+        team_id: i32,
+        user_id: i32,
+        start_date: &str,
+        end_date: &str,
+        details: &mut Vec<String>,
+    ) -> Result<Option<UserAnalyticsData>> {
+        let client = reqwest::Client::builder()
+            .gzip(true)
+            .deflate(true)
+            .brotli(true)
+            .build()?;
+
+        let mut analytics_headers = reqwest::header::HeaderMap::new();
+        analytics_headers.insert("Accept", "application/json, text/plain, */*".parse()?);
+        analytics_headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+        analytics_headers.insert("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8".parse()?);
+        analytics_headers.insert("Cache-Control", "no-cache".parse()?);
+        analytics_headers.insert("Content-Type", "application/json".parse()?);
+        analytics_headers.insert("Origin", "https://cursor.com".parse()?);
+        analytics_headers.insert("Pragma", "no-cache".parse()?);
+        analytics_headers.insert("Referer", "https://cursor.com/dashboard".parse()?);
+        analytics_headers.insert(
+            "Sec-CH-UA",
+            "\"Chromium\";v=\"131\", \"Google Chrome\";v=\"131\", \"Not_A Brand\";v=\"24\""
+                .parse()?,
+        );
+        analytics_headers.insert("Sec-CH-UA-Mobile", "?0".parse()?);
+        analytics_headers.insert("Sec-CH-UA-Platform", "\"macOS\"".parse()?);
+        analytics_headers.insert("Sec-Fetch-Dest", "empty".parse()?);
+        analytics_headers.insert("Sec-Fetch-Mode", "cors".parse()?);
+        analytics_headers.insert("Sec-Fetch-Site", "same-origin".parse()?);
+        analytics_headers.insert("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse()?);
+        analytics_headers.insert(
+            "Cookie",
+            format!("WorkosCursorSessionToken={}", workos_session_token).parse()?,
+        );
+
+        let request_body = UserAnalyticsRequest {
+            team_id,
+            user_id,
+            start_date: start_date.to_string(),
+            end_date: end_date.to_string(),
+        };
+
+        println!("🔄 发送用户分析API请求到: https://cursor.com/api/dashboard/get-user-analytics");
+        println!("📦 请求参数: {:?}", request_body);
+
+        let analytics_response = client
+            .post("https://cursor.com/api/dashboard/get-user-analytics")
+            .headers(analytics_headers)
+            .json(&request_body)
+            .timeout(std::time::Duration::from_secs(40))
+            .send()
+            .await;
+
+        match analytics_response {
+            Ok(resp) => {
+                let status = resp.status();
+                println!("📡 用户分析API响应状态: {}", status);
+                details.push(format!("User analytics API response status: {}", status));
+
+                if status.is_success() {
+                    match resp.text().await {
+                        Ok(body) => {
+                            println!("📦 用户分析响应数据长度: {} bytes", body.len());
+                            println!("📝 用户分析响应内容: {}", body);
+                            details.push(format!(
+                                "User analytics response body length: {} bytes",
+                                body.len()
+                            ));
+
+                            // Try to parse JSON response
+                            match serde_json::from_str::<UserAnalyticsData>(&body) {
+                                Ok(analytics_data) => {
+                                    println!("✅ 成功解析用户分析数据");
+                                    details.push(
+                                        "Successfully parsed user analytics data".to_string(),
+                                    );
+                                    return Ok(Some(analytics_data));
+                                }
+                                Err(e) => {
+                                    println!("❌ 解析用户分析数据失败: {}", e);
+                                    details.push(format!(
+                                        "Failed to parse user analytics data: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("❌ 读取用户分析响应失败: {}", e);
+                            details.push(format!("Failed to read user analytics response: {}", e));
+                        }
+                    }
+                } else {
+                    println!("❌ 用户分析API返回错误状态码: {}", status);
+                    details.push(format!(
+                        "User analytics API returned error status: {}",
+                        status
+                    ));
+                }
+            }
+            Err(e) => {
+                println!("❌ 用户分析API请求失败: {}", e);
+                details.push(format!("User analytics API request failed: {}", e));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Get filtered usage events data from Cursor API
+    async fn get_filtered_usage_events(
+        workos_session_token: &str,
+        team_id: i32,
+        start_date: &str,
+        end_date: &str,
+        page: i32,
+        page_size: i32,
+        details: &mut Vec<String>,
+    ) -> Result<Option<FilteredUsageEventsData>> {
+        let client = reqwest::Client::builder()
+            .gzip(true)
+            .deflate(true)
+            .brotli(true)
+            .build()?;
+
+        let mut events_headers = reqwest::header::HeaderMap::new();
+        events_headers.insert("Accept", "application/json, text/plain, */*".parse()?);
+        events_headers.insert("Accept-Encoding", "gzip, deflate, br".parse()?);
+        events_headers.insert("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.8".parse()?);
+        events_headers.insert("Cache-Control", "no-cache".parse()?);
+        events_headers.insert("Content-Type", "application/json".parse()?);
+        events_headers.insert("Origin", "https://cursor.com".parse()?);
+        events_headers.insert("Pragma", "no-cache".parse()?);
+        events_headers.insert("Referer", "https://cursor.com/dashboard".parse()?);
+        events_headers.insert(
+            "Sec-CH-UA",
+            "\"Chromium\";v=\"131\", \"Google Chrome\";v=\"131\", \"Not_A Brand\";v=\"24\""
+                .parse()?,
+        );
+        events_headers.insert("Sec-CH-UA-Mobile", "?0".parse()?);
+        events_headers.insert("Sec-CH-UA-Platform", "\"macOS\"".parse()?);
+        events_headers.insert("Sec-Fetch-Dest", "empty".parse()?);
+        events_headers.insert("Sec-Fetch-Mode", "cors".parse()?);
+        events_headers.insert("Sec-Fetch-Site", "same-origin".parse()?);
+        events_headers.insert("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36".parse()?);
+        events_headers.insert(
+            "Cookie",
+            format!("WorkosCursorSessionToken={}", workos_session_token).parse()?,
+        );
+
+        let request_body = FilteredUsageRequest {
+            team_id,
+            start_date: start_date.to_string(),
+            end_date: end_date.to_string(),
+            page,
+            page_size,
+        };
+
+        println!("🔄 发送过滤使用事件API请求到: https://cursor.com/api/dashboard/get-filtered-usage-events");
+        println!("📦 请求参数: {:?}", request_body);
+
+        let events_response = client
+            .post("https://cursor.com/api/dashboard/get-filtered-usage-events")
+            .headers(events_headers)
+            .json(&request_body)
+            .timeout(std::time::Duration::from_secs(40))
+            .send()
+            .await;
+
+        match events_response {
+            Ok(resp) => {
+                let status = resp.status();
+                println!("📡 过滤使用事件API响应状态: {}", status);
+                details.push(format!(
+                    "Filtered usage events API response status: {}",
+                    status
+                ));
+
+                if status.is_success() {
+                    match resp.text().await {
+                        Ok(body) => {
+                            println!("📦 过滤使用事件响应数据长度: {} bytes", body.len());
+                            println!("📝 过滤使用事件响应内容: {}", body);
+                            details.push(format!(
+                                "Filtered usage events response body length: {} bytes",
+                                body.len()
+                            ));
+
+                            // Try to parse JSON response
+                            match serde_json::from_str::<FilteredUsageEventsData>(&body) {
+                                Ok(events_data) => {
+                                    println!("✅ 成功解析过滤使用事件数据");
+                                    details.push(
+                                        "Successfully parsed filtered usage events data"
+                                            .to_string(),
+                                    );
+                                    return Ok(Some(events_data));
+                                }
+                                Err(e) => {
+                                    println!("❌ 解析过滤使用事件数据失败: {}", e);
+                                    details.push(format!(
+                                        "Failed to parse filtered usage events data: {}",
+                                        e
+                                    ));
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            println!("❌ 读取过滤使用事件响应失败: {}", e);
+                            details.push(format!(
+                                "Failed to read filtered usage events response: {}",
+                                e
+                            ));
+                        }
+                    }
+                } else {
+                    println!("❌ 过滤使用事件API返回错误状态码: {}", status);
+                    details.push(format!(
+                        "Filtered usage events API returned error status: {}",
+                        status
+                    ));
+                }
+            }
+            Err(e) => {
+                println!("❌ 过滤使用事件API请求失败: {}", e);
+                details.push(format!("Filtered usage events API request failed: {}", e));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Find WorkOS Session Token for a given access token from account manager
+    fn find_workos_session_token(access_token: &str) -> Option<String> {
+        // Use account manager to find WorkOS session token
+        match crate::account_manager::AccountManager::load_accounts() {
+            Ok(accounts) => {
+                for account in accounts {
+                    if account.token == access_token {
+                        return account.workos_cursor_session_token;
+                    }
+                }
+            }
+            Err(e) => {
+                println!("❌ 无法加载账户列表: {}", e);
+            }
+        }
+        None
+    }
+
     /// Get account information from Cursor API
-    async fn get_account_info(token: &str, _checksum: &str, details: &mut Vec<String>) -> Result<Option<AccountInfo>> {
+    async fn get_account_info(
+        token: &str,
+        _checksum: &str,
+        details: &mut Vec<String>,
+    ) -> Result<Option<AccountInfo>> {
         let client = reqwest::Client::new();
 
         let mut account_info = AccountInfo {
@@ -659,6 +1304,7 @@ impl AuthChecker {
             subscription_status: None,
             trial_days_remaining: None,
             usage_info: None,
+            aggregated_usage: None,
         };
 
         // First try to get email from local storage (highest priority)
@@ -676,15 +1322,38 @@ impl AuthChecker {
         println!("🔍 正在获取订阅信息...");
 
         let mut subscription_headers = reqwest::header::HeaderMap::new();
-        subscription_headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36".parse()?);
-        subscription_headers.insert("Accept", "application/json".parse()?);
+        subscription_headers.insert("Accept", "*/*".parse()?);
+        subscription_headers.insert("Accept-Encoding", "gzip, deflate, br, zstd".parse()?);
+        subscription_headers.insert(
+            "Accept-Language",
+            "en,zh-CN;q=0.9,zh;q=0.8,eu;q=0.7".parse()?,
+        );
         subscription_headers.insert("Content-Type", "application/json".parse()?);
+        subscription_headers.insert("Origin", "https://cursor.com".parse()?);
+        subscription_headers.insert("Referer", "https://cursor.com/cn/dashboard".parse()?);
+        subscription_headers.insert(
+            "Sec-CH-UA",
+            "\"Not;A=Brand\";v=\"99\", \"Google Chrome\";v=\"139\", \"Chromium\";v=\"139\""
+                .parse()?,
+        );
+        subscription_headers.insert("Sec-CH-UA-Arch", "\"x86\"".parse()?);
+        subscription_headers.insert("Sec-CH-UA-Bitness", "\"64\"".parse()?);
+        subscription_headers.insert("Sec-CH-UA-Mobile", "?0".parse()?);
+        subscription_headers.insert("Sec-CH-UA-Platform", "\"macOS\"".parse()?);
+        subscription_headers.insert("Sec-CH-UA-Platform-Version", "\"15.3.1\"".parse()?);
+        subscription_headers.insert("Sec-Fetch-Dest", "empty".parse()?);
+        subscription_headers.insert("Sec-Fetch-Mode", "cors".parse()?);
+        subscription_headers.insert("Sec-Fetch-Site", "cross-site".parse()?);
+        subscription_headers.insert(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".parse()?,
+        );
         subscription_headers.insert("Authorization", format!("Bearer {}", token).parse()?);
 
         let subscription_response = client
             .get("https://api2.cursor.sh/auth/full_stripe_profile")
             .headers(subscription_headers)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(40))
             .send()
             .await;
 
@@ -699,13 +1368,21 @@ impl AuthChecker {
                         Ok(body) => {
                             println!("📦 订阅响应数据长度: {} bytes", body.len());
                             println!("📝 订阅响应内容: {}", body);
-                            details.push(format!("Subscription response body length: {} bytes", body.len()));
+                            details.push(format!(
+                                "Subscription response body length: {} bytes",
+                                body.len()
+                            ));
                             details.push(format!("Subscription response content: {}", body));
 
                             // Try to parse JSON response
-                            if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body) {
+                            if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body)
+                            {
                                 println!("✅ 成功解析订阅JSON数据");
-                                println!("🔍 JSON数据结构: {}", serde_json::to_string_pretty(&json_data).unwrap_or_else(|_| "无法格式化".to_string()));
+                                println!(
+                                    "🔍 JSON数据结构: {}",
+                                    serde_json::to_string_pretty(&json_data)
+                                        .unwrap_or_else(|_| "无法格式化".to_string())
+                                );
 
                                 // Extract email from customer info
                                 if let Some(customer) = json_data.get("customer") {
@@ -720,20 +1397,25 @@ impl AuthChecker {
                                 // Extract subscription type and status
                                 if let Some(membership_type) = json_data.get("membershipType") {
                                     if let Some(membership_str) = membership_type.as_str() {
-                                        account_info.subscription_type = Some(membership_str.to_string());
+                                        account_info.subscription_type =
+                                            Some(membership_str.to_string());
                                         println!("� 订阅类型: {}", membership_str);
                                     }
                                 }
 
-                                if let Some(subscription_status) = json_data.get("subscriptionStatus") {
+                                if let Some(subscription_status) =
+                                    json_data.get("subscriptionStatus")
+                                {
                                     if let Some(status_str) = subscription_status.as_str() {
-                                        account_info.subscription_status = Some(status_str.to_string());
+                                        account_info.subscription_status =
+                                            Some(status_str.to_string());
                                         println!("📊 订阅状态: {}", status_str);
                                     }
                                 }
 
                                 // Extract trial days remaining
-                                if let Some(days_remaining) = json_data.get("daysRemainingOnTrial") {
+                                if let Some(days_remaining) = json_data.get("daysRemainingOnTrial")
+                                {
                                     if let Some(days) = days_remaining.as_i64() {
                                         account_info.trial_days_remaining = Some(days as i32);
                                         println!("⏰ 试用剩余天数: {}", days);
@@ -748,7 +1430,8 @@ impl AuthChecker {
                         }
                         Err(e) => {
                             println!("❌ 读取订阅响应体失败: {}", e);
-                            details.push(format!("Failed to read subscription response body: {}", e));
+                            details
+                                .push(format!("Failed to read subscription response body: {}", e));
                         }
                     }
                 } else {
@@ -767,16 +1450,49 @@ impl AuthChecker {
         println!("🔍 正在获取使用情况信息...");
 
         let mut usage_headers = reqwest::header::HeaderMap::new();
-        usage_headers.insert("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36".parse()?);
-        usage_headers.insert("Accept", "application/json".parse()?);
+        usage_headers.insert("Accept", "*/*".parse()?);
+        usage_headers.insert("Accept-Encoding", "gzip, deflate, br, zstd".parse()?);
+        usage_headers.insert(
+            "Accept-Language",
+            "en,zh-CN;q=0.9,zh;q=0.8,eu;q=0.7".parse()?,
+        );
         usage_headers.insert("Content-Type", "application/json".parse()?);
+        usage_headers.insert("Origin", "https://cursor.com".parse()?);
+        usage_headers.insert("Referer", "https://cursor.com/cn/dashboard".parse()?);
+        usage_headers.insert(
+            "Sec-CH-UA",
+            "\"Not;A=Brand\";v=\"99\", \"Google Chrome\";v=\"139\", \"Chromium\";v=\"139\""
+                .parse()?,
+        );
+        usage_headers.insert("Sec-CH-UA-Arch", "\"x86\"".parse()?);
+        usage_headers.insert("Sec-CH-UA-Bitness", "\"64\"".parse()?);
+        usage_headers.insert("Sec-CH-UA-Mobile", "?0".parse()?);
+        usage_headers.insert("Sec-CH-UA-Platform", "\"macOS\"".parse()?);
+        usage_headers.insert("Sec-CH-UA-Platform-Version", "\"15.3.1\"".parse()?);
+        usage_headers.insert("Sec-Fetch-Dest", "empty".parse()?);
+        usage_headers.insert("Sec-Fetch-Mode", "cors".parse()?);
+        usage_headers.insert("Sec-Fetch-Site", "same-origin".parse()?);
+        usage_headers.insert(
+            "User-Agent",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36".parse()?,
+        );
         // Use Cookie authentication for usage API
-        usage_headers.insert("Cookie", format!("WorkosCursorSessionToken=user_01OOOOOOOOOOOOOOOOOOOOOOOO%3A%3A{}", token).parse()?);
+        // Try to find real WorkOS Session Token from account manager, fallback to legacy format
+        let workos_cookie = if let Some(workos_token) = Self::find_workos_session_token(token) {
+            format!("WorkosCursorSessionToken={}", workos_token)
+        } else {
+            // Fallback to legacy format if no WorkOS token found
+            format!(
+                "WorkosCursorSessionToken=user_01OOOOOOOOOOOOOOOOOOOOOOOO%3A%3A{}",
+                token
+            )
+        };
+        usage_headers.insert("Cookie", workos_cookie.parse()?);
 
         let user_response = client
-            .get("https://www.cursor.com/api/usage")
+            .get("https://cursor.com/api/usage")
             .headers(usage_headers)
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(40))
             .send()
             .await;
 
@@ -791,26 +1507,32 @@ impl AuthChecker {
                         Ok(body) => {
                             println!("📦 使用情况响应数据长度: {} bytes", body.len());
                             println!("📝 使用情况响应内容: {}", body);
-                            details.push(format!("Usage response body length: {} bytes", body.len()));
+                            details
+                                .push(format!("Usage response body length: {} bytes", body.len()));
                             details.push(format!("Usage response content: {}", body));
 
                             // Try to parse JSON response
-                            if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body) {
+                            if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body)
+                            {
                                 println!("✅ 成功解析使用情况JSON数据");
 
                                 // Extract GPT-4 usage (Premium)
                                 if let Some(gpt4_data) = json_data.get("gpt-4") {
                                     if let Some(premium_usage) = gpt4_data.get("numRequestsTotal") {
                                         if let Some(max_usage) = gpt4_data.get("maxRequestUsage") {
-                                            let usage_text = format!("Premium: {}/{}",
+                                            let usage_text = format!(
+                                                "Premium: {}/{}",
                                                 premium_usage.as_i64().unwrap_or(0),
                                                 max_usage.as_i64().unwrap_or(999)
                                             );
                                             println!("⭐ {}", usage_text);
 
                                             if account_info.usage_info.is_some() {
-                                                account_info.usage_info = Some(format!("{}, {}",
-                                                    account_info.usage_info.as_ref().unwrap(), usage_text));
+                                                account_info.usage_info = Some(format!(
+                                                    "{}, {}",
+                                                    account_info.usage_info.as_ref().unwrap(),
+                                                    usage_text
+                                                ));
                                             } else {
                                                 account_info.usage_info = Some(usage_text);
                                             }
@@ -821,14 +1543,18 @@ impl AuthChecker {
                                 // Extract GPT-3.5 usage (Basic)
                                 if let Some(gpt35_data) = json_data.get("gpt-3.5-turbo") {
                                     if let Some(basic_usage) = gpt35_data.get("numRequestsTotal") {
-                                        let usage_text = format!("Basic: {}/无限制",
+                                        let usage_text = format!(
+                                            "Basic: {}/无限制",
                                             basic_usage.as_i64().unwrap_or(0)
                                         );
                                         println!("� {}", usage_text);
 
                                         if account_info.usage_info.is_some() {
-                                            account_info.usage_info = Some(format!("{}, {}",
-                                                account_info.usage_info.as_ref().unwrap(), usage_text));
+                                            account_info.usage_info = Some(format!(
+                                                "{}, {}",
+                                                account_info.usage_info.as_ref().unwrap(),
+                                                usage_text
+                                            ));
                                         } else {
                                             account_info.usage_info = Some(usage_text);
                                         }
@@ -839,7 +1565,8 @@ impl AuthChecker {
                             } else {
                                 println!("❌ 无法解析使用情况JSON数据");
                                 if account_info.usage_info.is_none() {
-                                    account_info.usage_info = Some("使用情况数据解析失败".to_string());
+                                    account_info.usage_info =
+                                        Some("使用情况数据解析失败".to_string());
                                 }
                             }
                         }
@@ -859,18 +1586,157 @@ impl AuthChecker {
             }
         }
 
+        // Try to get aggregated usage data if we can find a WorkOS Session Token
+        if let Some(workos_token) = Self::find_workos_session_token(token) {
+            details.push(
+                "Found WorkOS Session Token, attempting to get aggregated usage data..."
+                    .to_string(),
+            );
+            println!(
+                "✅ 找到 WorkOS Session Token，正在获取聚合用量数据...{}",
+                workos_token
+            );
+
+            // Default to last 30 days
+            let end_date = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
+            let start_date = end_date - (30 * 24 * 60 * 60 * 1000); // 30 days ago
+
+            match Self::get_aggregated_usage_data(&workos_token, start_date, end_date, -1, details)
+                .await
+            {
+                Ok(Some(aggregated_usage)) => {
+                    account_info.aggregated_usage = Some(aggregated_usage);
+                    details.push("Successfully retrieved aggregated usage data".to_string());
+                    println!("✅ 成功获取聚合用量数据");
+                }
+                Ok(None) => {
+                    details.push("No aggregated usage data available".to_string());
+                    println!("⚠️ 无聚合用量数据");
+                }
+                Err(e) => {
+                    details.push(format!("Failed to get aggregated usage data: {}", e));
+                    println!("❌ 获取聚合用量数据失败: {}", e);
+                }
+            }
+        } else {
+            details.push("No WorkOS Session Token found for aggregated usage data".to_string());
+            println!("⚠️ 未找到 WorkOS Session Token，无法获取聚合用量数据");
+        }
+
         Ok(Some(account_info))
+    }
+
+    /// Get aggregated usage data for a specific time period
+    pub async fn get_usage_for_period(
+        token: &str,
+        start_date: u64,
+        end_date: u64,
+        team_id: i32,
+    ) -> Result<Option<AggregatedUsageData>> {
+        let mut details = Vec::new();
+
+        // Find WorkOS Session Token for the given access token
+        if let Some(workos_token) = Self::find_workos_session_token(token) {
+            details.push("Found WorkOS Session Token for usage data request".to_string());
+            println!("✅ 找到 WorkOS Session Token，获取指定时间段用量数据");
+
+            Self::get_aggregated_usage_data(
+                &workos_token,
+                start_date,
+                end_date,
+                team_id,
+                &mut details,
+            )
+            .await
+        } else {
+            println!("❌ 未找到对应的 WorkOS Session Token");
+            Err(anyhow!(
+                "No WorkOS Session Token found for the given access token"
+            ))
+        }
+    }
+
+    /// Get user analytics data for a given period
+    pub async fn get_user_analytics(
+        token: &str,
+        team_id: i32,
+        user_id: i32,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<Option<UserAnalyticsData>> {
+        let mut details = Vec::new();
+
+        // Find WorkOS Session Token for the given access token
+        if let Some(workos_token) = Self::find_workos_session_token(token) {
+            details.push("Found WorkOS Session Token for user analytics request".to_string());
+            println!("✅ 找到 WorkOS Session Token，获取用户分析数据");
+
+            return Self::get_user_analytics_data(
+                &workos_token,
+                team_id,
+                user_id,
+                start_date,
+                end_date,
+                &mut details,
+            )
+            .await;
+        } else {
+            println!("❌ 未找到对应的 WorkOS Session Token");
+            Err(anyhow!(
+                "No WorkOS Session Token found for the given access token"
+            ))
+        }
+    }
+
+    /// Get filtered usage events for a given period
+    pub async fn get_usage_events(
+        token: &str,
+        team_id: i32,
+        start_date: &str,
+        end_date: &str,
+        page: i32,
+        page_size: i32,
+    ) -> Result<Option<FilteredUsageEventsData>> {
+        let mut details = Vec::new();
+
+        // Find WorkOS Session Token for the given access token
+        if let Some(workos_token) = Self::find_workos_session_token(token) {
+            details.push("Found WorkOS Session Token for usage events request".to_string());
+            println!("✅ 找到 WorkOS Session Token，获取使用事件数据");
+
+            return Self::get_filtered_usage_events(
+                &workos_token,
+                team_id,
+                start_date,
+                end_date,
+                page,
+                page_size,
+                &mut details,
+            )
+            .await;
+        } else {
+            println!("❌ 未找到对应的 WorkOS Session Token");
+            Err(anyhow!(
+                "No WorkOS Session Token found for the given access token"
+            ))
+        }
     }
 
     /// Check user authorization with the given token
     pub async fn check_user_authorized(token: &str) -> Result<AuthCheckResult> {
         let mut details = Vec::new();
         details.push("Starting authorization check...".to_string());
-        
+
         // Clean and validate token
         let clean_token = match Self::clean_token(token) {
             Ok(token) => {
-                details.push(format!("Token cleaned successfully, length: {} characters", token.len()));
+                details.push(format!(
+                    "Token cleaned successfully, length: {} characters",
+                    token.len()
+                ));
                 token
             }
             Err(e) => {
@@ -902,7 +1768,7 @@ impl AuthChecker {
 
         // Create HTTP client
         let client = reqwest::Client::new();
-        
+
         // Create request headers
         let mut headers = reqwest::header::HeaderMap::new();
         headers.insert("accept-encoding", "gzip".parse()?);
@@ -920,10 +1786,12 @@ impl AuthChecker {
 
         // Make the API request
         let response = client
-            .post("https://api2.cursor.sh/aiserver.v1.DashboardService/GetUsageBasedPremiumRequests")
+            .post(
+                "https://api2.cursor.sh/aiserver.v1.DashboardService/GetUsageBasedPremiumRequests",
+            )
             .headers(headers)
             .body(vec![]) // Empty body
-            .timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(40))
             .send()
             .await;
 
@@ -982,7 +1850,7 @@ impl AuthChecker {
             }
             Err(e) => {
                 details.push(format!("API request failed: {}", e));
-                
+
                 // If token looks like JWT, consider it potentially valid even if API fails
                 let is_authorized = if Self::is_jwt_like(&clean_token) {
                     details.push("Token appears to be in JWT format, considering it potentially valid despite API failure".to_string());

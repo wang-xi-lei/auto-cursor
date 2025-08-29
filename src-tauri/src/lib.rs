@@ -3,7 +3,10 @@ mod auth_checker;
 mod machine_id;
 
 use account_manager::{AccountListResult, AccountManager, LogoutResult, SwitchAccountResult};
-use auth_checker::{AuthCheckResult, AuthChecker, TokenInfo};
+use auth_checker::{
+    AggregatedUsageData, AuthCheckResult, AuthChecker, FilteredUsageEventsData, TokenInfo,
+    UserAnalyticsData,
+};
 use machine_id::{BackupInfo, MachineIdRestorer, MachineIds, ResetResult, RestoreResult};
 use tauri::{Emitter, Manager};
 
@@ -361,7 +364,7 @@ async fn open_cancel_subscription_page(
     .title("Cursor - 取消订阅")
     .inner_size(1200.0, 800.0)
     .resizable(true)
-    .visible(false) // 默认隐藏窗口
+    .visible(true) // 默认隐藏窗口
     .build();
 
     match webview_window {
@@ -737,6 +740,128 @@ async fn delete_cursor_account(
     }
 }
 
+#[tauri::command]
+async fn get_usage_for_period(
+    token: String,
+    start_date: u64,
+    end_date: u64,
+    team_id: i32,
+) -> Result<serde_json::Value, String> {
+    println!(
+        "🔍 获取用量数据请求: token长度={}, start_date={}, end_date={}, team_id={}",
+        token.len(),
+        start_date,
+        end_date,
+        team_id
+    );
+
+    match AuthChecker::get_usage_for_period(&token, start_date, end_date, team_id).await {
+        Ok(Some(usage_data)) => {
+            println!("✅ 成功获取用量数据");
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "Successfully retrieved usage data",
+                "data": usage_data
+            }))
+        }
+        Ok(None) => {
+            println!("⚠️ 未找到用量数据");
+            Ok(serde_json::json!({
+                "success": false,
+                "message": "No usage data found"
+            }))
+        }
+        Err(e) => {
+            println!("❌ 获取用量数据失败: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to get usage data: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn get_user_analytics(
+    token: String,
+    team_id: i32,
+    user_id: i32,
+    start_date: String,
+    end_date: String,
+) -> Result<serde_json::Value, String> {
+    println!(
+        "🔍 获取用户分析数据 - team_id: {}, user_id: {}, 时间范围: {} 到 {}",
+        team_id, user_id, start_date, end_date
+    );
+
+    match AuthChecker::get_user_analytics(&token, team_id, user_id, &start_date, &end_date).await {
+        Ok(Some(analytics_data)) => {
+            println!("✅ 成功获取用户分析数据");
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "Successfully retrieved user analytics data",
+                "data": analytics_data
+            }))
+        }
+        Ok(None) => {
+            println!("⚠️ 未找到用户分析数据");
+            Ok(serde_json::json!({
+                "success": false,
+                "message": "No user analytics data found"
+            }))
+        }
+        Err(e) => {
+            println!("❌ 获取用户分析数据失败: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to get user analytics data: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn get_usage_events(
+    token: String,
+    team_id: i32,
+    start_date: String,
+    end_date: String,
+    page: i32,
+    page_size: i32,
+) -> Result<serde_json::Value, String> {
+    println!(
+        "🔍 获取使用事件数据 - team_id: {}, 时间范围: {} 到 {}, 页码: {}, 页大小: {}",
+        team_id, start_date, end_date, page, page_size
+    );
+
+    match AuthChecker::get_usage_events(&token, team_id, &start_date, &end_date, page, page_size)
+        .await
+    {
+        Ok(Some(events_data)) => {
+            println!("✅ 成功获取使用事件数据");
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "Successfully retrieved usage events data",
+                "data": events_data
+            }))
+        }
+        Ok(None) => {
+            println!("⚠️ 未找到使用事件数据");
+            Ok(serde_json::json!({
+                "success": false,
+                "message": "No usage events data found"
+            }))
+        }
+        Err(e) => {
+            println!("❌ 获取使用事件数据失败: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("Failed to get usage events data: {}", e)
+            }))
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -768,7 +893,10 @@ pub fn run() {
             open_cancel_subscription_page,
             show_cancel_subscription_window,
             cancel_subscription_failed,
-            delete_cursor_account
+            delete_cursor_account,
+            get_usage_for_period,
+            get_user_analytics,
+            get_usage_events
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -5,6 +5,7 @@ import type { AccountInfo, AccountListResult } from "../types/account";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { Toast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ConfirmDialog";
+import { UsageDisplay } from "../components/UsageDisplay";
 
 export const TokenManagePage: React.FC = () => {
   const [accountData, setAccountData] = useState<AccountListResult | null>(
@@ -500,6 +501,16 @@ export const TokenManagePage: React.FC = () => {
                   {getRemainingDays(accountData.current_account)}
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Usage Display Section */}
+          {accountData?.current_account && (
+            <div className="mb-6">
+              <UsageDisplay
+                token={accountData.current_account.token}
+                className="mb-4"
+              />
             </div>
           )}
 

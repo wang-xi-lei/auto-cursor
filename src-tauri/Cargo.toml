@@ -32,7 +32,7 @@ uuid = { version = "1.0", features = ["v4"] }
 sha2 = "0.10"
 rand = "0.8"
 regex = "1.0"
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "gzip", "deflate", "brotli"] }
 base64 = "0.21"
 hex = "0.4"
 rusqlite = "0.29"
