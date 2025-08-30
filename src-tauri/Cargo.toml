@@ -35,7 +35,7 @@ regex = "1.0"
 reqwest = { version = "0.11", features = ["json", "gzip", "deflate", "brotli"] }
 base64 = "0.21"
 hex = "0.4"
-rusqlite = "0.29"
+rusqlite = { version = "0.29", features = ["bundled"] }
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.50"
