@@ -313,6 +313,7 @@ export const TokenManagePage: React.FC = () => {
           const result = await AccountService.deleteAccount(
             account.workos_cursor_session_token!
           );
+          await AccountService.removeAccount(account.email);
           if (result.success) {
             setToast({
               message: "账户注销成功！",
@@ -699,7 +700,9 @@ export const TokenManagePage: React.FC = () => {
                   <div
                     key={index}
                     className={`p-4 rounded-lg border ${
-                      account.is_current
+                      account.is_current &&
+                      accountData?.current_account &&
+                      account.token == accountData?.current_account.token
                         ? "bg-green-50 border-green-200"
                         : "bg-white border-gray-200"
                     }`}
@@ -710,11 +713,14 @@ export const TokenManagePage: React.FC = () => {
                           <span className="text-sm font-medium text-gray-900">
                             {account.email}
                           </span>
-                          {account.is_current && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                              当前账户
-                            </span>
-                          )}
+                          {account.is_current &&
+                            accountData?.current_account &&
+                            account.token ==
+                              accountData?.current_account.token && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                当前账户
+                              </span>
+                            )}
                         </div>
                         <p className="mt-1 text-xs text-gray-500">
                           添加时间: {formatDate(account.created_at)}
@@ -774,7 +780,11 @@ export const TokenManagePage: React.FC = () => {
                             </button>
                           </>
                         )}
-                        {!account.is_current && (
+                        {account.is_current &&
+                        accountData?.current_account &&
+                        account.token == accountData?.current_account.token ? (
+                          ""
+                        ) : (
                           <>
                             <button
                               type="button"

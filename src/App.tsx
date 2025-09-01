@@ -5,6 +5,7 @@ import { HomePage } from "./pages/HomePage";
 import { MachineIdPage } from "./pages/MachineIdPage";
 import { AuthCheckPage } from "./pages/AuthCheckPage";
 import { TokenManagePage } from "./pages/TokenManagePage";
+import { AutoRegisterPage } from "./pages/AutoRegisterPage";
 import { UsageProvider } from "./context/UsageContext";
 import "./App.css";
 
@@ -18,6 +19,7 @@ function App() {
             <Route path="/machine-id" element={<MachineIdPage />} />
             <Route path="/auth-check" element={<AuthCheckPage />} />
             <Route path="/token-manage" element={<TokenManagePage />} />
+            <Route path="/auto-register" element={<AutoRegisterPage />} />
           </Routes>
         </Layout>
       </Router>
