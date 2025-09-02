@@ -14,6 +14,18 @@ from faker import Faker
 sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
+def safe_print(*args, **kwargs):
+    """Safe print function that handles BrokenPipeError"""
+    try:
+        print(*args, **kwargs)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # Pipe has been closed, exit gracefully
+        sys.exit(0)
+    except Exception:
+        # Ignore other print errors
+        pass
+
 # 设置路径
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
@@ -188,25 +200,25 @@ def main():
 
                 print(json.dumps(result_data, ensure_ascii=False), flush=True)
             else:
-                print(json.dumps({
+                safe_print(json.dumps({
                     "success": False,
                     "error": "注册失败",
                     "message": "注册过程中出现错误"
                 }, ensure_ascii=False))
         except Exception as e:
-            print(json.dumps({
+            safe_print(json.dumps({
                 "success": False,
                 "error": f"注册过程出错: {str(e)}"
             }, ensure_ascii=False))
                 
     except ImportError as e:
-        print(json.dumps({
+        safe_print(json.dumps({
             "success": False,
             "error": f"导入模块失败: {str(e)}"
         }, ensure_ascii=False))
         sys.exit(1)
     except Exception as e:
-        print(json.dumps({
+        safe_print(json.dumps({
             "success": False,
             "error": f"注册过程出错: {str(e)}"
         }, ensure_ascii=False))

@@ -21,6 +21,18 @@ os.environ["PYINSTALLER_VERBOSE"] = "0"
 # Initialize colorama
 init()
 
+def safe_print(*args, **kwargs):
+    """Safe print function that handles BrokenPipeError"""
+    try:
+        print(*args, **kwargs)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # Pipe has been closed, exit gracefully
+        sys.exit(0)
+    except Exception:
+        # Ignore other print errors
+        pass
+
 # Define emoji constants
 EMOJI = {
     'START': '🚀',
@@ -305,7 +317,7 @@ class CursorRegistration:
             return False
             
         except Exception as e:
-            print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.register_process_error', error=str(e))}{Style.RESET_ALL}")
+            safe_print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.register_process_error', error=str(e))}{Style.RESET_ALL}")
             return False
         finally:
             # Ensure browser is closed in any case
@@ -359,7 +371,7 @@ class CursorRegistration:
                         print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.token_max_attempts', max=max_attempts)}{Style.RESET_ALL}")
 
                 except Exception as e:
-                    print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.token_failed', error=str(e))}{Style.RESET_ALL}")
+                    safe_print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.token_failed', error=str(e))}{Style.RESET_ALL}")
                     attempts += 1
                     if attempts < max_attempts:
                         print(f"{Fore.YELLOW}{EMOJI['WAIT']} {self.translator.get('register.token_attempt', attempt=attempts, time=retry_interval)}{Style.RESET_ALL}")
@@ -368,7 +380,7 @@ class CursorRegistration:
             return False
 
         except Exception as e:
-            print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.account_error', error=str(e))}{Style.RESET_ALL}")
+            safe_print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.account_error', error=str(e))}{Style.RESET_ALL}")
             return False
 
     def _save_account_info(self, token, total_usage, original_workos_token=None):
@@ -388,7 +400,7 @@ class CursorRegistration:
             # if not resetter.reset_machine_ids():  # Call reset_machine_ids method directly
             #     raise Exception("Failed to reset machine ID")
 
-            print(f"{Fore.CYAN}{EMOJI['INFO']} 注册成功，仅保存账户信息，不自动切换账号{Style.RESET_ALL}")
+            safe_print(f"{Fore.CYAN}{EMOJI['INFO']} 注册成功，仅保存账户信息，不自动切换账号{Style.RESET_ALL}")
 
             # Save account information to file using AccountManager
             account_manager = AccountManager(self.translator)
@@ -401,7 +413,7 @@ class CursorRegistration:
                 return False
 
         except Exception as e:
-            print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.save_account_info_failed', error=str(e))}{Style.RESET_ALL}")
+            safe_print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.save_account_info_failed', error=str(e))}{Style.RESET_ALL}")
             return False
 
     def _setup_payment_method(self, browser_tab):

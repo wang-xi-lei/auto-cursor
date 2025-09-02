@@ -1,6 +1,19 @@
 import os
+import sys
 from colorama import Fore, Style
 import re
+
+def safe_print(*args, **kwargs):
+    """Safe print function that handles BrokenPipeError"""
+    try:
+        print(*args, **kwargs)
+        sys.stdout.flush()
+    except BrokenPipeError:
+        # Pipe has been closed, exit gracefully
+        sys.exit(0)
+    except Exception:
+        # Ignore other print errors
+        pass
 
 # Define emoji constants
 EMOJI = {
@@ -27,12 +40,12 @@ class AccountManager:
                 f.write(f"Usage Limit: {total_usage}\n")
                 f.write(f"{'='*50}\n")
 
-            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} {self.translator.get('register.account_info_saved') if self.translator else 'Account information saved'}...{Style.RESET_ALL}")
+            safe_print(f"{Fore.GREEN}{EMOJI['SUCCESS']} {self.translator.get('register.account_info_saved') if self.translator else 'Account information saved'}...{Style.RESET_ALL}")
             return True
 
         except Exception as e:
             error_msg = self.translator.get('register.save_account_info_failed', error=str(e)) if self.translator else f'Failed to save account information: {str(e)}'
-            print(f"{Fore.RED}{EMOJI['ERROR']} {error_msg}{Style.RESET_ALL}")
+            safe_print(f"{Fore.RED}{EMOJI['ERROR']} {error_msg}{Style.RESET_ALL}")
             return False
     
     def get_last_email_domain(self):

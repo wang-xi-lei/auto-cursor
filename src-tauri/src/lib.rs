@@ -1693,7 +1693,8 @@ async fn register_with_email(
                 ) {
                     println!("发送事件失败: {}", e);
                 } else {
-                    println!("✅ 事件已发送: {}", &line[..std::cmp::min(50, line.len())]);
+                    let truncated = line.chars().take(50).collect::<String>();
+                    println!("✅ 事件已发送: {}", truncated);
                 }
 
                 // 检查是否需要验证码
