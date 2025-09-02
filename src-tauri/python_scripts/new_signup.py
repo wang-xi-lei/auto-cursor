@@ -217,7 +217,16 @@ def setup_driver(translator=None, use_incognito=True):
 
         # Use headless mode (must be set to False, simulate human operation)
         co.headless(False)
-        
+
+        # Set window size (width, height)
+        co.set_argument("--window-size=1280,720")  # 可以修改为你想要的宽度和高度
+
+        # 可选：使用app模式减少浏览器UI（取消注释下面的行来启用）
+        # co.set_argument("--app=https://authenticator.cursor.sh/sign-up")
+
+        # 可选：使用kiosk模式（全屏，无法调整窗口大小，取消注释下面的行来启用）
+        # co.set_argument("--kiosk")
+
         # Log browser info
         if translator:
             print(f"{Fore.CYAN}🌐 {translator.get('register.using_browser', browser=browser_type, path=browser_path)}{Style.RESET_ALL}")

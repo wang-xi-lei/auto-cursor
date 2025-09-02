@@ -292,14 +292,14 @@ class CursorRegistration:
                     card_success = self._setup_payment_method(browser_tab)
                     if card_success:
                         print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡绑定成功{Style.RESET_ALL}")
-                        # 银行卡绑定成功后等待15秒
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定完成，等待15秒后关闭浏览器...{Style.RESET_ALL}")
-                        time.sleep(15)
+                        # 银行卡绑定成功后等待25秒
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定完成，等待25秒后关闭浏览器...{Style.RESET_ALL}")
+                        time.sleep(25)
                     else:
                         print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡绑定失败，但注册已完成{Style.RESET_ALL}")
                         # 银行卡绑定失败也等待一段时间
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 等待10秒后关闭浏览器...{Style.RESET_ALL}")
-                        time.sleep(10)
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 等待15秒后关闭浏览器...{Style.RESET_ALL}")
+                        time.sleep(15)
                 else:
                     # 注册失败，等待5秒后关闭
                     print(f"{Fore.CYAN}{EMOJI['INFO']} 注册失败，等待5秒后关闭浏览器...{Style.RESET_ALL}")
@@ -538,10 +538,10 @@ class CursorRegistration:
                 print(f"{Fore.RED}{EMOJI['ERROR']} 无法加载银行卡配置，使用默认配置{Style.RESET_ALL}")
                 # 使用默认配置作为后备
                 card_info = {
-                    'cardNumber': '5450469404847346',
+                    'cardNumber': '545046940484xxxx',
                     'cardExpiry': '08/30',
                     'cardCvc': '603',
-                    'billingName': 'yuxuan yang',
+                    'billingName': 'xxx xx',
                     'billingCountry': 'China',
                     'billingPostalCode': '494364',
                     'billingAdministrativeArea': '福建省 — Fujian Sheng',

@@ -32,13 +32,14 @@ def build_executable():
     current_dir = Path(__file__).parent
     build_dir = current_dir.parent / "pyBuild"
     
-    # 清理并创建build目录
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
+    # 确保build目录存在
     build_dir.mkdir(exist_ok=True)
-    
-    # 创建平台特定目录
+
+    # 创建平台特定目录，如果存在则清理
     platform_dir = build_dir / platform
+    if platform_dir.exists():
+        print(f"🧹 清理 {platform} 平台的构建目录...")
+        shutil.rmtree(platform_dir)
     platform_dir.mkdir(exist_ok=True)
     
     print(f"📁 构建目录: {platform_dir}")
@@ -134,6 +135,11 @@ if __name__ == "__main__":
         "--distpath", str(platform_dir),
         "--workpath", str(current_dir / "build"),
         "--specpath", str(current_dir),
+        "--collect-all", "faker",  # 收集faker的所有模块
+        "--collect-all", "colorama",  # 收集colorama的所有模块
+        "--collect-all", "requests",  # 收集requests的所有模块
+        "--collect-all", "DrissionPage",  # 收集DrissionPage的所有模块
+        "--collect-all", "dotenv",  # 收集dotenv的所有模块
         # 添加隐藏导入
         "--hidden-import", "manual_register",
         "--hidden-import", "cursor_register_manual",
@@ -146,6 +152,14 @@ if __name__ == "__main__":
         "--hidden-import", "utils",
         "--hidden-import", "email_tabs.email_tab_interface",
         "--hidden-import", "email_tabs.tempmail_plus_tab",
+        # 添加第三方库的具体模块
+        "--hidden-import", "faker.providers.person",
+        "--hidden-import", "faker.providers.internet",
+        "--hidden-import", "faker.providers.lorem",
+        "--hidden-import", "requests.adapters",
+        "--hidden-import", "requests.packages.urllib3",
+        "--hidden-import", "urllib3.util.retry",
+        "--hidden-import", "urllib3.util.connection",
         # 添加数据文件
         "--add-data", f"{current_dir}/*.py{os.pathsep}.",
         "--add-data", f"{current_dir}/email_tabs{os.pathsep}email_tabs",

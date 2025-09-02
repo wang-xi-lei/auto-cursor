@@ -46,6 +46,23 @@ python-dotenv>=1.0.0 # 环境变量管理
 ## 🔧 使用方法
 
 ### 1. 直接使用Python脚本
+
+#### Windows (PowerShell/CMD)
+```powershell
+
+$env:PATH = "$HOME\.pyenv\pyenv-win\bin;$HOME\.pyenv\pyenv-win\shims;" + $env:PATH; 
+
+# 激活虚拟环境
+venv\Scripts\activate
+
+# 使用指定邮箱注册
+python manual_register.py test@example.com John Smith
+
+# 使用随机生成的姓名
+python manual_register.py test@example.com
+```
+
+#### Linux/macOS (Bash)
 ```bash
 # 激活虚拟环境
 source venv/bin/activate
@@ -133,6 +150,16 @@ Command::new("bash")
 - 其他临时文件
 
 ### 首次设置
+
+#### Windows (PowerShell/CMD)
+```powershell
+# 克隆项目后需要重新创建虚拟环境
+python -m venv venv
+venv\Scripts\activate
+pip install -r requirements_minimal.txt
+```
+
+#### Linux/macOS (Bash)
 ```bash
 # 克隆项目后需要重新创建虚拟环境
 python3 -m venv venv

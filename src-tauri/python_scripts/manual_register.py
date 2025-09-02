@@ -6,9 +6,14 @@
 
 import os
 import sys
+import io
 import json
 from pathlib import Path
 from faker import Faker
+
+# 设置UTF-8编码输出 - 必须在所有其他操作之前
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 # 强制刷新输出，确保实时显示
 sys.stdout.reconfigure(line_buffering=True)
