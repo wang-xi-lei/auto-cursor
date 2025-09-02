@@ -4,9 +4,14 @@ import { listen } from "@tauri-apps/api/event";
 import { Button } from "../components/Button";
 import { LoadingSpinner } from "../components/LoadingSpinner";
 import { Toast } from "../components/Toast";
+import { BankCardConfigModal } from "../components/BankCardConfigModal";
+import { EmailConfigModal } from "../components/EmailConfigModal";
 import { AccountService } from "../services/accountService";
+import { BankCardConfigService } from "../services/bankCardConfigService";
+import { EmailConfigService } from "../services/emailConfigService";
+import { BankCardConfig } from "../types/bankCardConfig";
+import { EmailConfig } from "../types/emailConfig";
 import { base64URLEncode, K, sha256 } from "../utils/cursorToken";
-import axios from "axios";
 
 interface RegistrationForm {
   email: string;
@@ -57,7 +62,12 @@ export const AutoRegisterPage: React.FC = () => {
   const [isRegistering, setIsRegistering] = useState(false);
   const isRegisteringRef = useRef(false);
   const realtimeOutputRef = useRef<string[]>([]);
-  const [forceRender, setForceRender] = useState(0);
+  const [showBankCardConfig, setShowBankCardConfig] = useState(false);
+  const [bankCardConfig, setBankCardConfig] = useState<BankCardConfig | null>(
+    null
+  );
+  const [showEmailConfig, setShowEmailConfig] = useState(false);
+  const [emailConfig, setEmailConfig] = useState<EmailConfig | null>(null);
 
   // 同步ref和state
   useEffect(() => {
@@ -377,20 +387,62 @@ export const AutoRegisterPage: React.FC = () => {
     setToast({ message: "已生成随机账户信息", type: "info" });
   };
 
+  // 加载银行卡配置
+  const loadBankCardConfig = async () => {
+    try {
+      const config = await BankCardConfigService.getBankCardConfig();
+      setBankCardConfig(config);
+    } catch (error) {
+      console.error("加载银行卡配置失败:", error);
+    }
+  };
+
+  const handleBankCardConfigSave = (config: BankCardConfig) => {
+    setBankCardConfig(config);
+    setToast({ message: "银行卡配置已更新", type: "success" });
+  };
+
+  // 加载邮箱配置
+  const loadEmailConfig = async () => {
+    try {
+      const config = await EmailConfigService.getEmailConfig();
+      setEmailConfig(config);
+    } catch (error) {
+      console.error("加载邮箱配置失败:", error);
+    }
+  };
+
+  const handleEmailConfigSave = (config: EmailConfig) => {
+    setEmailConfig(config);
+    setToast({ message: "邮箱配置已更新", type: "success" });
+  };
+
   // Initialize with random info on component mount
   React.useEffect(() => {
     if (useRandomInfo) {
       generateRandomInfo();
     }
+    // 加载银行卡配置和邮箱配置
+    loadBankCardConfig();
+    loadEmailConfig();
   }, [useRandomInfo]);
 
   return (
     <div className="max-w-4xl mx-auto">
       <div className="bg-white rounded-lg shadow">
         <div className="px-4 py-5 sm:p-6">
-          <h3 className="mb-6 text-lg font-medium leading-6 text-gray-900">
-            📝 Cursor 自动注册
-          </h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-lg font-medium leading-6 text-gray-900">
+              📝 Cursor 自动注册
+            </h3>
+            <Button
+              onClick={() => setShowBankCardConfig(true)}
+              variant="secondary"
+              className="flex items-center"
+            >
+              💳 银行卡配置
+            </Button>
+          </div>
 
           <div className="space-y-6">
             {/* 使用随机信息选项 */}
@@ -647,6 +699,62 @@ export const AutoRegisterPage: React.FC = () => {
               </div>
             </div>
 
+            {/* 邮箱配置状态 */}
+            {emailConfig && (
+              <div className="p-4 border border-green-200 rounded-md bg-green-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="text-sm font-medium text-green-800">
+                      📧 邮箱配置状态
+                    </h5>
+                    <p className="mt-1 text-sm text-green-700">
+                      Worker域名: {emailConfig.worker_domain || "未配置"} |
+                      邮箱域名: {emailConfig.email_domain || "未配置"} | 密码:{" "}
+                      {emailConfig.admin_password ? "已配置" : "未配置"}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setShowEmailConfig(true)}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    编辑
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* 银行卡配置状态 */}
+            {bankCardConfig && (
+              <div className="p-4 border border-blue-200 rounded-md bg-blue-50">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h5 className="text-sm font-medium text-blue-800">
+                      💳 银行卡配置状态
+                    </h5>
+                    <p className="mt-1 text-sm text-blue-700">
+                      卡号:{" "}
+                      {bankCardConfig.cardNumber
+                        ? `${bankCardConfig.cardNumber.slice(
+                            0,
+                            4
+                          )}****${bankCardConfig.cardNumber.slice(-4)}`
+                        : "未配置"}{" "}
+                      | 持卡人: {bankCardConfig.billingName || "未配置"} | 地址:{" "}
+                      {bankCardConfig.billingAdministrativeArea || "未配置"}
+                    </p>
+                  </div>
+                  <Button
+                    onClick={() => setShowBankCardConfig(true)}
+                    variant="secondary"
+                    size="sm"
+                  >
+                    编辑
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* 操作按钮 */}
             <div className="flex space-x-4">
               {useRandomInfo && (
@@ -741,7 +849,7 @@ export const AutoRegisterPage: React.FC = () => {
               </div>
             )}
             {/* 显示实时Python脚本输出 */}
-            {(isRegistering || realtimeOutputRef.current.length > 0) && (
+            {(isRegistering || realtimeOutput.length > 0) && (
               <div className="mt-3">
                 <h5 className="mb-2 text-sm font-medium text-gray-900">
                   脚本执行日志：
@@ -753,17 +861,14 @@ export const AutoRegisterPage: React.FC = () => {
                 </h5>
                 <div className="p-3 overflow-y-auto bg-gray-900 rounded-md max-h-64">
                   <div className="space-y-1 font-mono text-xs text-green-400">
-                    {Array.from(new Set(realtimeOutputRef.current)).map(
-                      (line, index) => (
-                        <div key={index} className="whitespace-pre-wrap">
-                          {line}
-                        </div>
-                      )
+                    {Array.from(new Set(realtimeOutput)).map((line, index) => (
+                      <div key={index} className="whitespace-pre-wrap">
+                        {line}
+                      </div>
+                    ))}
+                    {isRegistering && realtimeOutput.length === 0 && (
+                      <div className="text-yellow-400">等待脚本输出...</div>
                     )}
-                    {isRegistering &&
-                      realtimeOutputRef.current.length === 0 && (
-                        <div className="text-yellow-400">等待脚本输出...</div>
-                      )}
                   </div>
                 </div>
               </div>
@@ -836,6 +941,20 @@ export const AutoRegisterPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 邮箱配置模态框 */}
+      <EmailConfigModal
+        isOpen={showEmailConfig}
+        onClose={() => setShowEmailConfig(false)}
+        onSave={handleEmailConfigSave}
+      />
+
+      {/* 银行卡配置模态框 */}
+      <BankCardConfigModal
+        isOpen={showBankCardConfig}
+        onClose={() => setShowBankCardConfig(false)}
+        onSave={handleBankCardConfigSave}
+      />
     </div>
   );
 };

@@ -61,10 +61,13 @@ fn get_python_executable_path() -> Result<PathBuf, String> {
     }
 }
 
-// Cloudflare临时邮箱配置
-const WORKER_DOMAIN: &str = "apimail.anify.icu";
-const EMAIL_DOMAIN: &str = "anify.icu";
-const ADMIN_PASSWORD: &str = "abc2002522";
+// 邮箱配置结构体
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct EmailConfig {
+    worker_domain: String,
+    email_domain: String,
+    admin_password: String,
+}
 
 // Cloudflare临时邮箱相关结构体
 #[derive(Debug, Serialize, Deserialize)]
@@ -111,17 +114,20 @@ async fn create_cloudflare_temp_email() -> Result<(String, String), String> {
     let client = reqwest::Client::new();
     let random_name = generate_random_email_name();
 
-    let url = format!("https://{}/admin/new_address", WORKER_DOMAIN);
+    // 获取邮箱配置
+    let email_config = get_email_config().await?;
+
+    let url = format!("https://{}/admin/new_address", email_config.worker_domain);
     let payload = serde_json::json!({
         "enablePrefix": true,
         "name": random_name,
-        "domain": EMAIL_DOMAIN,
+        "domain": email_config.email_domain,
     });
 
     println!("🔍 [DEBUG] 创建邮箱请求详情:");
     println!("  URL: {}", url);
     println!("  Headers:");
-    println!("    x-admin-auth: {}", ADMIN_PASSWORD);
+    println!("    x-admin-auth: {}", email_config.admin_password);
     println!("    Content-Type: application/json");
     println!(
         "  Payload: {}",
@@ -130,7 +136,7 @@ async fn create_cloudflare_temp_email() -> Result<(String, String), String> {
 
     let response = client
         .post(&url)
-        .header("X-Admin-Auth", ADMIN_PASSWORD)
+        .header("X-Admin-Auth", &email_config.admin_password)
         .header("Content-Type", "application/json")
         .json(&payload)
         .send()
@@ -180,11 +186,14 @@ async fn create_cloudflare_temp_email() -> Result<(String, String), String> {
 async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, String> {
     let client = reqwest::Client::new();
 
+    // 获取邮箱配置
+    let email_config = get_email_config().await?;
+
     // 最多尝试30次，每次等待10秒
     for attempt in 1..=30 {
         println!("🔍 第{}次尝试获取验证码...", attempt);
 
-        let url = format!("https://{}/api/mails", WORKER_DOMAIN);
+        let url = format!("https://{}/api/mails", email_config.worker_domain);
         println!("🔍 [DEBUG] 获取邮件请求详情:");
         println!("  URL: {}", url);
         println!("  Headers:");
@@ -1888,7 +1897,7 @@ async fn register_with_cloudflare_temp_email(
     // 7. 由于我们已经通过实时输出获取了所有信息，这里需要从最后的输出中解析结果
     // 我们可以通过检查临时文件或其他方式来获取最终结果
     // 简化处理：返回一个成功的结果，具体的注册状态通过实时输出已经传递给前端
-    let mut result = serde_json::json!({
+    let result = serde_json::json!({
         "success": true,
         "message": "注册流程已完成",
         "email": email,
@@ -1993,6 +2002,108 @@ async fn get_saved_accounts() -> Result<Vec<serde_json::Value>, String> {
     }
 }
 
+// Bank Card Configuration Commands
+#[tauri::command]
+async fn read_bank_card_config() -> Result<String, String> {
+    use std::fs;
+
+    // 获取工作目录
+    let current_dir =
+        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let config_path = current_dir.join("bank_card_config.json");
+
+    if config_path.exists() {
+        fs::read_to_string(&config_path)
+            .map_err(|e| format!("Failed to read bank card config: {}", e))
+    } else {
+        // 如果文件不存在，返回空字符串，前端会使用默认配置
+        Ok(String::new())
+    }
+}
+
+#[tauri::command]
+async fn save_bank_card_config(config: String) -> Result<(), String> {
+    use std::fs;
+
+    // 获取工作目录
+    let current_dir =
+        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let config_path = current_dir.join("bank_card_config.json");
+
+    // 验证JSON格式
+    serde_json::from_str::<serde_json::Value>(&config)
+        .map_err(|e| format!("Invalid JSON format: {}", e))?;
+
+    fs::write(&config_path, config)
+        .map_err(|e| format!("Failed to save bank card config: {}", e))?;
+
+    println!("✅ 银行卡配置已保存到: {:?}", config_path);
+    Ok(())
+}
+
+// Email Configuration Commands
+#[tauri::command]
+async fn read_email_config() -> Result<String, String> {
+    use std::fs;
+
+    // 获取工作目录
+    let current_dir =
+        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let config_path = current_dir.join("email_config.json");
+
+    if config_path.exists() {
+        fs::read_to_string(&config_path).map_err(|e| format!("Failed to read email config: {}", e))
+    } else {
+        // 如果文件不存在，返回空字符串，前端会使用默认配置
+        Ok(String::new())
+    }
+}
+
+#[tauri::command]
+async fn save_email_config(config: String) -> Result<(), String> {
+    use std::fs;
+
+    // 获取工作目录
+    let current_dir =
+        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    let config_path = current_dir.join("email_config.json");
+
+    // 验证JSON格式
+    serde_json::from_str::<serde_json::Value>(&config)
+        .map_err(|e| format!("Invalid JSON format: {}", e))?;
+
+    fs::write(&config_path, config).map_err(|e| format!("Failed to save email config: {}", e))?;
+
+    println!("✅ 邮箱配置已保存到: {:?}", config_path);
+    Ok(())
+}
+
+// 获取邮箱配置的辅助函数
+async fn get_email_config() -> Result<EmailConfig, String> {
+    match read_email_config().await {
+        Ok(config_str) if !config_str.is_empty() => {
+            match serde_json::from_str::<EmailConfig>(&config_str) {
+                Ok(config) => {
+                    // 验证配置是否完整
+                    if config.worker_domain.is_empty()
+                        || config.email_domain.is_empty()
+                        || config.admin_password.is_empty()
+                    {
+                        return Err("邮箱配置不完整，请先在前端配置邮箱域名和密码".to_string());
+                    }
+                    Ok(config)
+                }
+                Err(e) => Err(format!("解析邮箱配置失败: {}", e)),
+            }
+        }
+        _ => Err("未找到邮箱配置，请先在前端配置邮箱域名和密码".to_string()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -2036,7 +2147,11 @@ pub fn run() {
             register_with_cloudflare_temp_email,
             submit_verification_code,
             cancel_registration,
-            get_saved_accounts
+            get_saved_accounts,
+            read_bank_card_config,
+            save_bank_card_config,
+            read_email_config,
+            save_email_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

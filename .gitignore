@@ -7,3 +7,4 @@ build/
 .env.test.local
 .env.production.local
 cursor_accounts
+bank_card_config.json

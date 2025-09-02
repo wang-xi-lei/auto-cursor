@@ -520,19 +520,26 @@ class CursorRegistration:
             print(f"{Fore.CYAN}{EMOJI['INFO']} 开始填写银行卡信息...{Style.RESET_ALL}")
             print(f"{Fore.CYAN}{EMOJI['INFO']} 当前页面URL: {browser_tab.url}{Style.RESET_ALL}")
 
-            # 银行卡信息
-            card_info = {
-                'cardNumber': '5450469404847346',
-                'cardExpiry': '08/30',
-                'cardCvc': '603',
-                'billingName': 'yuxuan yang',
-                'billingCountry': 'China',
-                'billingPostalCode': '494364',
-                'billingAdministrativeArea': '福建省 — Fujian Sheng',
-                'billingLocality': '福州市',
-                'billingDependentLocality': '闽侯县',
-                'billingAddressLine1': '银泰路201号'
-            }
+            # 从配置文件读取银行卡信息
+            card_info = self._load_bank_card_config()
+            if not card_info:
+                print(f"{Fore.RED}{EMOJI['ERROR']} 无法加载银行卡配置，使用默认配置{Style.RESET_ALL}")
+                # 使用默认配置作为后备
+                card_info = {
+                    'cardNumber': '5450469404847346',
+                    'cardExpiry': '08/30',
+                    'cardCvc': '603',
+                    'billingName': 'yuxuan yang',
+                    'billingCountry': 'China',
+                    'billingPostalCode': '494364',
+                    'billingAdministrativeArea': '福建省 — Fujian Sheng',
+                    'billingLocality': '福州市',
+                    'billingDependentLocality': '闽侯县',
+                    'billingAddressLine1': '银泰路201号'
+                }
+            
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 使用银行卡配置: {card_info['cardNumber'][:4]}****{card_info['cardNumber'][-4:]}{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 持卡人: {card_info['billingName']}{Style.RESET_ALL}")
 
             # 填写卡号
             print(f"{Fore.CYAN}{EMOJI['INFO']} 查找卡号输入框 #cardNumber...{Style.RESET_ALL}")
@@ -670,6 +677,47 @@ class CursorRegistration:
         except Exception as e:
             print(f"{Fore.RED}{EMOJI['ERROR']} 提交银行卡信息失败: {str(e)}{Style.RESET_ALL}")
             return False
+
+    def _load_bank_card_config(self):
+        """从配置文件加载银行卡信息"""
+        try:
+            import json
+            import os
+            
+            # 获取当前工作目录
+            current_dir = os.getcwd()
+            config_path = os.path.join(current_dir, 'bank_card_config.json')
+            
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试加载银行卡配置文件: {config_path}{Style.RESET_ALL}")
+            
+            if not os.path.exists(config_path):
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡配置文件不存在: {config_path}{Style.RESET_ALL}")
+                return None
+            
+            with open(config_path, 'r', encoding='utf-8') as f:
+                config_data = json.load(f)
+            
+            # 验证必需的字段
+            required_fields = [
+                'cardNumber', 'cardExpiry', 'cardCvc', 'billingName', 
+                'billingCountry', 'billingPostalCode', 'billingAdministrativeArea',
+                'billingLocality', 'billingDependentLocality', 'billingAddressLine1'
+            ]
+            
+            for field in required_fields:
+                if field not in config_data or not config_data[field]:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 配置文件缺少必需字段: {field}{Style.RESET_ALL}")
+                    return None
+            
+            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 成功加载银行卡配置{Style.RESET_ALL}")
+            return config_data
+            
+        except json.JSONDecodeError as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 银行卡配置文件JSON格式错误: {str(e)}{Style.RESET_ALL}")
+            return None
+        except Exception as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 加载银行卡配置失败: {str(e)}{Style.RESET_ALL}")
+            return None
 
     def start(self):
         """Start Registration Process"""
