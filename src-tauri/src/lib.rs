@@ -253,10 +253,13 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                                 return Ok(verification_code);
                             }
                         }
+                        // 1. 移除颜色代码
+                        let color_code_regex = Regex::new(r"#([0-9a-fA-F]{6})\b").unwrap();
+                        let content_without_colors = color_code_regex.replace_all(raw_content, "");
 
                         // 尝试第三种匹配方式：直接匹配连续的6位数字
                         let re3 = Regex::new(r"\b(\d{6})\b").unwrap();
-                        if let Some(captures) = re3.captures(raw_content) {
+                        if let Some(captures) = re3.captures(&content_without_colors) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
                                 println!(
@@ -294,6 +297,138 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
     }
 
     Err("获取验证码超时".to_string())
+}
+
+// 从Outlook邮箱获取验证码
+async fn get_verification_code_from_outlook(email: &str) -> Result<String, String> {
+    let client = reqwest::Client::new();
+    let encoded_email = urlencoding::encode(email);
+
+    // 最多尝试30次，每次等待10秒
+    for attempt in 1..=30 {
+        println!("🔍 第{}次尝试从Outlook获取验证码...", attempt);
+
+        // 获取收件箱邮件
+        let inbox_url = format!(
+            "http://query.paopaodw.com/api/GetLastEmails?email={}&boxType=1",
+            encoded_email
+        );
+        println!("🔍 [DEBUG] 获取收件箱邮件: {}", inbox_url);
+
+        let inbox_response = client
+            .get(&inbox_url)
+            .send()
+            .await
+            .map_err(|e| format!("获取收件箱邮件失败: {}", e))?;
+
+        if inbox_response.status().is_success() {
+            let inbox_text = inbox_response
+                .text()
+                .await
+                .map_err(|e| format!("读取收件箱响应失败: {}", e))?;
+
+            println!("🔍 [DEBUG] 收件箱响应: {}", inbox_text);
+
+            if let Ok(inbox_data) = serde_json::from_str::<serde_json::Value>(&inbox_text) {
+                if let Some(data) = inbox_data.get("data").and_then(|d| d.as_array()) {
+                    for email_item in data {
+                        if let Some(body) = email_item.get("Body").and_then(|b| b.as_str()) {
+                            if let Some(code) = extract_verification_code_from_content(body) {
+                                println!("✅ 从收件箱找到验证码: {}", code);
+                                return Ok(code);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // 获取垃圾箱邮件
+        let spam_url = format!(
+            "http://query.paopaodw.com/api/GetLastEmails?email={}&boxType=2",
+            encoded_email
+        );
+        println!("🔍 [DEBUG] 获取垃圾箱邮件: {}", spam_url);
+
+        let spam_response = client
+            .get(&spam_url)
+            .send()
+            .await
+            .map_err(|e| format!("获取垃圾箱邮件失败: {}", e))?;
+
+        if spam_response.status().is_success() {
+            let spam_text = spam_response
+                .text()
+                .await
+                .map_err(|e| format!("读取垃圾箱响应失败: {}", e))?;
+
+            println!("🔍 [DEBUG] 垃圾箱响应: {}", spam_text);
+
+            if let Ok(spam_data) = serde_json::from_str::<serde_json::Value>(&spam_text) {
+                if let Some(data) = spam_data.get("data").and_then(|d| d.as_array()) {
+                    for email_item in data {
+                        if let Some(body) = email_item.get("Body").and_then(|b| b.as_str()) {
+                            if let Some(code) = extract_verification_code_from_content(body) {
+                                println!("✅ 从垃圾箱找到验证码: {}", code);
+                                return Ok(code);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        if attempt < 30 {
+            println!("⏰ 第{}次尝试未找到验证码，等待10秒后重试...", attempt);
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        }
+    }
+
+    Err("获取验证码超时，请检查邮箱或稍后重试".to_string())
+}
+
+// 提取验证码的通用函数（复用现有逻辑）
+fn extract_verification_code_from_content(content: &str) -> Option<String> {
+    use regex::Regex;
+
+    // 使用现有的验证码提取逻辑
+    let re1 = Regex::new(r"code is: (\d{6})").unwrap();
+    if let Some(captures) = re1.captures(content) {
+        if let Some(code) = captures.get(1) {
+            return Some(code.as_str().to_string());
+        }
+    }
+
+    // 第二种方式
+    let re2 = Regex::new(r"验证码为：(\d{6})").unwrap();
+    if let Some(captures) = re2.captures(content) {
+        if let Some(code) = captures.get(1) {
+            return Some(code.as_str().to_string());
+        }
+    }
+
+    // 第三种方式
+    let re3 = Regex::new(r"verification code is: (\d{6})").unwrap();
+    if let Some(captures) = re3.captures(content) {
+        if let Some(code) = captures.get(1) {
+            return Some(code.as_str().to_string());
+        }
+    }
+
+    // 第四种方式 - 更通用的6位数字匹配，排除颜色代码（如#414141）
+    // 1. 移除颜色代码
+    let color_code_regex = Regex::new(r"#([0-9a-fA-F]{6})\b").unwrap();
+    let content_without_colors = color_code_regex.replace_all(content, "");
+
+    // 2. 查找 6 位数字
+    let re4 = Regex::new(r"\b(\d{6})\b").unwrap();
+    if let Some(captures) = re4.captures(&content_without_colors) {
+        if let Some(code) = captures.get(1) {
+            return Some(code.as_str().to_string());
+        }
+    }
+
+    None
 }
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -1938,6 +2073,253 @@ async fn register_with_cloudflare_temp_email(
     Ok(result)
 }
 
+// 使用Outlook邮箱注册账户
+#[tauri::command]
+async fn register_with_outlook(
+    app: tauri::AppHandle,
+    email: String,
+    first_name: String,
+    last_name: String,
+    use_incognito: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    println!("🔄 使用Outlook邮箱注册 Cursor 账户...");
+    println!("📧 邮箱: {}", email);
+    println!("👤 姓名: {} {}", first_name, last_name);
+    println!(
+        "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
+        use_incognito
+    );
+
+    // 获取可执行文件路径
+    let executable_path = get_python_executable_path()?;
+
+    if !executable_path.exists() {
+        return Err(format!("找不到Python可执行文件: {:?}", executable_path));
+    }
+
+    // 启动注册进程并设置实时输出
+    let incognito_flag = if use_incognito.unwrap_or(true) {
+        "true"
+    } else {
+        "false"
+    };
+
+    println!("🔍 [DEBUG] 准备启动注册进程");
+    println!("    可执行文件: {:?}", executable_path);
+    println!("    邮箱: {}", email);
+    println!("    姓名: {} {}", first_name, last_name);
+    println!("    隐身模式: {}", incognito_flag);
+
+    let mut cmd = Command::new(&executable_path);
+    cmd.arg(&email)
+        .arg(&first_name)
+        .arg(&last_name)
+        .arg(incognito_flag)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+
+    println!("🔍 [DEBUG] 命令行: {:?}", cmd);
+
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("无法启动注册进程: {}", e))?;
+
+    let stdout = child.stdout.take().ok_or("无法获取stdout".to_string())?;
+
+    let stderr = child.stderr.take().ok_or("无法获取stderr".to_string())?;
+
+    // 启动实时输出读取任务（使用同步线程，与Cloudflare注册函数保持一致）
+    let app_clone = app.clone();
+    let email_clone = email.clone();
+
+    // 处理stdout
+    let app_for_stdout = app_clone.clone();
+    let email_for_stdout = email_clone.clone();
+    let stdout_task = std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(stdout);
+
+        for line in reader.lines() {
+            match line {
+                Ok(line_content) => {
+                    println!("📝 Python输出: {}", line_content);
+
+                    // 检查是否需要验证码
+                    if line_content.contains("等待验证码")
+                        || line_content.contains("request_verification_code")
+                        || line_content.contains("需要邮箱验证码")
+                        || line_content.contains("请输入验证码")
+                    {
+                        println!("🔍 检测到验证码请求，开始从Outlook获取验证码...");
+
+                        // 启动验证码获取任务
+                        let app_task = app_for_stdout.clone();
+                        let email_task = email_for_stdout.clone();
+                        std::thread::spawn(move || {
+                            // 使用tokio运行时
+                            let rt = tokio::runtime::Runtime::new().unwrap();
+                            rt.block_on(async {
+                                // 等待一小段时间让邮件到达
+                                tokio::time::sleep(tokio::time::Duration::from_secs(8)).await;
+
+                                for attempt in 1..=10 {
+                                    println!("🔍 第{}次尝试获取Outlook验证码...", attempt);
+
+                                    match get_verification_code_from_outlook(&email_task).await {
+                                        Ok(code) => {
+                                            println!("🎯 自动获取到验证码: {}", code);
+
+                                            // 将验证码写入临时文件
+                                            let temp_dir = std::env::temp_dir();
+                                            let code_file =
+                                                temp_dir.join("cursor_verification_code.txt");
+
+                                            if let Err(e) = std::fs::write(&code_file, &code) {
+                                                println!("❌ 写入验证码文件失败: {}", e);
+                                                return;
+                                            }
+
+                                            // 发送验证码到前端
+                                            if let Err(e) =
+                                                app_task.emit("verification-code-received", &code)
+                                            {
+                                                println!("❌ 发送验证码事件失败: {}", e);
+                                            }
+
+                                            println!("✅ 验证码已自动填入临时文件");
+                                            return;
+                                        }
+                                        Err(e) => {
+                                            println!("🔍 第{}次获取验证码失败: {}", attempt, e);
+                                            if attempt < 10 {
+                                                std::thread::sleep(std::time::Duration::from_secs(
+                                                    10,
+                                                ));
+                                            }
+                                        }
+                                    }
+                                }
+
+                                println!("❌ 自动获取验证码失败，已尝试10次，请用户手动输入");
+                                if let Err(emit_err) = app_task.emit(
+                                    "verification-code-manual-input-required",
+                                    "自动获取验证码失败，请手动输入验证码",
+                                ) {
+                                    println!("❌ 发送手动输入提示事件失败: {}", emit_err);
+                                }
+                            });
+                        });
+                    }
+
+                    // 发送实时输出到前端
+                    if let Err(e) = app_for_stdout.emit(
+                        "registration-output",
+                        serde_json::json!({
+                            "line": line_content,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        }),
+                    ) {
+                        println!("❌ 发送输出事件失败: {}", e);
+                    }
+                }
+                Err(e) => {
+                    println!("❌ 读取Python输出失败: {}", e);
+                    break;
+                }
+            }
+        }
+    });
+
+    // 处理stderr
+    let app_for_stderr = app.clone();
+    let stderr_task = std::thread::spawn(move || {
+        use std::io::{BufRead, BufReader};
+        let reader = BufReader::new(stderr);
+
+        for line in reader.lines() {
+            match line {
+                Ok(line_content) => {
+                    println!("📝 Python错误: {}", line_content);
+
+                    // 发送错误输出到前端
+                    if let Err(e) = app_for_stderr.emit(
+                        "registration-output",
+                        serde_json::json!({
+                            "line": line_content,
+                            "timestamp": chrono::Utc::now().to_rfc3339()
+                        }),
+                    ) {
+                        println!("❌ 发送错误输出事件失败: {}", e);
+                    }
+                }
+                Err(e) => {
+                    println!("❌ 读取Python错误输出失败: {}", e);
+                    break;
+                }
+            }
+        }
+    });
+
+    // // 等待进程完成
+    // let exit_status = child
+    //     .wait()
+    //     .map_err(|e| format!("等待注册进程完成失败: {}", e))?;
+
+    // println!("🔍 Python进程已结束");
+
+    // // 等待输出读取任务完成
+    // let _ = stdout_task.join();
+    // let _ = stderr_task.join();
+
+    // println!("🔍 [DEBUG] 注册完成");
+    // println!("    退出代码: {:?}", exit_status.code());
+
+    // // 构建返回结果
+    // let result = if exit_status.success() {
+    //     serde_json::json!({
+    //         "success": false,
+    //         "message": "进程关闭"
+    //     })
+    // } else {
+    //     serde_json::json!({
+    //         "success": false,
+    //         "message": "进程关闭",
+    //         "exit_code": exit_status.code()
+    //     })
+    // };
+
+    // 4. 等待注册进程完成
+    let exit_status = child
+        .wait()
+        .map_err(|e| format!("等待Python脚本执行失败: {}", e))?;
+
+    println!("🔍 Python进程已结束");
+
+    // 等待输出读取任务完成
+    let _ = stdout_task.join();
+
+    // 6. 处理进程退出状态
+    if !exit_status.success() {
+        println!("❌ Python脚本执行失败，退出码: {:?}", exit_status.code());
+        return Err(format!(
+            "Python脚本执行失败，退出码: {:?}",
+            exit_status.code()
+        ));
+    }
+
+    // 7. 由于我们已经通过实时输出获取了所有信息，这里需要从最后的输出中解析结果
+    // 我们可以通过检查临时文件或其他方式来获取最终结果
+    // 简化处理：返回一个成功的结果，具体的注册状态通过实时输出已经传递给前端
+    let result = serde_json::json!({
+        "success": false,
+        "message": "注册进程已退出",
+        "email": email,
+        "email_type": "outlook-default"
+    });
+
+    Ok(result)
+}
+
 #[tauri::command]
 async fn submit_verification_code(code: String) -> Result<serde_json::Value, String> {
     println!("🔢 接收到验证码: {}", code);
@@ -2145,6 +2527,7 @@ pub fn run() {
             create_temp_email,
             register_with_email,
             register_with_cloudflare_temp_email,
+            register_with_outlook,
             submit_verification_code,
             cancel_registration,
             get_saved_accounts,

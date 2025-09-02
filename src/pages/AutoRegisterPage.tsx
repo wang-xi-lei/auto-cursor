@@ -46,6 +46,10 @@ export const AutoRegisterPage: React.FC = () => {
   const [emailType, setEmailType] = useState<
     "custom" | "cloudflare_temp" | "outlook"
   >("custom");
+  const [outlookMode, setOutlookMode] = useState<"default" | "token">(
+    "default"
+  );
+  const [outlookEmail, setOutlookEmail] = useState("");
   const [useIncognito, setUseIncognito] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{
@@ -194,6 +198,20 @@ export const AutoRegisterPage: React.FC = () => {
         }
       );
 
+      // 监听需要手动输入验证码
+      const unlistenManualInput = await listen(
+        "verification-code-manual-input-required",
+        (event: any) => {
+          const message = event.payload;
+          console.log("🔍 需要手动输入验证码:", message);
+          setShowVerificationModal(true);
+          setToast({
+            message: "自动获取验证码失败，请手动输入验证码",
+            type: "info",
+          });
+        }
+      );
+
       console.log("事件监听器设置完成");
 
       return () => {
@@ -201,6 +219,7 @@ export const AutoRegisterPage: React.FC = () => {
         unlistenVerification();
         unlistenAutoCode();
         unlistenCodeFailed();
+        unlistenManualInput();
       };
     };
 
@@ -292,10 +311,21 @@ export const AutoRegisterPage: React.FC = () => {
   };
 
   const validateForm = (): boolean => {
-    // 只有自定义邮箱才需要验证邮箱地址
+    // 自定义邮箱需要验证邮箱地址
     if (emailType === "custom" && (!form.email || !form.email.includes("@"))) {
       setToast({ message: "请输入有效的邮箱地址", type: "error" });
       return false;
+    }
+    // Outlook邮箱需要验证邮箱地址
+    if (emailType === "outlook" && outlookMode === "default") {
+      if (!outlookEmail || !outlookEmail.includes("@")) {
+        setToast({ message: "请输入有效的Outlook邮箱地址", type: "error" });
+        return false;
+      }
+      if (!outlookEmail.toLowerCase().includes("outlook.com")) {
+        setToast({ message: "请输入@outlook.com邮箱地址", type: "error" });
+        return false;
+      }
     }
     if (!form.firstName.trim()) {
       setToast({ message: "请输入名字", type: "error" });
@@ -335,6 +365,14 @@ export const AutoRegisterPage: React.FC = () => {
             useIncognito: useIncognito,
           }
         );
+      } else if (emailType === "outlook" && outlookMode === "default") {
+        // 使用Outlook邮箱注册
+        result = await invoke<RegistrationResult>("register_with_outlook", {
+          email: outlookEmail,
+          firstName: form.firstName,
+          lastName: form.lastName,
+          useIncognito: useIncognito,
+        });
       } else {
         // 使用自定义邮箱注册
         result = await invoke<RegistrationResult>("register_with_email", {
@@ -358,6 +396,9 @@ export const AutoRegisterPage: React.FC = () => {
         // 只有自定义邮箱才需要手动输入验证码
         setShowVerificationModal(true);
         setToast({ message: "请输入验证码", type: "info" });
+      } else if (needsVerificationCode && emailType === "outlook") {
+        // Outlook邮箱会自动获取验证码
+        setToast({ message: "正在从Outlook邮箱获取验证码...", type: "info" });
       } else if (
         result.success == "completed" ||
         result.message == "注册成功"
@@ -557,7 +598,7 @@ export const AutoRegisterPage: React.FC = () => {
                       Cloudflare临时邮箱（自动获取验证码）
                     </label>
                   </div>
-                  <div className="flex items-center">
+                  {/* <div className="flex items-center">
                     <input
                       id="email-outlook"
                       name="email-type"
@@ -573,15 +614,14 @@ export const AutoRegisterPage: React.FC = () => {
                         )
                       }
                       className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      disabled
                     />
                     <label
                       htmlFor="email-outlook"
-                      className="ml-2 text-sm text-gray-400"
+                      className="ml-2 text-sm text-gray-700"
                     >
-                      Outlook邮箱（TODO: 待实现）
+                      Outlook邮箱（自动获取验证码）
                     </label>
-                  </div>
+                  </div> */}
                 </div>
               </div>
 
@@ -611,6 +651,105 @@ export const AutoRegisterPage: React.FC = () => {
                       📧 将自动创建临时邮箱并获取验证码，无需手动输入
                     </p>
                   </div>
+                </div>
+              )}
+
+              {emailType === "outlook" && (
+                <div className="space-y-4 sm:col-span-2">
+                  {/* Outlook模式选择 */}
+                  <div>
+                    <label className="block mb-3 text-sm font-medium text-gray-700">
+                      Outlook模式
+                    </label>
+                    <div className="space-y-2">
+                      <div className="flex items-center">
+                        <input
+                          id="outlook-default"
+                          name="outlook-mode"
+                          type="radio"
+                          value="default"
+                          checked={outlookMode === "default"}
+                          onChange={(e) =>
+                            setOutlookMode(
+                              e.target.value as "default" | "token"
+                            )
+                          }
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <label
+                          htmlFor="outlook-default"
+                          className="ml-2 text-sm text-gray-700"
+                        >
+                          默认模式（只需输入邮箱）
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          id="outlook-token"
+                          name="outlook-mode"
+                          type="radio"
+                          value="token"
+                          checked={outlookMode === "token"}
+                          onChange={(e) =>
+                            setOutlookMode(
+                              e.target.value as "default" | "token"
+                            )
+                          }
+                          className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                          disabled
+                        />
+                        <label
+                          htmlFor="outlook-token"
+                          className="ml-2 text-sm text-gray-400"
+                        >
+                          令牌模式（TODO: 待实现）
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 默认模式配置 */}
+                  {outlookMode === "default" && (
+                    <div>
+                      <label
+                        htmlFor="outlook-email"
+                        className="block text-sm font-medium text-gray-700"
+                      >
+                        Outlook邮箱地址
+                      </label>
+                      <input
+                        type="email"
+                        id="outlook-email"
+                        value={outlookEmail}
+                        onChange={(e) => setOutlookEmail(e.target.value)}
+                        placeholder="example@outlook.com"
+                        className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <p className="mt-1 text-sm text-gray-500">
+                        请输入你的@outlook.com邮箱地址
+                      </p>
+                      <div className="p-3 mt-3 border border-green-200 rounded-md bg-green-50">
+                        <p className="text-sm text-green-700">
+                          📧 将自动获取该邮箱的验证码，无需手动输入
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 令牌模式配置（预留） */}
+                  {outlookMode === "token" && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        令牌配置（格式：邮箱----密码----ID----令牌）
+                      </label>
+                      <textarea
+                        rows={3}
+                        placeholder="TODO: 令牌模式待实现"
+                        className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        disabled
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
