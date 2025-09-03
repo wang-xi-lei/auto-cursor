@@ -70,7 +70,7 @@ function wrap(data: any) {
 }
 
 function base64URLEncode(k: Uint8Array) {
-  const _t = wrap(k);
+  wrap(k);
   return o3(k, !1, !0)
 }
 

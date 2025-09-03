@@ -40,8 +40,7 @@ export const MachineIdPage: React.FC = () => {
   const [resetResult, setResetResult] = useState<ResetResult | null>(null);
 
   // Toast 和确认对话框
-  const { toasts, removeToast, showSuccess, showError, showWarning } =
-    useToast();
+  const { toasts, removeToast, showSuccess, showError } = useToast();
   const { showConfirm, ConfirmDialog } = useConfirmDialog();
 
   useEffect(() => {

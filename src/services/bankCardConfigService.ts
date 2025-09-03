@@ -2,7 +2,6 @@ import { invoke } from "@tauri-apps/api/core";
 import { BankCardConfig, DEFAULT_BANK_CARD_CONFIG } from "../types/bankCardConfig";
 
 export class BankCardConfigService {
-  private static readonly CONFIG_FILE_NAME = 'bank_card_config.json';
 
   /**
    * 获取银行卡配置

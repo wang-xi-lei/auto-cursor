@@ -13,8 +13,6 @@ export const HomePage: React.FC = () => {
   const [debugInfo, setDebugInfo] = useState<string[]>([]);
   const [showDebug, setShowDebug] = useState(false);
 
-  const [debugLoading, setDebugLoading] = useState(false);
-
   useEffect(() => {
     checkCursorInstallation();
   }, []);

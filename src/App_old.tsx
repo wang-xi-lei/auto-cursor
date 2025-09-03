@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { AuthCheckResult, UserAuthInfo, AccountInfo } from "./types/auth";
+import { AuthCheckResult } from "./types/auth";
 import "./App.css";
 
 interface BackupInfo {

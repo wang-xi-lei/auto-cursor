@@ -456,7 +456,7 @@ export const TokenManagePage: React.FC = () => {
     }
   };
 
-  const getRemainingDays = (account: AccountInfo) => {
+  const getRemainingDays = (_account: AccountInfo) => {
     // This would need to be implemented based on your token validation logic
     // For now, return a placeholder
     return "未知";
