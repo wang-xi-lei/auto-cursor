@@ -17,6 +17,9 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tauri::{Emitter, Manager};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
 // 日志宏
 macro_rules! log_info {
     ($($arg:tt)*) => {
@@ -38,6 +41,20 @@ pub fn get_app_dir() -> Result<PathBuf, String> {
         .ok_or("Failed to get parent directory")?
         .to_path_buf();
     Ok(app_dir)
+}
+
+// 创建隐藏窗口的Command（Windows平台适配）
+fn create_hidden_command(executable_path: &str) -> Command {
+    let mut cmd = Command::new(executable_path);
+
+    #[cfg(target_os = "windows")]
+    {
+        // Windows平台：隐藏命令行窗口
+        // CREATE_NO_WINDOW = 0x08000000
+        cmd.creation_flags(0x08000000);
+    }
+
+    cmd
 }
 
 // 递归复制目录的辅助函数
@@ -1623,7 +1640,7 @@ async fn register_cursor_account(
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
     // 执行Python可执行文件
-    let output = Command::new(&executable_path)
+    let output = create_hidden_command(&executable_path.to_string_lossy())
         .arg(&random_email)
         .arg(&first_name)
         .arg(&last_name)
@@ -1692,7 +1709,7 @@ async fn create_temp_email() -> Result<serde_json::Value, String> {
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
     // 执行Python可执行文件测试（传递一个测试邮箱）
-    let output = Command::new(&executable_path)
+    let output = create_hidden_command(&executable_path.to_string_lossy())
         .arg("test@example.com")
         .arg("Test")
         .arg("User")
@@ -1761,7 +1778,7 @@ async fn register_with_email(
     println!("  - 参数5 (app_dir_base64): {}", app_dir_base64);
     println!("  - 预期参数总数: 6 (包括脚本名)");
 
-    let mut child = Command::new(&executable_path)
+    let mut child = create_hidden_command(&executable_path.to_string_lossy())
         .arg(&email)
         .arg(&first_name)
         .arg(&last_name)
@@ -2005,7 +2022,7 @@ async fn register_with_cloudflare_temp_email(
         email, first_name, last_name, incognito_flag, app_dir_base64
     );
 
-    let mut child = Command::new(&executable_path)
+    let mut child = create_hidden_command(&executable_path.to_string_lossy())
         .arg(&email)
         .arg(&first_name)
         .arg(&last_name)
@@ -2235,7 +2252,7 @@ async fn register_with_outlook(
     println!("    姓名: {} {}", first_name, last_name);
     println!("    隐身模式: {}", incognito_flag);
 
-    let mut cmd = Command::new(&executable_path);
+    let mut cmd = create_hidden_command(&executable_path.to_string_lossy());
     cmd.arg(&email)
         .arg(&first_name)
         .arg(&last_name)
@@ -2627,14 +2644,18 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .setup(|app| {
-            // 只在生产环境下复制 pyBuild 文件夹，开发模式下跳过
-            if !cfg!(debug_assertions) {
+            // 只在生产环境下复制 pyBuild 文件夹并且是macos，开发模式下跳过
+            if !cfg!(debug_assertions) && cfg!(target_os = "macos") {
                 if let Err(e) = copy_pybuild_to_app_dir(app.handle()) {
                     log_error!("Failed to copy pyBuild directory on startup: {}", e);
                     // 不阻断应用启动，只记录错误
                 }
             } else {
-                log_info!("Development mode detected, skipping pyBuild directory copy");
+                if cfg!(debug_assertions) {
+                    log_info!("Development mode detected, skipping pyBuild directory copy");
+                } else {
+                    log_info!("Non-macOS platform detected, skipping pyBuild directory copy");
+                }
             }
             Ok(())
         })
