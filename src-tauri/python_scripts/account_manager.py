@@ -23,9 +23,13 @@ EMOJI = {
 }
 
 class AccountManager:
-    def __init__(self, translator=None):
+    def __init__(self, translator=None, app_dir=None):
         self.translator = translator
-        self.accounts_file = 'cursor_accounts.txt'
+        # 如果提供了 app_dir，使用它作为保存路径
+        if app_dir:
+            self.accounts_file = os.path.join(app_dir, 'cursor_accounts.txt')
+        else:
+            self.accounts_file = 'cursor_accounts.txt'
     
     def save_account_info(self, email, password, token, total_usage, original_workos_token=None):
         """Save account information to file"""

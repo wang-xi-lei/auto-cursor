@@ -8,6 +8,7 @@ import os
 import sys
 import io
 import json
+import base64
 from pathlib import Path
 from faker import Faker
 
@@ -106,15 +107,30 @@ def main():
     if len(sys.argv) < 2:
         print(json.dumps({
             "success": False,
-            "error": "缺少参数，用法: python manual_register.py <email> [first_name] [last_name]"
+            "error": "缺少参数，用法: python manual_register.py <email> [first_name] [last_name] [use_incognito] [app_dir]"
         }, ensure_ascii=False))
         sys.exit(1)
     
     email = sys.argv[1]
+    app_dir = None
     
-    # 解析参数：email first_name last_name [use_incognito]
-    if len(sys.argv) >= 5:
-        # 有5个或更多参数：包含无痕模式设置
+    # 解析参数：email first_name last_name [use_incognito] [app_dir]
+    if len(sys.argv) >= 6:
+        # 有6个或更多参数：包含应用目录（Base64编码）
+        first_name = sys.argv[2]
+        last_name = sys.argv[3]
+        use_incognito = sys.argv[4]
+        app_dir_base64 = sys.argv[5]
+        
+        # 解码 Base64 编码的应用目录
+        try:
+            app_dir = base64.b64decode(app_dir_base64).decode('utf-8')
+            print(f"🔍 [DEBUG] Base64解码成功: {app_dir_base64} -> {app_dir}")
+        except Exception as e:
+            print(f"🔍 [DEBUG] Base64解码失败: {str(e)}, 直接使用原始值")
+            app_dir = app_dir_base64
+    elif len(sys.argv) >= 5:
+        # 有5个参数：包含无痕模式设置，但没有应用目录
         first_name = sys.argv[2]
         last_name = sys.argv[3]
         use_incognito = sys.argv[4]
@@ -143,8 +159,12 @@ def main():
     print(f"  - 姓名: {first_name} {last_name}")
     print(f"  - 无痕模式参数: {use_incognito}")
     print(f"  - 无痕模式布尔值: {use_incognito_bool}")
+    print(f"  - 应用目录: {app_dir}")
     print(f"  - 总参数数量: {len(sys.argv)}")
     print(f"  - 所有参数: {sys.argv}")
+    print(f"🔍 [DEBUG] 详细参数解析:")
+    for i, arg in enumerate(sys.argv):
+        print(f"  - sys.argv[{i}]: '{arg}' (类型: {type(arg)}, 长度: {len(arg)})")
     
     try:
         print(f"🎯 开始注册 Cursor 账户")
@@ -159,7 +179,7 @@ def main():
         translator = SimpleTranslator()
         
         # 创建注册实例
-        registration = CursorRegistration(translator=translator, use_incognito=use_incognito_bool)
+        registration = CursorRegistration(translator=translator, use_incognito=use_incognito_bool, app_dir=app_dir)
 
         # 设置用户信息
         registration.email_address = email

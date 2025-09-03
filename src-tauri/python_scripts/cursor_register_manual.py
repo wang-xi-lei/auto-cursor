@@ -81,7 +81,7 @@ def get_random_wait_time(config, timing_type='page_load_wait'):
         return random.uniform(0.1, 0.8)  # Return default value when error
 
 class CursorRegistration:
-    def __init__(self, translator=None, use_incognito=True):
+    def __init__(self, translator=None, use_incognito=True, app_dir=None):
         self.translator = translator
         # Set to display mode
         os.environ['BROWSER_HEADLESS'] = 'False'
@@ -93,6 +93,7 @@ class CursorRegistration:
         self.signup_tab = None
         self.email_tab = None
         self.use_incognito = use_incognito  # 无痕模式设置
+        self.app_dir = app_dir  # 应用目录路径
 
         # 获取配置
         self.config = get_config(translator)
@@ -100,6 +101,7 @@ class CursorRegistration:
         # 调试日志
         print(f"🔍 [DEBUG] CursorRegistration 初始化:")
         print(f"  - 无痕模式设置: {self.use_incognito}")
+        print(f"  - 应用目录: {self.app_dir}")
 
         # initialize Faker instance
         self.faker = Faker()
@@ -279,6 +281,7 @@ class CursorRegistration:
                 controller=self,  # Pass self instead of self.controller
                 translator=self.translator,
                 use_incognito=self.use_incognito  # Pass incognito mode setting
+                # app_dir is not passed to new_signup_main, it's only used in this class
             )
             
             if result:
@@ -403,7 +406,7 @@ class CursorRegistration:
             safe_print(f"{Fore.CYAN}{EMOJI['INFO']} 注册成功，仅保存账户信息，不自动切换账号{Style.RESET_ALL}")
 
             # Save account information to file using AccountManager
-            account_manager = AccountManager(self.translator)
+            account_manager = AccountManager(self.translator, self.app_dir)
             if account_manager.save_account_info(self.email_address, self.password, token, total_usage, original_workos_token):
                 # 保存token信息供外部访问
                 self.extracted_token = token
@@ -696,9 +699,15 @@ class CursorRegistration:
             import json
             import os
             
-            # 获取当前工作目录
-            current_dir = os.getcwd()
-            config_path = os.path.join(current_dir, 'bank_card_config.json')
+            # 使用传递进来的应用目录，如果没有则回退到当前工作目录
+            if self.app_dir:
+                config_dir = self.app_dir
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 使用应用目录: {config_dir}{Style.RESET_ALL}")
+            else:
+                config_dir = os.getcwd()
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 应用目录未提供，使用当前工作目录: {config_dir}{Style.RESET_ALL}")
+            
+            config_path = os.path.join(config_dir, 'bank_card_config.json')
             
             print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试加载银行卡配置文件: {config_path}{Style.RESET_ALL}")
             
@@ -752,22 +761,73 @@ class CursorRegistration:
         auth_manager = CursorAuth(translator=self.translator)
         return auth_manager.update_auth(email, access_token, refresh_token, auth_type)
 
-def main(translator=None):
+def main(translator=None, app_dir=None):
     """Main function to be called from main.py"""
     print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
-    print(f"{Fore.CYAN}{EMOJI['START']} {translator.get('register.title')}{Style.RESET_ALL}")
+    print(f"{Fore.CYAN}{EMOJI['START']} {translator.get('register.title') if translator else 'Cursor Registration'}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
 
-    registration = CursorRegistration(translator)
+    registration = CursorRegistration(translator, app_dir=app_dir)
     registration.start()
 
     print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
-    input(f"{EMOJI['INFO']} {translator.get('register.press_enter')}...")
+    input(f"{EMOJI['INFO']} {translator.get('register.press_enter') if translator else 'Press Enter to continue...'}...")
 
 if __name__ == "__main__":
-    try:
-        from main import translator as main_translator
-        main(main_translator)
-    except ImportError:
-        # 如果无法导入main模块，使用默认的None
-        main(None)
+    import sys
+    
+    # 检查是否有足够的命令行参数
+    # 预期参数顺序: email, first_name, last_name, incognito_flag, app_dir
+    app_dir = None
+    email = None
+    first_name = None
+    last_name = None
+    use_incognito = True
+    
+    if len(sys.argv) >= 6:
+        # 从 Rust 调用，有完整参数
+        email = sys.argv[1]
+        first_name = sys.argv[2]
+        last_name = sys.argv[3]
+        incognito_flag = sys.argv[4]
+        app_dir = sys.argv[5]
+        use_incognito = incognito_flag.lower() == "true"
+        
+        print(f"{Fore.CYAN}{EMOJI['INFO']} 从 Rust 调用，参数: email={email}, name={first_name} {last_name}, incognito={use_incognito}, app_dir={app_dir}{Style.RESET_ALL}")
+        
+        # 创建注册实例并执行
+        try:
+            registration = CursorRegistration(translator=None, use_incognito=use_incognito, app_dir=app_dir)
+            registration.email_address = email
+            registration.first_name = first_name
+            registration.last_name = last_name
+            
+            # 直接调用注册流程
+            success = registration.register_cursor()
+            if success:
+                print(f"{Fore.GREEN}{EMOJI['DONE']} 注册流程完成{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.RED}{EMOJI['ERROR']} 注册流程失败{Style.RESET_ALL}")
+                
+        except Exception as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 注册过程中发生错误: {str(e)}{Style.RESET_ALL}")
+    
+    elif len(sys.argv) > 1:
+        # 只有应用目录参数（向后兼容）
+        app_dir = sys.argv[1]
+        print(f"{Fore.CYAN}{EMOJI['INFO']} 从命令行参数获取应用目录: {app_dir}{Style.RESET_ALL}")
+        
+        try:
+            from main import translator as main_translator
+            main(main_translator, app_dir)
+        except ImportError:
+            # 如果无法导入main模块，使用默认的None
+            main(None, app_dir)
+    else:
+        # 没有参数，交互式模式
+        try:
+            from main import translator as main_translator
+            main(main_translator, None)
+        except ImportError:
+            # 如果无法导入main模块，使用默认的None
+            main(None, None)

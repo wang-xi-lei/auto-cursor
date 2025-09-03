@@ -4,15 +4,93 @@ mod machine_id;
 
 use account_manager::{AccountListResult, AccountManager, LogoutResult, SwitchAccountResult};
 use auth_checker::{AuthCheckResult, AuthChecker, TokenInfo};
+use base64::{Engine as _, engine::general_purpose};
 use chrono;
 use machine_id::{BackupInfo, MachineIdRestorer, MachineIds, ResetResult, RestoreResult};
 use rand::{Rng, distributions::Alphanumeric};
 use regex::Regex;
 use reqwest;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use tauri::{Emitter, Manager};
+
+// 日志宏
+macro_rules! log_info {
+    ($($arg:tt)*) => {
+        println!("[INFO] {}", format!($($arg)*));
+    };
+}
+
+macro_rules! log_error {
+    ($($arg:tt)*) => {
+        eprintln!("[ERROR] {}", format!($($arg)*));
+    };
+}
+
+// 获取应用目录的辅助函数
+pub fn get_app_dir() -> Result<PathBuf, String> {
+    let exe_path = env::current_exe().map_err(|e| format!("Failed to get exe path: {}", e))?;
+    let app_dir = exe_path
+        .parent()
+        .ok_or("Failed to get parent directory")?
+        .to_path_buf();
+    Ok(app_dir)
+}
+
+// 递归复制目录的辅助函数
+fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if !dst.exists() {
+        fs::create_dir_all(dst)?;
+    }
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let path = entry.path();
+        let name = path.file_name().unwrap();
+        let dst_path = dst.join(name);
+        if path.is_dir() {
+            copy_dir_all(&path, &dst_path)?;
+        } else {
+            fs::copy(&path, &dst_path)?;
+        }
+    }
+    Ok(())
+}
+
+// 复制 pyBuild 文件夹到应用目录
+pub fn copy_pybuild_to_app_dir(app_handle: &tauri::AppHandle) -> Result<(), String> {
+    let app_dir = get_app_dir()?;
+    let src_dir = app_dir.join("pyBuild");
+
+    // 创建目标目录
+    fs::create_dir_all(&src_dir).map_err(|e| format!("Failed to create directory: {}", e))?;
+
+    // 复制资源文件到工作目录
+    let resource_dir = app_handle.path().resource_dir().unwrap().join("pyBuild");
+    if resource_dir.exists() {
+        log_info!("Found resource directory at: {:?}", resource_dir);
+
+        // 如果目标目录已存在，先删除它以实现覆盖
+        if src_dir.exists() {
+            fs::remove_dir_all(&src_dir)
+                .map_err(|e| format!("Failed to remove existing directory: {}", e))?;
+        }
+
+        // 递归复制目录
+        if let Err(e) = copy_dir_all(&resource_dir, &src_dir) {
+            log_error!("Failed to copy resource directory: {}", e);
+            return Err(format!("Failed to copy pyBuild directory: {}", e));
+        }
+
+        log_info!("Successfully copied pyBuild to: {:?}", src_dir);
+        Ok(())
+    } else {
+        log_info!("Resource directory not found at: {:?}", resource_dir);
+        Err("Resource directory not found".to_string())
+    }
+}
 
 // 获取Python可执行文件路径的辅助函数
 fn get_python_executable_path() -> Result<PathBuf, String> {
@@ -32,11 +110,7 @@ fn get_python_executable_path() -> Result<PathBuf, String> {
             "cursor_register"
         };
 
-        Ok(std::env::current_dir()
-            .map_err(|e| format!("无法获取当前工作目录: {}", e))?
-            .join("pyBuild")
-            .join(platform)
-            .join(exe_name))
+        Ok(get_app_dir()?.join("pyBuild").join(platform).join(exe_name))
     } else {
         // 生产环境：使用相对于exe的路径
         let current_exe =
@@ -1541,11 +1615,20 @@ async fn register_cursor_account(
         rand::random::<u32>() % 1000
     );
 
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let app_dir_str = app_dir.to_string_lossy().to_string();
+
+    // 使用 Base64 编码应用目录路径，避免特殊字符问题
+    let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
+
     // 执行Python可执行文件
     let output = Command::new(&executable_path)
         .arg(&random_email)
         .arg(&first_name)
         .arg(&last_name)
+        .arg("true") // 默认使用无痕模式
+        .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -1601,11 +1684,20 @@ async fn create_temp_email() -> Result<serde_json::Value, String> {
         return Err(format!("找不到Python可执行文件: {:?}", executable_path));
     }
 
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let app_dir_str = app_dir.to_string_lossy().to_string();
+
+    // 使用 Base64 编码应用目录路径，避免特殊字符问题
+    let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
+
     // 执行Python可执行文件测试（传递一个测试邮箱）
     let output = Command::new(&executable_path)
         .arg("test@example.com")
         .arg("Test")
         .arg("User")
+        .arg("true") // 默认使用无痕模式
+        .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -1633,6 +1725,7 @@ async fn register_with_email(
     last_name: String,
     use_incognito: Option<bool>,
 ) -> Result<serde_json::Value, String> {
+    println!("🔄 [DEBUG] register_with_email 函数被调用");
     println!("🔄 使用指定邮箱注册 Cursor 账户...");
     println!("📧 邮箱: {}", email);
     println!("👤 姓名: {} {}", first_name, last_name);
@@ -1650,15 +1743,36 @@ async fn register_with_email(
     } else {
         "false"
     };
+
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let app_dir_str = app_dir.to_string_lossy().to_string();
+
+    // 使用 Base64 编码应用目录路径，避免特殊字符问题
+    let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
+
+    // 调试：显示将要传递的所有参数
+    println!("🔍 [DEBUG] register_with_email 准备传递的参数:");
+    println!("  - 参数1 (email): {}", email);
+    println!("  - 参数2 (first_name): {}", first_name);
+    println!("  - 参数3 (last_name): {}", last_name);
+    println!("  - 参数4 (incognito_flag): {}", incognito_flag);
+    println!("  - 参数5 (app_dir_str): {}", app_dir_str);
+    println!("  - 参数5 (app_dir_base64): {}", app_dir_base64);
+    println!("  - 预期参数总数: 6 (包括脚本名)");
+
     let mut child = Command::new(&executable_path)
         .arg(&email)
         .arg(&first_name)
         .arg(&last_name)
         .arg(incognito_flag)
+        .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
         .map_err(|e| format!("无法启动Python脚本: {}", e))?;
+
+    println!("🔍 [DEBUG] 当前工作目录: {:?}", app_dir_str);
 
     // 实时读取输出
     use std::io::{BufRead, BufReader};
@@ -1870,6 +1984,13 @@ async fn register_with_cloudflare_temp_email(
         "false"
     };
 
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let app_dir_str = app_dir.to_string_lossy().to_string();
+
+    // 使用 Base64 编码应用目录路径，避免特殊字符问题
+    let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
+
     // 调试日志
     println!("🔍 [DEBUG] Rust 启动Python脚本:");
     println!("  - 可执行文件: {:?}", executable_path);
@@ -1877,9 +1998,11 @@ async fn register_with_cloudflare_temp_email(
     println!("  - 姓名: {} {}", first_name, last_name);
     println!("  - use_incognito 原始值: {:?}", use_incognito);
     println!("  - incognito_flag: {}", incognito_flag);
+    println!("  - app_dir: {}", app_dir_str);
+    println!("  - app_dir_base64: {}", app_dir_base64);
     println!(
-        "  - 传递的参数: [{}, {}, {}, {}]",
-        email, first_name, last_name, incognito_flag
+        "  - 传递的参数: [{}, {}, {}, {}, {}]",
+        email, first_name, last_name, incognito_flag, app_dir_base64
     );
 
     let mut child = Command::new(&executable_path)
@@ -1887,6 +2010,7 @@ async fn register_with_cloudflare_temp_email(
         .arg(&first_name)
         .arg(&last_name)
         .arg(incognito_flag)
+        .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -2390,11 +2514,9 @@ async fn get_saved_accounts() -> Result<Vec<serde_json::Value>, String> {
 async fn read_bank_card_config() -> Result<String, String> {
     use std::fs;
 
-    // 获取工作目录
-    let current_dir =
-        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    let config_path = current_dir.join("bank_card_config.json");
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let config_path = app_dir.join("bank_card_config.json");
 
     if config_path.exists() {
         fs::read_to_string(&config_path)
@@ -2409,11 +2531,9 @@ async fn read_bank_card_config() -> Result<String, String> {
 async fn save_bank_card_config(config: String) -> Result<(), String> {
     use std::fs;
 
-    // 获取工作目录
-    let current_dir =
-        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    let config_path = current_dir.join("bank_card_config.json");
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let config_path = app_dir.join("bank_card_config.json");
 
     // 验证JSON格式
     serde_json::from_str::<serde_json::Value>(&config)
@@ -2431,11 +2551,9 @@ async fn save_bank_card_config(config: String) -> Result<(), String> {
 async fn read_email_config() -> Result<String, String> {
     use std::fs;
 
-    // 获取工作目录
-    let current_dir =
-        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    let config_path = current_dir.join("email_config.json");
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let config_path = app_dir.join("email_config.json");
 
     if config_path.exists() {
         fs::read_to_string(&config_path).map_err(|e| format!("Failed to read email config: {}", e))
@@ -2449,11 +2567,9 @@ async fn read_email_config() -> Result<String, String> {
 async fn save_email_config(config: String) -> Result<(), String> {
     use std::fs;
 
-    // 获取工作目录
-    let current_dir =
-        std::env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    let config_path = current_dir.join("email_config.json");
+    // 获取应用目录
+    let app_dir = get_app_dir()?;
+    let config_path = app_dir.join("email_config.json");
 
     // 验证JSON格式
     serde_json::from_str::<serde_json::Value>(&config)
@@ -2463,6 +2579,24 @@ async fn save_email_config(config: String) -> Result<(), String> {
 
     println!("✅ 邮箱配置已保存到: {:?}", config_path);
     Ok(())
+}
+
+// 手动触发复制 pyBuild 文件夹的命令
+#[tauri::command]
+async fn copy_pybuild_resources(app_handle: tauri::AppHandle) -> Result<String, String> {
+    if cfg!(debug_assertions) {
+        log_info!("Development mode: Manually copying pyBuild directory");
+    }
+    copy_pybuild_to_app_dir(&app_handle)?;
+    let env_type = if cfg!(debug_assertions) {
+        "development"
+    } else {
+        "production"
+    };
+    Ok(format!(
+        "pyBuild directory copied successfully in {} mode",
+        env_type
+    ))
 }
 
 // 获取邮箱配置的辅助函数
@@ -2492,6 +2626,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .setup(|app| {
+            // 只在生产环境下复制 pyBuild 文件夹，开发模式下跳过
+            if !cfg!(debug_assertions) {
+                if let Err(e) = copy_pybuild_to_app_dir(app.handle()) {
+                    log_error!("Failed to copy pyBuild directory on startup: {}", e);
+                    // 不阻断应用启动，只记录错误
+                }
+            } else {
+                log_info!("Development mode detected, skipping pyBuild directory copy");
+            }
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             greet,
             get_available_backups,
@@ -2535,7 +2681,8 @@ pub fn run() {
             read_bank_card_config,
             save_bank_card_config,
             read_email_config,
-            save_email_config
+            save_email_config,
+            copy_pybuild_resources
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
