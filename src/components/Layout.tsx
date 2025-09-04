@@ -18,13 +18,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Navigation */}
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <nav className="bg-white border-b shadow-sm">
+        <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
+              <div className="flex items-center flex-shrink-0">
                 <Link to="/" className="flex items-center space-x-3">
                   <img
                     src={logoSvg}
@@ -58,9 +58,38 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </nav>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+      <main className="flex-1 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
         <div className="px-4 py-6 sm:px-0">{children}</div>
       </main>
+
+      {/* Footer with Disclaimer */}
+      <footer className="mt-auto bg-white border-t border-gray-200">
+        <div className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
+          <div className="space-y-4 text-center">
+            <div className="p-4 border border-yellow-200 rounded-lg bg-yellow-50">
+              <h3 className="mb-2 text-sm font-semibold text-yellow-800">
+                ⚠️ 免责声明
+              </h3>
+              <p className="text-xs leading-relaxed text-yellow-700">
+                本工具仅供学习和研究目的使用。使用本工具产生的任何后果由用户自行承担，开发者不承担任何法律责任。
+                请遵守相关服务条款和法律法规。如有任何问题或疑虑，请及时停止使用并联系开发者。
+              </p>
+            </div>
+            <div className="text-xs text-gray-500">
+              <p>
+                如有问题请联系：
+                <a
+                  href="mailto:wuqi_y@163.com"
+                  className="ml-1 text-blue-600 hover:text-blue-800"
+                >
+                  wuqi_y@163.com
+                </a>
+              </p>
+              <p className="mt-1">© 2025 Cursor Manager. 仅供学习研究使用。</p>
+            </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 };

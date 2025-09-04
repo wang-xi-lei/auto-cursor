@@ -45,16 +45,19 @@ pub fn get_app_dir() -> Result<PathBuf, String> {
 
 // 创建隐藏窗口的Command（Windows平台适配）
 fn create_hidden_command(executable_path: &str) -> Command {
-    let mut cmd = Command::new(executable_path);
-
     #[cfg(target_os = "windows")]
     {
+        let mut cmd = Command::new(executable_path);
         // Windows平台：隐藏命令行窗口
         // CREATE_NO_WINDOW = 0x08000000
         cmd.creation_flags(0x08000000);
+        cmd
     }
 
-    cmd
+    #[cfg(not(target_os = "windows"))]
+    {
+        Command::new(executable_path)
+    }
 }
 
 // 递归复制目录的辅助函数
@@ -2374,7 +2377,7 @@ async fn register_with_outlook(
 
     // 处理stderr
     let app_for_stderr = app.clone();
-    let stderr_task = std::thread::spawn(move || {
+    let _stderr_task = std::thread::spawn(move || {
         use std::io::{BufRead, BufReader};
         let reader = BufReader::new(stderr);
 
@@ -2598,7 +2601,47 @@ async fn save_email_config(config: String) -> Result<(), String> {
     Ok(())
 }
 
+// 获取应用版本
+#[tauri::command]
+async fn get_app_version(app: tauri::AppHandle) -> Result<String, String> {
+    let package_info = app.package_info();
+    Ok(package_info.version.to_string())
+}
+
+// 打开更新链接
+#[tauri::command]
+async fn open_update_url(url: String) -> Result<(), String> {
+    use std::process::Command;
+
+    #[cfg(target_os = "windows")]
+    {
+        Command::new("cmd")
+            .args(["/C", "start", &url])
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+            .map_err(|e| format!("Failed to open URL: {}", e))?;
+    }
+
+    Ok(())
+}
+
 // 手动触发复制 pyBuild 文件夹的命令
+
 #[tauri::command]
 async fn copy_pybuild_resources(app_handle: tauri::AppHandle) -> Result<String, String> {
     if cfg!(debug_assertions) {
@@ -2703,6 +2746,8 @@ pub fn run() {
             save_bank_card_config,
             read_email_config,
             save_email_config,
+            get_app_version,
+            open_update_url,
             copy_pybuild_resources
         ])
         .run(tauri::generate_context!())

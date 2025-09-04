@@ -24,6 +24,84 @@
   transition: all 0.2s ease-in-out;
 }
 
+/* 禁用右键菜单和文本选择 */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-context-menu: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+  -khtml-user-drag: none;
+  -moz-user-drag: none;
+  -o-user-drag: none;
+  user-drag: none;
+}
+
+/* 允许输入框和文本区域的文本选择 */
+input,
+textarea,
+[contenteditable="true"] {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* 允许代码块的文本选择 */
+code,
+pre {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* 更新弹窗背景模糊效果 */
+.update-modal-backdrop {
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  background: rgba(0, 0, 0, 0.6);
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* 更新弹窗内容动画 */
+.update-modal-content {
+  animation: slideInScale 0.3s ease-out;
+  transform-origin: center;
+}
+
+/* 动画关键帧 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9) translateY(-20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* 强制更新警告样式 */
+.force-update-warning {
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  border: 2px solid #fca5a5;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.15);
+}
+
 /* Code blocks */
 code {
   font-family: 'Courier New', Courier, monospace;
@@ -63,19 +141,19 @@ button:not(:disabled):active {
 
 /* Status indicators */
 .status-success {
-  @apply bg-green-100 border-green-300 text-green-800;
+  @apply text-green-800 bg-green-100 border-green-300;
 }
 
 .status-error {
-  @apply bg-red-100 border-red-300 text-red-800;
+  @apply text-red-800 bg-red-100 border-red-300;
 }
 
 .status-warning {
-  @apply bg-yellow-100 border-yellow-300 text-yellow-800;
+  @apply text-yellow-800 bg-yellow-100 border-yellow-300;
 }
 
 .status-info {
-  @apply bg-blue-100 border-blue-300 text-blue-800;
+  @apply text-blue-800 bg-blue-100 border-blue-300;
 }
 
 /* Typography */
