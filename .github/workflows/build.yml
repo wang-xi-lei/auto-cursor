@@ -65,6 +65,16 @@ jobs:
       - name: Build frontend
         run: pnpm build
 
+      - name: Clean pyBuild for current platform
+        shell: bash
+        run: |
+          # 只保留当前平台的pyBuild文件，删除其他平台的
+          if [ "${{ matrix.os }}" = "macos" ]; then
+            rm -rf src-tauri/pyBuild/windows
+          elif [ "${{ matrix.os }}" = "windows" ]; then
+            rm -rf src-tauri/pyBuild/macos
+          fi
+
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -76,9 +86,8 @@ jobs:
         if: matrix.os == 'macos'
         run: |
           mkdir -p artifacts
-          # 查找并复制 .dmg 和 .app.tar.gz 文件
+          # 只复制 .dmg 文件
           find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} artifacts/ \;
-          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.app.tar.gz" -exec cp {} artifacts/ \;
           # 重命名文件以包含架构信息
           cd artifacts
           for file in *.dmg; do
@@ -86,19 +95,13 @@ jobs:
               mv "$file" "${file%.dmg}_${{ matrix.arch }}.dmg"
             fi
           done
-          for file in *.app.tar.gz; do
-            if [ -f "$file" ]; then
-              mv "$file" "${file%.app.tar.gz}_${{ matrix.arch }}.app.tar.gz"
-            fi
-          done
 
       - name: Prepare artifacts (Windows)
         if: matrix.os == 'windows'
         run: |
           mkdir artifacts
-          # 查找并复制 .msi 和 .exe 文件
+          # 只复制 .msi 安装程序文件
           Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.msi" | Copy-Item -Destination "artifacts/"
-          Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.exe" | Copy-Item -Destination "artifacts/"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -106,6 +109,7 @@ jobs:
           name: auto-cursor-${{ matrix.os }}-${{ matrix.arch }}
           path: artifacts/*
           if-no-files-found: warn
+          compression-level: 0 # 不压缩，保持原始文件格式
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')

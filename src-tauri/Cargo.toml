@@ -46,3 +46,11 @@ winreg = "0.50"
 [target.'cfg(target_os = "macos")'.dependencies]
 plist = "1.4"
 
+# 优化release构建以减小文件大小
+[profile.release]
+opt-level = "z"     # 优化大小而不是速度
+lto = true          # 启用链接时优化
+codegen-units = 1   # 减少代码生成单元以获得更好的优化
+panic = "abort"     # 使用abort而不是unwind减小大小
+strip = true        # 去除调试符号
+
