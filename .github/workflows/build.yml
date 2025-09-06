@@ -1,0 +1,179 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest" # macOS Intel
+            args: "--target x86_64-apple-darwin"
+            target: x86_64-apple-darwin
+            arch: x86_64
+            os: macos
+          - platform: "macos-latest" # macOS M1
+            args: "--target aarch64-apple-darwin"
+            target: aarch64-apple-darwin
+            arch: aarch64
+            os: macos
+          - platform: "windows-latest" # Windows x64
+            args: "--target x86_64-pc-windows-msvc"
+            target: x86_64-pc-windows-msvc
+            arch: x86_64
+            os: windows
+          - platform: "ubuntu-22.04" # Linux x64
+            args: "--target x86_64-unknown-linux-gnu"
+            target: x86_64-unknown-linux-gnu
+            arch: x86_64
+            os: linux
+
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.os == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: "npm"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 8
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      - name: Install Node.js dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Setup Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install Python dependencies (for pyBuild)
+        if: matrix.os != 'windows'
+        run: |
+          python3 -m pip install --upgrade pip
+          if [ -f src-tauri/python_scripts/requirements_minimal.txt ]; then
+            python3 -m pip install -r src-tauri/python_scripts/requirements_minimal.txt
+          fi
+
+      - name: Install Python dependencies (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          python -m pip install --upgrade pip
+          if (Test-Path src-tauri/python_scripts/requirements_minimal.txt) {
+            python -m pip install -r src-tauri/python_scripts/requirements_minimal.txt
+          }
+
+      - name: Build frontend
+        run: pnpm build
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          args: ${{ matrix.args }}
+
+      - name: Prepare artifacts (macOS)
+        if: matrix.os == 'macos'
+        run: |
+          mkdir -p artifacts
+          # 查找并复制 .dmg 和 .app.tar.gz 文件
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.dmg" -exec cp {} artifacts/ \;
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.app.tar.gz" -exec cp {} artifacts/ \;
+          # 重命名文件以包含架构信息
+          cd artifacts
+          for file in *.dmg; do
+            if [ -f "$file" ]; then
+              mv "$file" "${file%.dmg}_${{ matrix.arch }}.dmg"
+            fi
+          done
+          for file in *.app.tar.gz; do
+            if [ -f "$file" ]; then
+              mv "$file" "${file%.app.tar.gz}_${{ matrix.arch }}.app.tar.gz"
+            fi
+          done
+
+      - name: Prepare artifacts (Windows)
+        if: matrix.os == 'windows'
+        run: |
+          mkdir artifacts
+          # 查找并复制 .msi 和 .exe 文件
+          Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.msi" | Copy-Item -Destination "artifacts/"
+          Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.exe" | Copy-Item -Destination "artifacts/"
+
+      - name: Prepare artifacts (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          mkdir -p artifacts
+          # 查找并复制 .deb, .rpm 和 .AppImage 文件
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} artifacts/ \;
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.rpm" -exec cp {} artifacts/ \;
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} artifacts/ \;
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: auto-cursor-${{ matrix.os }}-${{ matrix.arch }}
+          path: artifacts/*
+          if-no-files-found: warn
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/**/*
+          draft: false
+          prerelease: ${{ contains(github.ref, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
