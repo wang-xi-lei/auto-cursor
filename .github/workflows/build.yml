@@ -32,11 +32,6 @@ jobs:
             target: x86_64-pc-windows-msvc
             arch: x86_64
             os: windows
-          - platform: "ubuntu-22.04" # Linux x64
-            args: "--target x86_64-unknown-linux-gnu"
-            target: x86_64-unknown-linux-gnu
-            arch: x86_64
-            os: linux
 
     runs-on: ${{ matrix.platform }}
 
@@ -44,37 +39,18 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies (Ubuntu only)
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Setup pnpm
+      - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
           version: 8
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
       - name: Install Node.js dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -85,22 +61,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
-
-      - name: Install Python dependencies (for pyBuild)
-        if: matrix.os != 'windows'
-        run: |
-          python3 -m pip install --upgrade pip
-          if [ -f src-tauri/python_scripts/requirements_minimal.txt ]; then
-            python3 -m pip install -r src-tauri/python_scripts/requirements_minimal.txt
-          fi
-
-      - name: Install Python dependencies (Windows)
-        if: matrix.os == 'windows'
-        run: |
-          python -m pip install --upgrade pip
-          if (Test-Path src-tauri/python_scripts/requirements_minimal.txt) {
-            python -m pip install -r src-tauri/python_scripts/requirements_minimal.txt
-          }
 
       - name: Build frontend
         run: pnpm build
@@ -139,15 +99,6 @@ jobs:
           # 查找并复制 .msi 和 .exe 文件
           Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.msi" | Copy-Item -Destination "artifacts/"
           Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.exe" | Copy-Item -Destination "artifacts/"
-
-      - name: Prepare artifacts (Linux)
-        if: matrix.os == 'linux'
-        run: |
-          mkdir -p artifacts
-          # 查找并复制 .deb, .rpm 和 .AppImage 文件
-          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} artifacts/ \;
-          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.rpm" -exec cp {} artifacts/ \;
-          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} artifacts/ \;
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4

@@ -13,27 +13,18 @@ on:
           - macos-intel
           - macos-m1
           - windows
-          - linux
-
 jobs:
   quick-build:
     runs-on: >-
       ${{
         inputs.platform == 'windows' && 'windows-latest' ||
         (inputs.platform == 'macos-intel' || inputs.platform == 'macos-m1') && 'macos-latest' ||
-        inputs.platform == 'linux' && 'ubuntu-22.04' ||
-        'ubuntu-22.04'
+        'macos-latest'
       }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install dependencies (Ubuntu only)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libgtk-3-dev libayatana-appindicator3-dev
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -56,7 +47,6 @@ jobs:
               inputs.platform == 'macos-intel' && 'x86_64-apple-darwin' ||
               inputs.platform == 'macos-m1' && 'aarch64-apple-darwin' ||
               inputs.platform == 'windows' && 'x86_64-pc-windows-msvc' ||
-              inputs.platform == 'linux' && 'x86_64-unknown-linux-gnu' ||
               ''
             }}
 
@@ -73,7 +63,6 @@ jobs:
               inputs.platform == 'macos-intel' && '--target x86_64-apple-darwin' ||
               inputs.platform == 'macos-m1' && '--target aarch64-apple-darwin' ||
               inputs.platform == 'windows' && '--target x86_64-pc-windows-msvc' ||
-              inputs.platform == 'linux' && '--target x86_64-unknown-linux-gnu' ||
               ''
             }}
 
