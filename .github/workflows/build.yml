@@ -100,8 +100,13 @@ jobs:
         if: matrix.os == 'windows'
         run: |
           mkdir artifacts
-          # 只复制 .msi 安装程序文件
-          Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.msi" | Copy-Item -Destination "artifacts/"
+          # 优先复制 .exe 安装程序文件，如果没有则复制 .msi
+          $exeFiles = Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.exe"
+          if ($exeFiles) {
+            $exeFiles | Copy-Item -Destination "artifacts/"
+          } else {
+            Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.msi" | Copy-Item -Destination "artifacts/"
+          }
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
