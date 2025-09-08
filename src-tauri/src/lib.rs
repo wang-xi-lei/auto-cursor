@@ -712,6 +712,44 @@ async fn test_logging() -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn debug_windows_cursor_paths() -> Result<Vec<String>, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    restorer
+        .debug_windows_cursor_paths()
+        .map_err(|e| format!("Failed to debug Windows cursor paths: {}", e))
+}
+
+#[tauri::command]
+async fn set_custom_cursor_path(path: String) -> Result<String, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    restorer
+        .set_custom_cursor_path(&path)
+        .map_err(|e| format!("Failed to set custom cursor path: {}", e))
+}
+
+#[tauri::command]
+async fn get_custom_cursor_path() -> Result<Option<String>, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    Ok(restorer.get_custom_cursor_path())
+}
+
+#[tauri::command]
+async fn clear_custom_cursor_path() -> Result<String, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    restorer
+        .clear_custom_cursor_path()
+        .map_err(|e| format!("Failed to clear custom cursor path: {}", e))
+}
+
+#[tauri::command]
 async fn open_log_file() -> Result<String, String> {
     let restorer =
         MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
@@ -2819,6 +2857,10 @@ pub fn run() {
             complete_cursor_reset,
             get_log_file_path,
             test_logging,
+            debug_windows_cursor_paths,
+            set_custom_cursor_path,
+            get_custom_cursor_path,
+            clear_custom_cursor_path,
             open_log_file,
             open_log_directory,
             get_current_machine_ids,

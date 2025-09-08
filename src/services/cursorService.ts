@@ -79,4 +79,20 @@ export class CursorService {
   static async openLogDirectory(): Promise<string> {
     return await invoke<string>("open_log_directory");
   }
+
+  static async debugWindowsCursorPaths(): Promise<string[]> {
+    return await invoke<string[]>("debug_windows_cursor_paths");
+  }
+
+  static async setCustomCursorPath(path: string): Promise<string> {
+    return await invoke<string>("set_custom_cursor_path", { path });
+  }
+
+  static async getCustomCursorPath(): Promise<string | null> {
+    return await invoke<string | null>("get_custom_cursor_path");
+  }
+
+  static async clearCustomCursorPath(): Promise<string> {
+    return await invoke<string>("clear_custom_cursor_path");
+  }
 }

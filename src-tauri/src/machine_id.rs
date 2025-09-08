@@ -150,6 +150,157 @@ impl MachineIdRestorer {
         ))
     }
 
+    // 调试Windows Cursor路径
+    pub fn debug_windows_cursor_paths(&self) -> Result<Vec<String>> {
+        let mut debug_info = Vec::new();
+
+        self.log_info("=== Windows Cursor路径调试开始 ===");
+        debug_info.push("=== Windows Cursor路径调试开始 ===".to_string());
+
+        #[cfg(target_os = "windows")]
+        {
+            let localappdata =
+                std::env::var("LOCALAPPDATA").unwrap_or_else(|_| "LOCALAPPDATA未设置".to_string());
+
+            let info = format!("LOCALAPPDATA: {}", localappdata);
+            self.log_info(&info);
+            debug_info.push(info);
+
+            // 检查所有可能的路径
+            let possible_cursor_paths = vec![
+                format!("{}\\Programs\\Cursor\\resources\\app", localappdata),
+                format!("{}\\Programs\\cursor\\resources\\app", localappdata),
+                format!("{}\\Cursor\\resources\\app", localappdata),
+                "C:\\Program Files\\Cursor\\resources\\app".to_string(),
+                "C:\\Program Files (x86)\\Cursor\\resources\\app".to_string(),
+                format!(
+                    "{}\\AppData\\Local\\Programs\\Cursor\\resources\\app",
+                    dirs::home_dir().unwrap_or_default().to_string_lossy()
+                ),
+                "C:\\Cursor\\resources\\app".to_string(),
+            ];
+
+            for (i, path) in possible_cursor_paths.iter().enumerate() {
+                let path_buf = PathBuf::from(path);
+                let package_json = path_buf.join("package.json");
+                let main_js = path_buf.join("out").join("main.js");
+                let workbench_js = path_buf
+                    .join("out")
+                    .join("vs")
+                    .join("workbench")
+                    .join("workbench.desktop.main.js");
+
+                let path_info = format!(
+                    "路径{}: {}\n  - 目录存在: {}\n  - package.json: {}\n  - main.js: {}\n  - workbench.js: {}",
+                    i + 1,
+                    path,
+                    path_buf.exists(),
+                    package_json.exists(),
+                    main_js.exists(),
+                    workbench_js.exists()
+                );
+
+                self.log_info(&path_info);
+                debug_info.push(path_info);
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            let info = "此功能仅在Windows上可用".to_string();
+            self.log_warning(&info);
+            debug_info.push(info);
+        }
+
+        self.log_info("=== Windows Cursor路径调试结束 ===");
+        debug_info.push("=== Windows Cursor路径调试结束 ===".to_string());
+
+        Ok(debug_info)
+    }
+
+    // 设置自定义 Cursor 路径
+    pub fn set_custom_cursor_path(&self, path: &str) -> Result<String> {
+        let custom_path = PathBuf::from(path);
+
+        // 验证路径是否有效
+        let package_json = custom_path.join("package.json");
+        let main_js = custom_path.join("out").join("main.js");
+        let workbench_js = custom_path
+            .join("out")
+            .join("vs")
+            .join("workbench")
+            .join("workbench.desktop.main.js");
+
+        let validation_info = format!(
+            "路径验证结果:\n- 目录存在: {}\n- package.json: {}\n- main.js: {}\n- workbench.js: {}",
+            custom_path.exists(),
+            package_json.exists(),
+            main_js.exists(),
+            workbench_js.exists()
+        );
+
+        self.log_info(&format!("设置自定义Cursor路径: {}", path));
+        self.log_info(&validation_info);
+
+        // 保存自定义路径到配置文件
+        let config_file = self.get_custom_path_config_file()?;
+        fs::write(&config_file, path)?;
+
+        self.log_info("自定义Cursor路径已保存");
+
+        Ok(validation_info)
+    }
+
+    // 获取自定义 Cursor 路径
+    pub fn get_custom_cursor_path(&self) -> Option<String> {
+        match self.get_custom_path_config_file() {
+            Ok(config_file) => {
+                if config_file.exists() {
+                    match fs::read_to_string(&config_file) {
+                        Ok(path) => {
+                            let path = path.trim();
+                            if !path.is_empty() {
+                                self.log_info(&format!("读取到自定义Cursor路径: {}", path));
+                                return Some(path.to_string());
+                            }
+                        }
+                        Err(e) => {
+                            self.log_warning(&format!("读取自定义路径配置失败: {}", e));
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                self.log_warning(&format!("获取自定义路径配置文件路径失败: {}", e));
+            }
+        }
+        None
+    }
+
+    // 清除自定义 Cursor 路径
+    pub fn clear_custom_cursor_path(&self) -> Result<String> {
+        let config_file = self.get_custom_path_config_file()?;
+
+        if config_file.exists() {
+            fs::remove_file(&config_file)?;
+            self.log_info("自定义Cursor路径已清除");
+            Ok("自定义Cursor路径已清除".to_string())
+        } else {
+            self.log_info("没有设置自定义Cursor路径");
+            Ok("没有设置自定义Cursor路径".to_string())
+        }
+    }
+
+    // 获取自定义路径配置文件路径
+    fn get_custom_path_config_file(&self) -> Result<PathBuf> {
+        let exe_dir = std::env::current_exe()?
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("Could not get exe directory"))?
+            .to_path_buf();
+
+        Ok(exe_dir.join("custom_cursor_path.txt"))
+    }
+
     #[cfg(target_os = "windows")]
     fn get_cursor_paths() -> Result<(PathBuf, PathBuf)> {
         let appdata = std::env::var("APPDATA").context("APPDATA environment variable not set")?;
@@ -693,19 +844,98 @@ impl MachineIdRestorer {
     }
 
     pub fn get_cursor_app_paths() -> Result<(PathBuf, PathBuf)> {
+        // 首先检查是否有自定义路径
+        if let Ok(restorer) = MachineIdRestorer::new() {
+            if let Some(custom_path) = restorer.get_custom_cursor_path() {
+                let custom_path_buf = PathBuf::from(&custom_path);
+                let package_json = custom_path_buf.join("package.json");
+                let main_js = custom_path_buf.join("out").join("main.js");
+
+                println!("🎯 [DEBUG] 使用自定义路径: {:?}", custom_path_buf);
+                println!(
+                    "🎯 [DEBUG] 自定义路径验证 - package.json存在: {}, main.js存在: {}",
+                    package_json.exists(),
+                    main_js.exists()
+                );
+
+                if package_json.exists() && main_js.exists() {
+                    println!("✅ [DEBUG] 自定义路径有效，使用自定义路径");
+                    return Ok((package_json, main_js));
+                } else {
+                    println!("❌ [DEBUG] 自定义路径无效，继续使用自动搜索");
+                }
+            }
+        }
+
         #[cfg(target_os = "windows")]
         {
             let localappdata = std::env::var("LOCALAPPDATA")
                 .context("LOCALAPPDATA environment variable not set")?;
 
-            let cursor_path = PathBuf::from(&localappdata)
+            // Windows上Cursor可能的安装路径
+            let possible_cursor_paths = vec![
+                // 方式1: LOCALAPPDATA路径 (用户安装)
+                PathBuf::from(&localappdata)
+                    .join("Programs")
+                    .join("Cursor")
+                    .join("resources")
+                    .join("app"),
+                // 方式2: LOCALAPPDATA路径的替代结构
+                PathBuf::from(&localappdata)
+                    .join("Programs")
+                    .join("cursor")
+                    .join("resources")
+                    .join("app"),
+                // 方式3: 直接在Cursor目录下
+                PathBuf::from(&localappdata)
+                    .join("Cursor")
+                    .join("resources")
+                    .join("app"),
+                // 方式4: 系统Program Files路径 (管理员安装)
+                PathBuf::from("C:\\Program Files\\Cursor\\resources\\app"),
+                PathBuf::from("C:\\Program Files (x86)\\Cursor\\resources\\app"),
+                // 方式5: 用户程序目录
+                dirs::home_dir()
+                    .unwrap_or_default()
+                    .join("AppData\\Local\\Programs\\Cursor\\resources\\app"),
+                // 方式6: 便携版路径
+                PathBuf::from("C:\\Cursor\\resources\\app"),
+            ];
+
+            // 搜索存在的路径
+            for (i, cursor_path) in possible_cursor_paths.iter().enumerate() {
+                let package_json = cursor_path.join("package.json");
+                let main_js = cursor_path.join("out").join("main.js");
+
+                println!("🔍 [DEBUG] Windows路径搜索 {}: {:?}", i + 1, cursor_path);
+                println!(
+                    "🔍 [DEBUG] package.json: {:?}, 存在: {}",
+                    package_json,
+                    package_json.exists()
+                );
+                println!(
+                    "🔍 [DEBUG] main.js: {:?}, 存在: {}",
+                    main_js,
+                    main_js.exists()
+                );
+
+                if package_json.exists() && main_js.exists() {
+                    println!(
+                        "✅ [DEBUG] 找到有效的Windows Cursor安装路径: {:?}",
+                        cursor_path
+                    );
+                    return Ok((package_json, main_js));
+                }
+            }
+
+            // 如果都找不到，返回最可能的路径用于错误提示
+            let default_path = PathBuf::from(&localappdata)
                 .join("Programs")
                 .join("Cursor")
                 .join("resources")
                 .join("app");
-
-            let package_json = cursor_path.join("package.json");
-            let main_js = cursor_path.join("out").join("main.js");
+            let package_json = default_path.join("package.json");
+            let main_js = default_path.join("out").join("main.js");
 
             Ok((package_json, main_js))
         }
@@ -747,12 +977,97 @@ impl MachineIdRestorer {
     }
 
     pub fn get_workbench_js_path() -> Result<PathBuf> {
+        // 首先检查是否有自定义路径
+        if let Ok(restorer) = MachineIdRestorer::new() {
+            if let Some(custom_path) = restorer.get_custom_cursor_path() {
+                let custom_workbench = PathBuf::from(&custom_path)
+                    .join("out")
+                    .join("vs")
+                    .join("workbench")
+                    .join("workbench.desktop.main.js");
+
+                println!("🎯 [DEBUG] 使用自定义workbench路径: {:?}", custom_workbench);
+                println!(
+                    "🎯 [DEBUG] 自定义workbench存在: {}",
+                    custom_workbench.exists()
+                );
+
+                if custom_workbench.exists() {
+                    println!("✅ [DEBUG] 自定义workbench路径有效");
+                    return Ok(custom_workbench);
+                } else {
+                    println!("❌ [DEBUG] 自定义workbench路径无效，继续使用自动搜索");
+                }
+            }
+        }
+
         #[cfg(target_os = "windows")]
         {
             let localappdata = std::env::var("LOCALAPPDATA")
                 .context("LOCALAPPDATA environment variable not set")?;
 
-            let workbench_path = PathBuf::from(&localappdata)
+            // Windows上Cursor workbench可能的路径
+            let possible_workbench_paths = vec![
+                // 方式1: LOCALAPPDATA路径 (用户安装)
+                PathBuf::from(&localappdata)
+                    .join("Programs")
+                    .join("Cursor")
+                    .join("resources")
+                    .join("app")
+                    .join("out")
+                    .join("vs")
+                    .join("workbench")
+                    .join("workbench.desktop.main.js"),
+                // 方式2: LOCALAPPDATA路径的替代结构
+                PathBuf::from(&localappdata)
+                    .join("Programs")
+                    .join("cursor")
+                    .join("resources")
+                    .join("app")
+                    .join("out")
+                    .join("vs")
+                    .join("workbench")
+                    .join("workbench.desktop.main.js"),
+                // 方式3: 直接在Cursor目录下
+                PathBuf::from(&localappdata)
+                    .join("Cursor")
+                    .join("resources")
+                    .join("app")
+                    .join("out")
+                    .join("vs")
+                    .join("workbench")
+                    .join("workbench.desktop.main.js"),
+                // 方式4: 系统Program Files路径 (管理员安装)
+                PathBuf::from("C:\\Program Files\\Cursor\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js"),
+                PathBuf::from("C:\\Program Files (x86)\\Cursor\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js"),
+                // 方式5: 用户程序目录
+                dirs::home_dir()
+                    .unwrap_or_default()
+                    .join("AppData\\Local\\Programs\\Cursor\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js"),
+                // 方式6: 便携版路径
+                PathBuf::from("C:\\Cursor\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js"),
+            ];
+
+            // 搜索存在的路径
+            for (i, workbench_path) in possible_workbench_paths.iter().enumerate() {
+                println!(
+                    "🔍 [DEBUG] Windows workbench路径搜索 {}: {:?}",
+                    i + 1,
+                    workbench_path
+                );
+                println!("🔍 [DEBUG] workbench存在: {}", workbench_path.exists());
+
+                if workbench_path.exists() {
+                    println!(
+                        "✅ [DEBUG] 找到有效的Windows workbench路径: {:?}",
+                        workbench_path
+                    );
+                    return Ok(workbench_path.clone());
+                }
+            }
+
+            // 如果都找不到，返回最可能的路径用于错误提示
+            let default_path = PathBuf::from(&localappdata)
                 .join("Programs")
                 .join("Cursor")
                 .join("resources")
@@ -762,7 +1077,7 @@ impl MachineIdRestorer {
                 .join("workbench")
                 .join("workbench.desktop.main.js");
 
-            Ok(workbench_path)
+            Ok(default_path)
         }
 
         #[cfg(target_os = "macos")]
