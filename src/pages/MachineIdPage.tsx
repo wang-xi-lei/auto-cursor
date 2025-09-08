@@ -411,7 +411,7 @@ export const MachineIdPage: React.FC = () => {
                 打开日志目录
               </Button>
 
-              {isWindows && (
+              {isWindows && false && (
                 <Button
                   variant="secondary"
                   onClick={handleDebugWindowsPaths}
@@ -547,7 +547,7 @@ export const MachineIdPage: React.FC = () => {
             </div>
 
             {/* 调试工具 */}
-            <div className="p-4 rounded-lg bg-yellow-50">
+            {/* <div className="p-4 rounded-lg bg-yellow-50">
               <h3 className="mb-2 font-medium text-yellow-800">🛠️ 调试工具</h3>
               <p className="mb-3 text-sm text-yellow-700">
                 如果不确定正确的路径，可以使用调试工具查看所有可能的安装位置。
@@ -559,7 +559,7 @@ export const MachineIdPage: React.FC = () => {
               >
                 🔍 查看所有可能路径
               </Button>
-            </div>
+            </div> */}
           </div>
         </div>
       )}
