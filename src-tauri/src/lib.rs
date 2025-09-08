@@ -694,6 +694,111 @@ async fn complete_cursor_reset() -> Result<ResetResult, String> {
 }
 
 #[tauri::command]
+async fn get_log_file_path() -> Result<String, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    Ok(restorer.get_log_file_path().to_string_lossy().to_string())
+}
+
+#[tauri::command]
+async fn test_logging() -> Result<String, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    restorer
+        .test_logging()
+        .map_err(|e| format!("Failed to test logging: {}", e))
+}
+
+#[tauri::command]
+async fn open_log_file() -> Result<String, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    let log_path = restorer.get_log_file_path();
+
+    // 检查日志文件是否存在
+    if !log_path.exists() {
+        return Err("日志文件不存在，请先执行 Cursor 重置操作".to_string());
+    }
+
+    let log_path_str = log_path.to_string_lossy().to_string();
+
+    // 根据操作系统打开文件
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("cmd")
+            .args(["/C", "start", "", &log_path_str])
+            .spawn()
+            .map_err(|e| format!("Failed to open log file: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        Command::new("open")
+            .arg(&log_path_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open log file: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        Command::new("xdg-open")
+            .arg(&log_path_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open log file: {}", e))?;
+    }
+
+    Ok(format!("已打开日志文件: {}", log_path_str))
+}
+
+#[tauri::command]
+async fn open_log_directory() -> Result<String, String> {
+    let restorer =
+        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+
+    let log_path = restorer.get_log_file_path();
+    let log_dir = log_path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."));
+    let log_dir_str = log_dir.to_string_lossy().to_string();
+
+    // 根据操作系统打开目录
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        Command::new("explorer")
+            .arg(&log_dir_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open log directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        Command::new("open")
+            .arg(&log_dir_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open log directory: {}", e))?;
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        Command::new("xdg-open")
+            .arg(&log_dir_str)
+            .spawn()
+            .map_err(|e| format!("Failed to open log directory: {}", e))?;
+    }
+
+    Ok(format!("已打开日志目录: {}", log_dir_str))
+}
+
+#[tauri::command]
 async fn get_current_machine_ids() -> Result<Option<MachineIds>, String> {
     let restorer =
         MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
@@ -2712,6 +2817,10 @@ pub fn run() {
             check_cursor_installation,
             reset_machine_ids,
             complete_cursor_reset,
+            get_log_file_path,
+            test_logging,
+            open_log_file,
+            open_log_directory,
             get_current_machine_ids,
             get_machine_id_file_content,
             get_backup_directory_info,

@@ -181,6 +181,37 @@ export const MachineIdPage: React.FC = () => {
     });
   };
 
+  const handleOpenLogFile = async () => {
+    try {
+      const result = await CursorService.openLogFile();
+      showSuccess(result);
+    } catch (error) {
+      console.error("打开日志文件失败:", error);
+      showError(`打开日志文件失败: ${error}`);
+    }
+  };
+
+  const handleOpenLogDirectory = async () => {
+    try {
+      const result = await CursorService.openLogDirectory();
+      showSuccess(result);
+    } catch (error) {
+      console.error("打开日志目录失败:", error);
+      showError(`打开日志目录失败: ${error}`);
+    }
+  };
+
+  const handleGetLogPath = async () => {
+    try {
+      const logPath = await CursorService.getLogFilePath();
+      showSuccess(`日志文件路径: ${logPath}`);
+      console.log("日志文件路径:", logPath);
+    } catch (error) {
+      console.error("获取日志路径失败:", error);
+      showError(`获取日志路径失败: ${error}`);
+    }
+  };
+
   if (loading && currentStep === "menu") {
     return <LoadingSpinner message="正在加载 Machine ID 信息..." />;
   }
@@ -227,36 +258,74 @@ export const MachineIdPage: React.FC = () => {
 
       {/* Action Buttons */}
       {currentStep === "menu" && (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          <Button
-            variant="primary"
-            onClick={loadBackups}
-            loading={loading}
-            className="flex-col h-20"
-          >
-            <span className="mb-1 text-lg">📁</span>
-            恢复备份
-          </Button>
+        <div className="space-y-6">
+          {/* 主要操作按钮 */}
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <Button
+              variant="primary"
+              onClick={loadBackups}
+              loading={loading}
+              className="flex-col h-20"
+            >
+              <span className="mb-1 text-lg">📁</span>
+              恢复备份
+            </Button>
 
-          <Button
-            variant="secondary"
-            onClick={showResetConfirm}
-            loading={loading}
-            className="flex-col h-20"
-          >
-            <span className="mb-1 text-lg">🔄</span>
-            重置 ID
-          </Button>
+            <Button
+              variant="secondary"
+              onClick={showResetConfirm}
+              loading={loading}
+              className="flex-col h-20"
+            >
+              <span className="mb-1 text-lg">🔄</span>
+              重置 ID
+            </Button>
 
-          <Button
-            variant="danger"
-            onClick={showCompleteResetConfirm}
-            loading={loading}
-            className="flex-col h-20"
-          >
-            <span className="mb-1 text-lg">🗑️</span>
-            完全重置
-          </Button>
+            <Button
+              variant="danger"
+              onClick={showCompleteResetConfirm}
+              loading={loading}
+              className="flex-col h-20"
+            >
+              <span className="mb-1 text-lg">🗑️</span>
+              完全重置
+            </Button>
+          </div>
+
+          {/* 日志管理按钮 */}
+          <div className="p-4 bg-white rounded-lg shadow">
+            <h3 className="mb-3 text-sm font-medium text-gray-700">
+              📝 日志管理
+            </h3>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <Button
+                variant="secondary"
+                onClick={handleGetLogPath}
+                className="flex-col h-16 text-sm"
+              >
+                <span className="mb-1">📍</span>
+                获取日志路径
+              </Button>
+
+              <Button
+                variant="secondary"
+                onClick={handleOpenLogFile}
+                className="flex-col h-16 text-sm"
+              >
+                <span className="mb-1">📄</span>
+                打开日志文件
+              </Button>
+
+              <Button
+                variant="secondary"
+                onClick={handleOpenLogDirectory}
+                className="flex-col h-16 text-sm"
+              >
+                <span className="mb-1">📂</span>
+                打开日志目录
+              </Button>
+            </div>
+          </div>
         </div>
       )}
 

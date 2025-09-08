@@ -62,4 +62,21 @@ export class CursorService {
   static async checkUserAuthorized(token: string): Promise<AuthCheckResult> {
     return await invoke<AuthCheckResult>("check_user_authorization", { token });
   }
+
+  // Logging Management
+  static async getLogFilePath(): Promise<string> {
+    return await invoke<string>("get_log_file_path");
+  }
+
+  static async testLogging(): Promise<string> {
+    return await invoke<string>("test_logging");
+  }
+
+  static async openLogFile(): Promise<string> {
+    return await invoke<string>("open_log_file");
+  }
+
+  static async openLogDirectory(): Promise<string> {
+    return await invoke<string>("open_log_directory");
+  }
 }
