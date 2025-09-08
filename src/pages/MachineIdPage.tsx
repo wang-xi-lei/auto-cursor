@@ -181,15 +181,15 @@ export const MachineIdPage: React.FC = () => {
     });
   };
 
-  const handleOpenLogFile = async () => {
-    try {
-      const result = await CursorService.openLogFile();
-      showSuccess(result);
-    } catch (error) {
-      console.error("打开日志文件失败:", error);
-      showError(`打开日志文件失败: ${error}`);
-    }
-  };
+  // const handleOpenLogFile = async () => {
+  //   try {
+  //     const result = await CursorService.openLogFile();
+  //     showSuccess(result);
+  //   } catch (error) {
+  //     console.error("打开日志文件失败:", error);
+  //     showError(`打开日志文件失败: ${error}`);
+  //   }
+  // };
 
   const handleOpenLogDirectory = async () => {
     try {
@@ -307,14 +307,14 @@ export const MachineIdPage: React.FC = () => {
                 获取日志路径
               </Button>
 
-              <Button
+              {/* <Button
                 variant="secondary"
                 onClick={handleOpenLogFile}
                 className="flex-col h-16 text-sm"
               >
                 <span className="mb-1">📄</span>
                 打开日志文件
-              </Button>
+              </Button> */}
 
               <Button
                 variant="secondary"
