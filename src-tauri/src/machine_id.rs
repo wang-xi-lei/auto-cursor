@@ -1032,12 +1032,12 @@ impl MachineIdRestorer {
         {
             (
                 r#"$(k,E(Ks,{title:"Upgrade to Pro",size:"small",get codicon(){return F.rocket},get onClick(){return t.pay}}),null)"#,
-                r#"$(k,E(Ks,{title:"yeongpin GitHub",size:"small",get codicon(){return F.rocket},get onClick(){return function(){window.open("https://github.com/yeongpin/cursor-free-vip","_blank")}}}),null)"#,
+                r#"$(k,E(Ks,{title:"wuqi-y GitHub",size:"small",get codicon(){return F.rocket},get onClick(){return function(){window.open("https://github.com/wuqi-y/auto-cursor-releases","_blank")}}}),null)"#,
             )
         } else {
             (
                 r#"M(x,I(as,{title:"Upgrade to Pro",size:"small",get codicon(){return $.rocket},get onClick(){return t.pay}}),null)"#,
-                r#"M(x,I(as,{title:"yeongpin GitHub",size:"small",get codicon(){return $.rocket},get onClick(){return function(){window.open("https://github.com/yeongpin/cursor-free-vip","_blank")}}}),null)"#,
+                r#"M(x,I(as,{title:"wuqi-y GitHub",size:"small",get codicon(){return $.rocket},get onClick(){return function(){window.open("https://github.com/wuqi-y/auto-cursor-releases","_blank")}}}),null)"#,
             )
         };
 
