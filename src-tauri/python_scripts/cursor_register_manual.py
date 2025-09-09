@@ -94,6 +94,7 @@ class CursorRegistration:
         self.email_tab = None
         self.use_incognito = use_incognito  # 无痕模式设置
         self.app_dir = app_dir  # 应用目录路径
+        self.keep_browser_open = False  # 标记是否保持浏览器打开
 
         # 获取配置
         self.config = get_config(translator)
@@ -293,7 +294,16 @@ class CursorRegistration:
                     # 注册成功后，继续执行银行卡绑定流程
                     print(f"{Fore.CYAN}{EMOJI['INFO']} 开始银行卡绑定流程...{Style.RESET_ALL}")
                     card_success = self._setup_payment_method(browser_tab)
-                    if card_success:
+                    if card_success == "non_china_completed":
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成，浏览器保持打开状态{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}{EMOJI['INFO']} 请手动完成剩余的地址信息填写和表单提交{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} Python进程将保持运行，浏览器不会自动关闭{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
+                        # 设置标记，不关闭浏览器，并保持进程运行
+                        self.keep_browser_open = True
+                        self._wait_for_user_completion(browser_tab)
+                        return True
+                    elif card_success:
                         print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡绑定成功{Style.RESET_ALL}")
                         # 银行卡绑定成功后等待25秒
                         print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定完成，等待25秒后关闭浏览器...{Style.RESET_ALL}")
@@ -308,8 +318,8 @@ class CursorRegistration:
                     print(f"{Fore.CYAN}{EMOJI['INFO']} 注册失败，等待5秒后关闭浏览器...{Style.RESET_ALL}")
                     time.sleep(5)
 
-                # Close browser after getting information
-                if browser_tab:
+                # Close browser after getting information (except for non-China addresses)
+                if browser_tab and not self.keep_browser_open:
                     try:
                         browser_tab.quit()
                     except:
@@ -323,8 +333,8 @@ class CursorRegistration:
             safe_print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.register_process_error', error=str(e))}{Style.RESET_ALL}")
             return False
         finally:
-            # Ensure browser is closed in any case
-            if browser_tab:
+            # Ensure browser is closed in any case (except when keep_browser_open is True)
+            if browser_tab and not self.keep_browser_open:
                 try:
                     browser_tab.quit()
                 except:
@@ -411,6 +421,23 @@ class CursorRegistration:
                 # 保存token信息供外部访问
                 self.extracted_token = token
                 self.workos_cursor_session_token = original_workos_token
+                
+                # 保存完整的账户信息供输出使用
+                self.account_info = {
+                    "success": True,
+                    "email": self.email_address,
+                    "first_name": getattr(self, 'first_name', 'unknown'),
+                    "last_name": getattr(self, 'last_name', 'unknown'),
+                    "message": "注册成功",
+                    "status": "completed",
+                    "token": token,
+                    "workos_cursor_session_token": original_workos_token
+                }
+                
+                # 输出JSON格式的账户信息供前端捕获
+                import json
+                print(json.dumps(self.account_info))
+                
                 return True
             else:
                 return False
@@ -599,60 +626,92 @@ class CursorRegistration:
                 billing_name_input.input(card_info['billingName'])
                 time.sleep(get_random_wait_time(self.config, 'input_wait'))
 
-            # 选择国家
-            print(f"{Fore.CYAN}{EMOJI['INFO']} 查找国家选择框 #billingCountry...{Style.RESET_ALL}")
-            country_select = browser_tab.ele("#billingCountry")
-            if country_select:
-                # print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到国家选择框，开始分析选项...{Style.RESET_ALL}")
-                # country_select.select(card_info['billingCountry'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                      # 根据国家决定填写哪些字段
+            is_china = card_info['billingCountry'].lower() == 'china'
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 检测到国家: {card_info['billingCountry']}, 中国模式: {is_china}{Style.RESET_ALL}")
+            
+            if is_china:
+                # 中国需要填写详细信息
+                # 填写邮政编码
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 查找邮政编码输入框 #billingPostalCode...{Style.RESET_ALL}")
+                postal_code_input = browser_tab.ele("#billingPostalCode", timeout=10)
+                if postal_code_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到邮政编码输入框，开始填写...{Style.RESET_ALL}")
+                    postal_code_input.clear()
+                    postal_code_input.input(card_info['billingPostalCode'])
+                    time.sleep(self.get_random_wait_time('input_wait'))
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 邮政编码填写完成{Style.RESET_ALL}")
+
+                # 选择省份
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 查找省份选择框 #billingAdministrativeArea...{Style.RESET_ALL}")
+                province_select = browser_tab.ele("#billingAdministrativeArea", timeout=10)
+                if province_select:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到省份选择框，开始选择...{Style.RESET_ALL}")
+                    try:
+                        province_select.select(card_info['billingAdministrativeArea'])
+                        time.sleep(self.get_random_wait_time('input_wait'))
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 省份选择完成{Style.RESET_ALL}")
+                    except Exception as e:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 省份选择失败: {str(e)}{Style.RESET_ALL}")
+
+                # 填写城市
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 查找城市输入框 #billingLocality...{Style.RESET_ALL}")
+                city_input = browser_tab.ele("#billingLocality", timeout=10)
+                if city_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到城市输入框，开始填写...{Style.RESET_ALL}")
+                    city_input.clear()
+                    city_input.input(card_info['billingLocality'])
+                    time.sleep(self.get_random_wait_time('input_wait'))
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 城市填写完成{Style.RESET_ALL}")
+
+                # 填写区县
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 查找区县输入框 #billingDependentLocality...{Style.RESET_ALL}")
+                district_input = browser_tab.ele("#billingDependentLocality", timeout=10)
+                if district_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到区县输入框，开始填写...{Style.RESET_ALL}")
+                    district_input.clear()
+                    district_input.input(card_info['billingDependentLocality'])
+                    time.sleep(self.get_random_wait_time('input_wait'))
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 区县填写完成{Style.RESET_ALL}")
+
+                # 填写地址
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 查找地址输入框 #billingAddressLine1...{Style.RESET_ALL}")
+                address_input = browser_tab.ele("#billingAddressLine1", timeout=10)
+                if address_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
+                    address_input.clear()
+                    address_input.input(card_info['billingAddressLine1'])
+                    time.sleep(self.get_random_wait_time('input_wait'))
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成{Style.RESET_ALL}")
             else:
-                print(f"{Fore.RED}{EMOJI['ERROR']} 未找到国家选择框 #billingCountry{Style.RESET_ALL}")
-                raise Exception("未找到国家选择框")
+                # 非中国只需要填写地址，填写完成后不自动提交
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 非中国地址，只填写地址字段...{Style.RESET_ALL}")
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 查找地址输入框 #billingAddressLine1...{Style.RESET_ALL}")
+                address_input = browser_tab.ele("#billingAddressLine1", timeout=10)
+                if address_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
+                    address_input.clear()
+                    address_input.input(card_info['billingAddressLine1'])
+                    time.sleep(3)  # 等待3秒
+                    print(f"{Fore.CYAN}{EMOJI['INFO']} 触发Enter事件...{Style.RESET_ALL}")
+                    address_input.input('\n')  # 触发Enter事件
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成并触发Enter事件{Style.RESET_ALL}")
+                    
+                    # 非中国地址填写完成后，等待用户手动填写其他信息
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 非中国地址填写完成，请手动填写其他必要的地址信息{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 填写完成后请手动提交表单，浏览器将保持打开状态{Style.RESET_ALL}")
+                    
+                    # 返回特殊状态，表示非中国地址填写完成，需要保持浏览器打开
+                    return "non_china_completed"
+                else:
+                    print(f"{Fore.RED}{EMOJI['ERROR']} 未找到地址输入框{Style.RESET_ALL}")
+                    return False
 
-            # 填写邮编
-            postal_code_input = browser_tab.ele("#billingPostalCode")
-            if postal_code_input:
-                postal_code_input.clear()
-                postal_code_input.input(card_info['billingPostalCode'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-
-            # 选择省份
-            print(f"{Fore.CYAN}{EMOJI['INFO']} 查找省份选择框 #billingAdministrativeArea...{Style.RESET_ALL}")
-            province_select = browser_tab.ele("#billingAdministrativeArea")
-            if province_select:
-                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到省份选择框，开始选择...{Style.RESET_ALL}")
-                province_select.select(card_info['billingAdministrativeArea'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-            else:
-                print(f"{Fore.RED}{EMOJI['ERROR']} 未找到省份选择框 #billingAdministrativeArea{Style.RESET_ALL}")
-                raise Exception("未找到省份选择框")
-
-            # 填写城市
-            city_input = browser_tab.ele("#billingLocality")
-            if city_input:
-                city_input.clear()
-                city_input.input(card_info['billingLocality'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-
-            # 填写区县
-            district_input = browser_tab.ele("#billingDependentLocality")
-            if district_input:
-                district_input.clear()
-                district_input.input(card_info['billingDependentLocality'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-
-            # 填写地址
-            address_input = browser_tab.ele("#billingAddressLine1")
-            if address_input:
-                address_input.clear()
-                address_input.input(card_info['billingAddressLine1'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-
-            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成{Style.RESET_ALL}")
+            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成！{Style.RESET_ALL}")
+            
             time.sleep(5)
 
-            # 查找并点击提交按钮
+            # 中国地址才自动提交
             return self._submit_payment_form(browser_tab)
 
         except Exception as e:
@@ -739,6 +798,124 @@ class CursorRegistration:
         except Exception as e:
             print(f"{Fore.RED}{EMOJI['ERROR']} 加载银行卡配置失败: {str(e)}{Style.RESET_ALL}")
             return None
+
+    def _wait_for_user_completion(self, browser_tab):
+        """等待用户手动完成地址填写和表单提交"""
+        try:
+            print(f"\n{Fore.YELLOW}{'='*60}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}{EMOJI['INFO']} 等待用户手动操作...{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}{EMOJI['INFO']} 请在浏览器中完成以下操作：{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}  1. 填写必要的地址信息（邮编、州/省等）{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}  2. 点击提交按钮完成银行卡绑定{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}  3. 完成后可以关闭浏览器{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}{'='*60}{Style.RESET_ALL}")
+            
+            # 保持进程运行，直到用户手动关闭
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 程序将保持运行状态...{Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 如需退出，请按 Ctrl+C 或关闭此窗口{Style.RESET_ALL}")
+            
+            # 无限循环，保持进程运行
+            while True:
+                try:
+                    # 检查浏览器是否还在运行
+                    if browser_tab:
+                        # 每10秒检查一次浏览器状态
+                        time.sleep(10)
+                        try:
+                            # 尝试获取当前URL，如果失败说明浏览器可能已关闭
+                            current_url = browser_tab.url
+                            print(f"{Fore.CYAN}{EMOJI['INFO']} 浏览器仍在运行，当前页面: {current_url[:50]}...{Style.RESET_ALL}")
+                        except:
+                            print(f"{Fore.YELLOW}{EMOJI['INFO']} 浏览器已关闭，准备结束进程...{Style.RESET_ALL}")
+                            # 浏览器关闭时，输出正常的注册完成信息
+                            self._output_completion_info()
+                            break
+                    else:
+                        time.sleep(10)
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 程序保持运行中...{Style.RESET_ALL}")
+                except KeyboardInterrupt:
+                    print(f"\n{Fore.YELLOW}{EMOJI['INFO']} 用户手动终止程序{Style.RESET_ALL}")
+                    # 用户手动终止时也输出完成信息
+                    self._output_completion_info()
+                    break
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 检查浏览器状态时出错: {str(e)}{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 程序将结束...{Style.RESET_ALL}")
+                    # 出错时也输出完成信息
+                    self._output_completion_info()
+                    break
+                    
+        except Exception as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 等待用户操作时出错: {str(e)}{Style.RESET_ALL}")
+            # 出错时也输出完成信息
+            self._output_completion_info()
+
+    def _output_completion_info(self):
+        """输出注册完成信息，格式与正常注册一致，供前端捕获token"""
+        try:
+            # 获取已保存的账户信息
+            if hasattr(self, 'account_info') and self.account_info:
+                # 输出和正常注册完成时一样的JSON格式
+                print(json.dumps(self.account_info))
+            else:
+                # 如果没有保存的账户信息，尝试重新获取
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试获取账户信息...{Style.RESET_ALL}")
+                if hasattr(self, 'signup_tab') and self.signup_tab:
+                    try:
+                        # 重新获取账户信息
+                        self._get_account_info()
+                        if hasattr(self, 'account_info') and self.account_info:
+                            print(json.dumps(self.account_info))
+                        else:
+                            # 如果还是没有，输出基本的成功信息
+                            basic_info = {
+                                "success": True,
+                                "email": getattr(self, 'email_address', 'unknown'),
+                                "first_name": getattr(self, 'first_name', 'unknown'),
+                                "last_name": getattr(self, 'last_name', 'unknown'),
+                                "message": "注册成功",
+                                "status": "completed"
+                            }
+                            print(json.dumps(basic_info))
+                    except Exception as e:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 重新获取账户信息失败: {str(e)}{Style.RESET_ALL}")
+                        # 输出基本的成功信息
+                        basic_info = {
+                            "success": True,
+                            "email": getattr(self, 'email_address', 'unknown'),
+                            "first_name": getattr(self, 'first_name', 'unknown'),
+                            "last_name": getattr(self, 'last_name', 'unknown'),
+                            "message": "注册成功",
+                            "status": "completed"
+                        }
+                        print(json.dumps(basic_info))
+                else:
+                    # 输出基本的成功信息
+                    basic_info = {
+                        "success": True,
+                        "email": getattr(self, 'email_address', 'unknown'),
+                        "first_name": getattr(self, 'first_name', 'unknown'),
+                        "last_name": getattr(self, 'last_name', 'unknown'),
+                        "message": "注册成功",
+                        "status": "completed"
+                    }
+                    print(json.dumps(basic_info))
+                    
+        except Exception as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 输出完成信息时出错: {str(e)}{Style.RESET_ALL}")
+            # 即使出错也输出基本信息
+            try:
+                basic_info = {
+                    "success": True,
+                    "email": getattr(self, 'email_address', 'unknown'),
+                    "first_name": getattr(self, 'first_name', 'unknown'),
+                    "last_name": getattr(self, 'last_name', 'unknown'),
+                    "message": "注册成功",
+                    "status": "completed"
+                }
+                print(json.dumps(basic_info))
+            except:
+                pass
 
     def start(self):
         """Start Registration Process"""

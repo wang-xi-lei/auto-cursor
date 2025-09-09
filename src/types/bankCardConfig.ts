@@ -58,14 +58,14 @@ export const CHINA_PROVINCES: ProvinceOption[] = [
 
 // 默认银行卡配置
 export const DEFAULT_BANK_CARD_CONFIG: BankCardConfig = {
-  cardNumber: '',
-  cardExpiry: '',
-  cardCvc: '',
-  billingName: '',
+  cardNumber: '--',
+  cardExpiry: '--',
+  cardCvc: '--',
+  billingName: '--',
   billingCountry: 'China',
-  billingPostalCode: '',
+  billingPostalCode: '--',
   billingAdministrativeArea: '福建省 — Fujian Sheng',
-  billingLocality: '',
-  billingDependentLocality: '',
-  billingAddressLine1: '',
+  billingLocality: '--',
+  billingDependentLocality: '--',
+  billingAddressLine1: '--',
 };

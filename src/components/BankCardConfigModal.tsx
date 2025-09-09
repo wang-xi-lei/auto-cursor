@@ -7,6 +7,7 @@ import {
   DEFAULT_BANK_CARD_CONFIG,
 } from "../types/bankCardConfig";
 import { BankCardConfigService } from "../services/bankCardConfigService";
+import { confirm } from "@tauri-apps/plugin-dialog";
 
 interface BankCardConfigModalProps {
   isOpen: boolean;
@@ -58,6 +59,32 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
         type: "error",
       });
       return;
+    }
+
+    // 如果是非中国地址，显示确认弹窗
+    if (config.billingCountry !== "China") {
+      try {
+        const confirmed = await confirm(
+          "非中国地址注意事项：\n\n" +
+            "• 系统将自动填写详细地址信息\n" +
+            "• 填写完成后，浏览器会保持打开状态\n" +
+            "• 您需要手动填写其他必要的地址信息（如邮编、州/省等）\n" +
+            "• 填写完成后请手动提交表单\n\n" +
+            "确认继续保存配置吗？",
+          {
+            title: "💳 银行卡配置 - 非中国地址",
+            kind: "info",
+          }
+        );
+
+        if (!confirmed) {
+          return;
+        }
+      } catch (error) {
+        console.error("弹窗确认失败:", error);
+        setToast({ message: "弹窗确认失败，请重试", type: "error" });
+        return;
+      }
     }
 
     setIsLoading(true);
@@ -150,6 +177,16 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                 id="cardNumber"
                 value={config.cardNumber}
                 onChange={(e) => handleCardNumberChange(e.target.value)}
+                onFocus={(e) => {
+                  if (e.target.value === "--") {
+                    handleInputChange("cardNumber", "");
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === "") {
+                    handleInputChange("cardNumber", "--");
+                  }
+                }}
                 className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="请输入银行卡号"
                 maxLength={19}
@@ -168,6 +205,16 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                 id="cardExpiry"
                 value={config.cardExpiry}
                 onChange={(e) => handleExpiryChange(e.target.value)}
+                onFocus={(e) => {
+                  if (e.target.value === "--") {
+                    handleInputChange("cardExpiry", "");
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === "") {
+                    handleInputChange("cardExpiry", "--");
+                  }
+                }}
                 className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="MM/YY"
                 maxLength={5}
@@ -186,6 +233,16 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                 id="cardCvc"
                 value={config.cardCvc}
                 onChange={(e) => handleCvcChange(e.target.value)}
+                onFocus={(e) => {
+                  if (e.target.value === "--") {
+                    handleInputChange("cardCvc", "");
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === "") {
+                    handleInputChange("cardCvc", "--");
+                  }
+                }}
                 className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="请输入CVC码"
                 maxLength={4}
@@ -206,6 +263,16 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                 onChange={(e) =>
                   handleInputChange("billingName", e.target.value)
                 }
+                onFocus={(e) => {
+                  if (e.target.value === "--") {
+                    handleInputChange("billingName", "");
+                  }
+                }}
+                onBlur={(e) => {
+                  if (e.target.value === "") {
+                    handleInputChange("billingName", "--");
+                  }
+                }}
                 className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="请输入持卡人姓名"
               />
@@ -234,95 +301,131 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                   }
                   className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 >
-                  <option value="China">中国</option>
+                  <option value="China">中国地址</option>
+                  <option value="Japan">日本地址</option>
                 </select>
               </div>
 
-              <div>
-                <label
-                  htmlFor="billingPostalCode"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  邮政编码 *
-                </label>
-                <input
-                  type="text"
-                  id="billingPostalCode"
-                  value={config.billingPostalCode}
-                  onChange={(e) => handlePostalCodeChange(e.target.value)}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="请输入邮政编码"
-                  maxLength={6}
-                />
-              </div>
+              {/* 只有选择中国时才显示以下字段 */}
+              {config.billingCountry === "China" && (
+                <>
+                  <div>
+                    <label
+                      htmlFor="billingPostalCode"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      邮政编码 *
+                    </label>
+                    <input
+                      type="text"
+                      id="billingPostalCode"
+                      value={config.billingPostalCode}
+                      onChange={(e) => handlePostalCodeChange(e.target.value)}
+                      onFocus={(e) => {
+                        if (e.target.value === "--") {
+                          handleInputChange("billingPostalCode", "");
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value === "") {
+                          handleInputChange("billingPostalCode", "--");
+                        }
+                      }}
+                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="请输入邮政编码"
+                      maxLength={6}
+                    />
+                  </div>
 
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="billingAdministrativeArea"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  省份/行政区 *
-                </label>
-                <select
-                  id="billingAdministrativeArea"
-                  value={config.billingAdministrativeArea}
-                  onChange={(e) =>
-                    handleInputChange(
-                      "billingAdministrativeArea",
-                      e.target.value
-                    )
-                  }
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  <option value="">请选择省份</option>
-                  {CHINA_PROVINCES.map((province) => (
-                    <option key={province.value} value={province.value}>
-                      {province.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  <div className="sm:col-span-2">
+                    <label
+                      htmlFor="billingAdministrativeArea"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      省份/行政区 *
+                    </label>
+                    <select
+                      id="billingAdministrativeArea"
+                      value={config.billingAdministrativeArea}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "billingAdministrativeArea",
+                          e.target.value
+                        )
+                      }
+                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="">请选择省份</option>
+                      {CHINA_PROVINCES.map((province) => (
+                        <option key={province.value} value={province.value}>
+                          {province.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-              <div>
-                <label
-                  htmlFor="billingLocality"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  城市 *
-                </label>
-                <input
-                  type="text"
-                  id="billingLocality"
-                  value={config.billingLocality}
-                  onChange={(e) =>
-                    handleInputChange("billingLocality", e.target.value)
-                  }
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="请输入城市"
-                />
-              </div>
+                  <div>
+                    <label
+                      htmlFor="billingLocality"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      城市 *
+                    </label>
+                    <input
+                      type="text"
+                      id="billingLocality"
+                      value={config.billingLocality}
+                      onChange={(e) =>
+                        handleInputChange("billingLocality", e.target.value)
+                      }
+                      onFocus={(e) => {
+                        if (e.target.value === "--") {
+                          handleInputChange("billingLocality", "");
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value === "") {
+                          handleInputChange("billingLocality", "--");
+                        }
+                      }}
+                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="请输入城市"
+                    />
+                  </div>
 
-              <div>
-                <label
-                  htmlFor="billingDependentLocality"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  区县 *
-                </label>
-                <input
-                  type="text"
-                  id="billingDependentLocality"
-                  value={config.billingDependentLocality}
-                  onChange={(e) =>
-                    handleInputChange(
-                      "billingDependentLocality",
-                      e.target.value
-                    )
-                  }
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  placeholder="请输入区县"
-                />
-              </div>
+                  <div>
+                    <label
+                      htmlFor="billingDependentLocality"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      区县 *
+                    </label>
+                    <input
+                      type="text"
+                      id="billingDependentLocality"
+                      value={config.billingDependentLocality}
+                      onChange={(e) =>
+                        handleInputChange(
+                          "billingDependentLocality",
+                          e.target.value
+                        )
+                      }
+                      onFocus={(e) => {
+                        if (e.target.value === "--") {
+                          handleInputChange("billingDependentLocality", "");
+                        }
+                      }}
+                      onBlur={(e) => {
+                        if (e.target.value === "") {
+                          handleInputChange("billingDependentLocality", "--");
+                        }
+                      }}
+                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="请输入区县"
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="sm:col-span-2">
                 <label
@@ -330,6 +433,12 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                   className="block text-sm font-medium text-gray-700"
                 >
                   详细地址 *
+                  {config.billingCountry === "Japan" && (
+                    <span className="text-xs text-gray-500">
+                      アオモリケン, カミキタグンシチノヘマチ, サイノカミ,
+                      412-1043
+                    </span>
+                  )}
                 </label>
                 <input
                   type="text"
@@ -338,6 +447,16 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                   onChange={(e) =>
                     handleInputChange("billingAddressLine1", e.target.value)
                   }
+                  onFocus={(e) => {
+                    if (e.target.value === "--") {
+                      handleInputChange("billingAddressLine1", "");
+                    }
+                  }}
+                  onBlur={(e) => {
+                    if (e.target.value === "") {
+                      handleInputChange("billingAddressLine1", "--");
+                    }
+                  }}
                   className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="请输入详细地址"
                 />

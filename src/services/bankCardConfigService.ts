@@ -43,35 +43,38 @@ export class BankCardConfigService {
   static validateBankCardConfig(config: BankCardConfig): { isValid: boolean; errors: string[] } {
     const errors: string[] = [];
 
-    if (!config.cardNumber || config.cardNumber.length < 13) {
+    if (!config.cardNumber || config.cardNumber === '--' || config.cardNumber.length < 13) {
       errors.push('银行卡号至少需要13位数字');
     }
 
-    if (!config.cardExpiry || !/^\d{2}\/\d{2}$/.test(config.cardExpiry)) {
+    if (!config.cardExpiry || config.cardExpiry === '--' || !/^\d{2}\/\d{2}$/.test(config.cardExpiry)) {
       errors.push('有效期格式应为 MM/YY');
     }
 
-    if (!config.cardCvc || config.cardCvc.length < 3) {
+    if (!config.cardCvc || config.cardCvc === '--' || config.cardCvc.length < 3) {
       errors.push('CVC码至少需要3位数字');
     }
 
-    if (!config.billingName.trim()) {
+    if (!config.billingName.trim() || config.billingName === '--') {
       errors.push('持卡人姓名不能为空');
     }
 
-    if (!config.billingPostalCode.trim()) {
-      errors.push('邮政编码不能为空');
+    // 只有选择中国时才验证这些字段
+    if (config.billingCountry === 'China') {
+      if (!config.billingPostalCode.trim() || config.billingPostalCode === '--') {
+        errors.push('邮政编码不能为空');
+      }
+
+      if (!config.billingLocality.trim() || config.billingLocality === '--') {
+        errors.push('城市不能为空');
+      }
+
+      if (!config.billingDependentLocality.trim() || config.billingDependentLocality === '--') {
+        errors.push('区县不能为空');
+      }
     }
 
-    if (!config.billingLocality.trim()) {
-      errors.push('城市不能为空');
-    }
-
-    if (!config.billingDependentLocality.trim()) {
-      errors.push('区县不能为空');
-    }
-
-    if (!config.billingAddressLine1.trim()) {
+    if (!config.billingAddressLine1.trim() || config.billingAddressLine1 === '--') {
       errors.push('详细地址不能为空');
     }
 
