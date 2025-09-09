@@ -88,7 +88,7 @@ def main():
     if len(sys.argv) < 2:
         print(json.dumps({
             "success": False,
-            "error": "缺少参数，用法: cursor_register <email> [first_name] [last_name]"
+            "error": "缺少参数，用法: cursor_register <email> [first_name] [last_name] [use_incognito] [app_dir] [enable_bank_card_binding]"
         }))
         sys.exit(1)
 
@@ -97,6 +97,7 @@ def main():
     last_name = sys.argv[3] if len(sys.argv) > 3 else "Generated"
     use_incognito = sys.argv[4] if len(sys.argv) > 4 else "true"
     app_dir = sys.argv[5] if len(sys.argv) > 5 else None
+    enable_bank_card_binding = sys.argv[6] if len(sys.argv) > 6 else "true"
 
     try:
         # 导入manual_register模块并执行
@@ -105,9 +106,9 @@ def main():
         # 临时修改sys.argv来传递参数
         original_argv = sys.argv[:]
         if app_dir is not None:
-            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, app_dir]
+            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, app_dir, enable_bank_card_binding]
         else:
-            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito]
+            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, ".", enable_bank_card_binding]
 
         try:
             manual_main()
@@ -224,11 +225,22 @@ def create_readme():
 ## 🚀 使用方法
 
 ```bash
-# 基本用法
+# 基本用法（默认启用无痕模式和银行卡绑定）
 ./cursor_register{ext} test@example.com John Smith
 
-# 或者只提供邮箱（会生成随机姓名）
+# 只提供邮箱（会生成随机姓名）
 ./cursor_register{ext} test@example.com
+
+# 完整参数用法
+./cursor_register{ext} test@example.com John Smith true . true
+
+# 参数说明:
+# 参数1: 邮箱地址 (必需)
+# 参数2: 名字 (可选，默认: Auto)
+# 参数3: 姓氏 (可选，默认: Generated)
+# 参数4: 无痕模式 (可选，默认: true)
+# 参数5: 应用目录 (可选，默认: .)
+# 参数6: 银行卡绑定 (可选，默认: true)
 ```
 
 ## 📊 响应格式

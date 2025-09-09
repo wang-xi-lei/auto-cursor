@@ -52,6 +52,7 @@ export const AutoRegisterPage: React.FC = () => {
   );
   const [outlookEmail, setOutlookEmail] = useState("");
   const [useIncognito, setUseIncognito] = useState(true);
+  const [enableBankCardBinding, setEnableBankCardBinding] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -130,7 +131,6 @@ export const AutoRegisterPage: React.FC = () => {
           if (
             data.line.includes("workos_cursor_session_token") &&
             data.line.includes("token") &&
-            data.line.includes("注册成功") &&
             data.line.includes("user_")
           ) {
             const resObj: any = JSON.parse(data.line);
@@ -386,6 +386,7 @@ export const AutoRegisterPage: React.FC = () => {
             firstName: form.firstName,
             lastName: form.lastName,
             useIncognito: useIncognito,
+            enableBankCardBinding: enableBankCardBinding,
           }
         );
       } else if (emailType === "outlook" && outlookMode === "default") {
@@ -395,6 +396,7 @@ export const AutoRegisterPage: React.FC = () => {
           firstName: form.firstName,
           lastName: form.lastName,
           useIncognito: useIncognito,
+          enableBankCardBinding: enableBankCardBinding,
         });
       } else {
         // 使用自定义邮箱注册
@@ -403,6 +405,7 @@ export const AutoRegisterPage: React.FC = () => {
           firstName: form.firstName,
           lastName: form.lastName,
           useIncognito: useIncognito,
+          enableBankCardBinding: enableBankCardBinding,
         });
       }
 
@@ -794,6 +797,27 @@ export const AutoRegisterPage: React.FC = () => {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
                   无痕模式可以避免浏览器缓存和历史记录影响注册过程
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="flex items-center">
+                  <input
+                    id="enable-bank-card-binding"
+                    type="checkbox"
+                    checked={enableBankCardBinding}
+                    onChange={(e) => setEnableBankCardBinding(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="enable-bank-card-binding"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    自动绑定银行卡（默认）
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  勾选后将自动执行银行卡绑定流程，取消勾选则跳过银行卡绑定
                 </p>
               </div>
 

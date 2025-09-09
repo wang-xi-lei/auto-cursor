@@ -47,7 +47,8 @@ EMOJI = {
     'MAIL': '📧',
     'KEY': '🔐',
     'UPDATE': '🔄',
-    'INFO': 'ℹ️'
+    'INFO': 'ℹ️',
+    'WARNING': '⚠️'
 }
 
 def get_random_wait_time(config, timing_type='page_load_wait'):
@@ -81,7 +82,7 @@ def get_random_wait_time(config, timing_type='page_load_wait'):
         return random.uniform(0.1, 0.8)  # Return default value when error
 
 class CursorRegistration:
-    def __init__(self, translator=None, use_incognito=True, app_dir=None):
+    def __init__(self, translator=None, use_incognito=True, app_dir=None, enable_bank_card_binding=True):
         self.translator = translator
         # Set to display mode
         os.environ['BROWSER_HEADLESS'] = 'False'
@@ -95,6 +96,7 @@ class CursorRegistration:
         self.use_incognito = use_incognito  # 无痕模式设置
         self.app_dir = app_dir  # 应用目录路径
         self.keep_browser_open = False  # 标记是否保持浏览器打开
+        self.enable_bank_card_binding = enable_bank_card_binding  # 是否启用银行卡绑定
 
         # 获取配置
         self.config = get_config(translator)
@@ -103,6 +105,7 @@ class CursorRegistration:
         print(f"🔍 [DEBUG] CursorRegistration 初始化:")
         print(f"  - 无痕模式设置: {self.use_incognito}")
         print(f"  - 应用目录: {self.app_dir}")
+        print(f"  - 银行卡绑定设置: {self.enable_bank_card_binding}")
 
         # initialize Faker instance
         self.faker = Faker()
@@ -291,28 +294,37 @@ class CursorRegistration:
                 success = self._get_account_info()
 
                 if success:
-                    # 注册成功后，继续执行银行卡绑定流程
-                    print(f"{Fore.CYAN}{EMOJI['INFO']} 开始银行卡绑定流程...{Style.RESET_ALL}")
-                    card_success = self._setup_payment_method(browser_tab)
-                    if card_success == "non_china_completed":
-                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成，浏览器保持打开状态{Style.RESET_ALL}")
-                        print(f"{Fore.YELLOW}{EMOJI['INFO']} 请手动完成剩余的地址信息填写和表单提交{Style.RESET_ALL}")
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} Python进程将保持运行，浏览器不会自动关闭{Style.RESET_ALL}")
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
-                        # 设置标记，不关闭浏览器，并保持进程运行
-                        self.keep_browser_open = True
-                        self._wait_for_user_completion(browser_tab)
-                        return True
-                    elif card_success:
-                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡绑定成功{Style.RESET_ALL}")
-                        # 银行卡绑定成功后等待25秒
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定完成，等待25秒后关闭浏览器...{Style.RESET_ALL}")
-                        time.sleep(25)
+                    # 根据配置决定是否执行银行卡绑定流程
+                    print(f"{Fore.CYAN}{EMOJI['INFO']} 检查银行卡绑定设置: {self.enable_bank_card_binding}{Style.RESET_ALL}")
+                    if self.enable_bank_card_binding:
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 开始银行卡绑定流程...{Style.RESET_ALL}")
+                        card_success = self._setup_payment_method(browser_tab)
+                        if card_success == "non_china_completed":
+                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成，浏览器保持打开状态{Style.RESET_ALL}")
+                            print(f"{Fore.YELLOW}{EMOJI['INFO']} 请手动完成剩余的地址信息填写和表单提交{Style.RESET_ALL}")
+                            print(f"{Fore.CYAN}{EMOJI['INFO']} Python进程将保持运行，浏览器不会自动关闭{Style.RESET_ALL}")
+                            print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
+                            # 设置标记，不关闭浏览器，并保持进程运行
+                            self.keep_browser_open = True
+                            self._wait_for_user_completion(browser_tab)
+                            return True
+                        elif card_success:
+                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡绑定成功{Style.RESET_ALL}")
+                            # 银行卡绑定成功后等待25秒
+                            print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定完成，等待25秒后关闭浏览器...{Style.RESET_ALL}")
+                            time.sleep(25)
+                        else:
+                            print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡绑定失败，但注册已完成{Style.RESET_ALL}")
+                            # 银行卡绑定失败也等待一段时间
+                            print(f"{Fore.CYAN}{EMOJI['INFO']} 等待15秒后关闭浏览器...{Style.RESET_ALL}")
+                            time.sleep(15)
                     else:
-                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡绑定失败，但注册已完成{Style.RESET_ALL}")
-                        # 银行卡绑定失败也等待一段时间
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 等待15秒后关闭浏览器...{Style.RESET_ALL}")
-                        time.sleep(15)
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 跳过银行卡绑定流程（已禁用）{Style.RESET_ALL}")
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 注册完成，无需银行卡绑定{Style.RESET_ALL}")
+                        # 等待5秒后关闭浏览器
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 等待5秒后关闭浏览器...{Style.RESET_ALL}")
+                        time.sleep(5)
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 准备返回注册成功状态...{Style.RESET_ALL}")
                 else:
                     # 注册失败，等待5秒后关闭
                     print(f"{Fore.CYAN}{EMOJI['INFO']} 注册失败，等待5秒后关闭浏览器...{Style.RESET_ALL}")
@@ -369,12 +381,28 @@ class CursorRegistration:
                         if cookie.get("name") == "WorkosCursorSessionToken":
                             # 保存原始的WorkosCursorSessionToken
                             original_workos_token = cookie["value"]
+                            print(f"{Fore.CYAN}{EMOJI['INFO']} 找到WorkosCursorSessionToken，开始提取...{Style.RESET_ALL}")
                             # 提取处理后的token
-                            token = get_token_from_cookie(cookie["value"], self.translator)
-                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} {self.translator.get('register.token_success')}{Style.RESET_ALL}")
-                            print(f"{Fore.CYAN}{EMOJI['INFO']} 原始WorkosCursorSessionToken: {original_workos_token[:50]}...{Style.RESET_ALL}")
-                            self._save_account_info(token, total_usage, original_workos_token)
-                            return True
+                            # 如果禁用了银行卡绑定，直接输出成功信息，跳过复杂的token处理
+                            if not self.enable_bank_card_binding:
+                                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 注册成功，跳过token提取（银行卡绑定已禁用）{Style.RESET_ALL}")
+                                self._save_basic_account_info(original_workos_token, total_usage)
+                                return True
+                            
+                            try:
+                                token = get_token_from_cookie(cookie["value"], self.translator)
+                                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} Token提取成功{Style.RESET_ALL}")
+                                print(f"{Fore.CYAN}{EMOJI['INFO']} 原始WorkosCursorSessionToken: {original_workos_token[:50]}...{Style.RESET_ALL}")
+                                print(f"{Fore.CYAN}{EMOJI['INFO']} 开始保存账户信息...{Style.RESET_ALL}")
+                                save_result = self._save_account_info(token, total_usage, original_workos_token)
+                                print(f"{Fore.CYAN}{EMOJI['INFO']} 保存账户信息结果: {save_result}{Style.RESET_ALL}")
+                                return save_result
+                            except Exception as token_error:
+                                print(f"{Fore.RED}{EMOJI['ERROR']} Token提取失败: {str(token_error)}{Style.RESET_ALL}")
+                                # 即使token提取失败，也尝试保存基本信息
+                                print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试保存基本账户信息...{Style.RESET_ALL}")
+                                self._save_basic_account_info(original_workos_token, total_usage)
+                                return True
 
                     attempts += 1
                     if attempts < max_attempts:
@@ -394,6 +422,32 @@ class CursorRegistration:
 
         except Exception as e:
             safe_print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.account_error', error=str(e))}{Style.RESET_ALL}")
+            return False
+
+    def _save_basic_account_info(self, original_workos_token, total_usage):
+        """保存基本账户信息（当token提取失败时）"""
+        try:
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 保存基本账户信息，跳过token处理{Style.RESET_ALL}")
+            
+            # 保存完整的账户信息供输出使用
+            self.account_info = {
+                "success": True,
+                "email": self.email_address,
+                "first_name": getattr(self, 'first_name', 'unknown'),
+                "last_name": getattr(self, 'last_name', 'unknown'),
+                "message": "注册成功",
+                "status": "completed",
+                "workos_cursor_session_token": original_workos_token
+            }
+            
+            # 输出JSON格式的账户信息供前端捕获
+            import json
+            print(json.dumps(self.account_info))
+            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 基本账户信息保存成功{Style.RESET_ALL}")
+            return True
+            
+        except Exception as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 保存基本账户信息失败: {str(e)}{Style.RESET_ALL}")
             return False
 
     def _save_account_info(self, token, total_usage, original_workos_token=None):
@@ -938,13 +992,13 @@ class CursorRegistration:
         auth_manager = CursorAuth(translator=self.translator)
         return auth_manager.update_auth(email, access_token, refresh_token, auth_type)
 
-def main(translator=None, app_dir=None):
+def main(translator=None, app_dir=None, enable_bank_card_binding=True):
     """Main function to be called from main.py"""
     print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{EMOJI['START']} {translator.get('register.title') if translator else 'Cursor Registration'}{Style.RESET_ALL}")
     print(f"{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
 
-    registration = CursorRegistration(translator, app_dir=app_dir)
+    registration = CursorRegistration(translator, app_dir=app_dir, enable_bank_card_binding=enable_bank_card_binding)
     registration.start()
 
     print(f"\n{Fore.CYAN}{'='*50}{Style.RESET_ALL}")
@@ -954,27 +1008,83 @@ if __name__ == "__main__":
     import sys
     
     # 检查是否有足够的命令行参数
-    # 预期参数顺序: email, first_name, last_name, incognito_flag, app_dir
+    # 预期参数顺序: email, first_name, last_name, incognito_flag, app_dir, enable_bank_card_binding
     app_dir = None
     email = None
     first_name = None
     last_name = None
     use_incognito = True
+    enable_bank_card_binding = True
     
-    if len(sys.argv) >= 6:
-        # 从 Rust 调用，有完整参数
+    if len(sys.argv) >= 7:
+        # 从 Rust 调用，有完整参数（包括银行卡绑定参数）
         email = sys.argv[1]
         first_name = sys.argv[2]
         last_name = sys.argv[3]
         incognito_flag = sys.argv[4]
-        app_dir = sys.argv[5]
+        app_dir_base64 = sys.argv[5]
+        bank_card_flag = sys.argv[6]
         use_incognito = incognito_flag.lower() == "true"
+        enable_bank_card_binding = bank_card_flag.lower() == "true"
         
-        print(f"{Fore.CYAN}{EMOJI['INFO']} 从 Rust 调用，参数: email={email}, name={first_name} {last_name}, incognito={use_incognito}, app_dir={app_dir}{Style.RESET_ALL}")
+        # 调试银行卡参数解析
+        print(f"{Fore.CYAN}{EMOJI['INFO']} [DEBUG] 银行卡参数解析:")
+        print(f"  - bank_card_flag 原始值: '{bank_card_flag}'")
+        print(f"  - bank_card_flag.lower(): '{bank_card_flag.lower()}'")
+        print(f"  - bank_card_flag.lower() == 'true': {bank_card_flag.lower() == 'true'}")
+        print(f"  - enable_bank_card_binding 最终值: {enable_bank_card_binding}")
+        
+        # 解码 Base64 编码的应用目录
+        try:
+            from base64 import standard_b64decode
+            app_dir = standard_b64decode(app_dir_base64).decode('utf-8')
+        except Exception as e:
+            print(f"{Fore.YELLOW}{EMOJI['WARNING']} Base64解码失败，使用原始路径: {str(e)}{Style.RESET_ALL}")
+            app_dir = app_dir_base64
+        
+        print(f"{Fore.CYAN}{EMOJI['INFO']} 从 Rust 调用，参数: email={email}, name={first_name} {last_name}, incognito={use_incognito}, bank_card={enable_bank_card_binding}, app_dir={app_dir}{Style.RESET_ALL}")
         
         # 创建注册实例并执行
         try:
-            registration = CursorRegistration(translator=None, use_incognito=use_incognito, app_dir=app_dir)
+            registration = CursorRegistration(translator=None, use_incognito=use_incognito, app_dir=app_dir, enable_bank_card_binding=enable_bank_card_binding)
+            registration.email_address = email
+            registration.first_name = first_name
+            registration.last_name = last_name
+            
+            # 直接调用注册流程
+            success = registration.register_cursor()
+            if success:
+                print(f"{Fore.GREEN}{EMOJI['DONE']} 注册流程完成{Style.RESET_ALL}")
+            else:
+                print(f"{Fore.RED}{EMOJI['ERROR']} 注册流程失败{Style.RESET_ALL}")
+                
+        except Exception as e:
+            print(f"{Fore.RED}{EMOJI['ERROR']} 注册过程中发生错误: {str(e)}{Style.RESET_ALL}")
+    
+    elif len(sys.argv) >= 6:
+        # 从 Rust 调用，旧版本参数（向后兼容）
+        email = sys.argv[1]
+        first_name = sys.argv[2]
+        last_name = sys.argv[3]
+        incognito_flag = sys.argv[4]
+        app_dir_base64 = sys.argv[5]
+        use_incognito = incognito_flag.lower() == "true"
+        # 默认启用银行卡绑定（向后兼容）
+        enable_bank_card_binding = True
+        
+        # 解码 Base64 编码的应用目录
+        try:
+            from base64 import standard_b64decode
+            app_dir = standard_b64decode(app_dir_base64).decode('utf-8')
+        except Exception as e:
+            print(f"{Fore.YELLOW}{EMOJI['WARNING']} Base64解码失败，使用原始路径: {str(e)}{Style.RESET_ALL}")
+            app_dir = app_dir_base64
+        
+        print(f"{Fore.CYAN}{EMOJI['INFO']} 从 Rust 调用（旧版本），参数: email={email}, name={first_name} {last_name}, incognito={use_incognito}, app_dir={app_dir}{Style.RESET_ALL}")
+        
+        # 创建注册实例并执行
+        try:
+            registration = CursorRegistration(translator=None, use_incognito=use_incognito, app_dir=app_dir, enable_bank_card_binding=enable_bank_card_binding)
             registration.email_address = email
             registration.first_name = first_name
             registration.last_name = last_name
