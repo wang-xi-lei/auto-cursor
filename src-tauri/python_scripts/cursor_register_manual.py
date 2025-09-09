@@ -639,7 +639,7 @@ class CursorRegistration:
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到邮政编码输入框，开始填写...{Style.RESET_ALL}")
                     postal_code_input.clear()
                     postal_code_input.input(card_info['billingPostalCode'])
-                    time.sleep(self.get_random_wait_time('input_wait'))
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 邮政编码填写完成{Style.RESET_ALL}")
 
                 # 选择省份
@@ -649,7 +649,7 @@ class CursorRegistration:
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到省份选择框，开始选择...{Style.RESET_ALL}")
                     try:
                         province_select.select(card_info['billingAdministrativeArea'])
-                        time.sleep(self.get_random_wait_time('input_wait'))
+                        time.sleep(get_random_wait_time(self.config, 'input_wait'))
                         print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 省份选择完成{Style.RESET_ALL}")
                     except Exception as e:
                         print(f"{Fore.YELLOW}{EMOJI['WARNING']} 省份选择失败: {str(e)}{Style.RESET_ALL}")
@@ -661,7 +661,7 @@ class CursorRegistration:
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到城市输入框，开始填写...{Style.RESET_ALL}")
                     city_input.clear()
                     city_input.input(card_info['billingLocality'])
-                    time.sleep(self.get_random_wait_time('input_wait'))
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 城市填写完成{Style.RESET_ALL}")
 
                 # 填写区县
@@ -671,7 +671,7 @@ class CursorRegistration:
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到区县输入框，开始填写...{Style.RESET_ALL}")
                     district_input.clear()
                     district_input.input(card_info['billingDependentLocality'])
-                    time.sleep(self.get_random_wait_time('input_wait'))
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 区县填写完成{Style.RESET_ALL}")
 
                 # 填写地址
@@ -681,7 +681,7 @@ class CursorRegistration:
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
                     address_input.clear()
                     address_input.input(card_info['billingAddressLine1'])
-                    time.sleep(self.get_random_wait_time('input_wait'))
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
                     print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成{Style.RESET_ALL}")
             else:
                 # 非中国只需要填写地址，填写完成后不自动提交

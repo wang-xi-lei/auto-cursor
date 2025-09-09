@@ -319,7 +319,7 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                         // log_debug!("🔍 [DEBUG] 第一封邮件原始内容: {}", raw_content);
 
                         // 使用正则表达式提取验证码 - 第一种方式
-                        let re1 = Regex::new(r"code is: (\d{6})").unwrap();
+                        let re1 = Regex::new(r"code is (\d{6})").unwrap();
                         if let Some(captures) = re1.captures(raw_content) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
@@ -339,11 +339,14 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                         }
                         // 1. 移除颜色代码
                         let color_code_regex = Regex::new(r"#([0-9a-fA-F]{6})\b").unwrap();
-                        let content_without_colors = color_code_regex.replace_all(raw_content, "");
+                        // 移除前面是+号的6位数字
+                        let content_without_plus = raw_content.replace(r"+\d{6}", "");
+                        let content_without_colors_plus =
+                            color_code_regex.replace_all(&content_without_plus, "");
 
                         // 尝试第三种匹配方式：直接匹配连续的6位数字
                         let re3 = Regex::new(r"\b(\d{6})\b").unwrap();
-                        if let Some(captures) = re3.captures(&content_without_colors) {
+                        if let Some(captures) = re3.captures(&content_without_colors_plus) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
                                 log_info!(
@@ -477,7 +480,7 @@ fn extract_verification_code_from_content(content: &str) -> Option<String> {
     use regex::Regex;
 
     // 使用现有的验证码提取逻辑
-    let re1 = Regex::new(r"code is: (\d{6})").unwrap();
+    let re1 = Regex::new(r"code is (\d{6})").unwrap();
     if let Some(captures) = re1.captures(content) {
         if let Some(code) = captures.get(1) {
             return Some(code.as_str().to_string());
@@ -503,11 +506,13 @@ fn extract_verification_code_from_content(content: &str) -> Option<String> {
     // 第四种方式 - 更通用的6位数字匹配，排除颜色代码（如#414141）
     // 1. 移除颜色代码
     let color_code_regex = Regex::new(r"#([0-9a-fA-F]{6})\b").unwrap();
-    let content_without_colors = color_code_regex.replace_all(content, "");
+    // 移除前面是+号的6位数字
+    let content_without_plus = content.replace(r"+\d{6}", "");
+    let content_without_colors_plus = color_code_regex.replace_all(&content_without_plus, "");
 
     // 2. 查找 6 位数字
     let re4 = Regex::new(r"\b(\d{6})\b").unwrap();
-    if let Some(captures) = re4.captures(&content_without_colors) {
+    if let Some(captures) = re4.captures(&content_without_colors_plus) {
         if let Some(code) = captures.get(1) {
             return Some(code.as_str().to_string());
         }

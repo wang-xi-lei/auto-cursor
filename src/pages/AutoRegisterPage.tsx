@@ -12,6 +12,7 @@ import { EmailConfigService } from "../services/emailConfigService";
 import { BankCardConfig } from "../types/bankCardConfig";
 import { EmailConfig } from "../types/emailConfig";
 import { base64URLEncode, K, sha256 } from "../utils/cursorToken";
+import { confirm } from "@tauri-apps/plugin-dialog";
 
 interface RegistrationForm {
   email: string;
@@ -154,6 +155,28 @@ export const AutoRegisterPage: React.FC = () => {
                 console.log(res.accessToken, "res.accessToken");
               }
             );
+          }
+
+          if (data.line.includes("程序将保持运行状态")) {
+            // 提示用户手动输入绑卡地址，完成后关闭浏览器会自动保存账号
+            try {
+              const confirmed = await confirm(
+                "程序将保持运行状态，请手动输入绑卡地址，完成后关闭浏览器会自动保存账号",
+                {
+                  title: "程序将保持运行状态",
+                  kind: "info",
+                }
+              );
+              if (confirmed) {
+                setToast({ message: "已确认", type: "success" });
+              } else {
+                setToast({ message: "未确认", type: "error" });
+              }
+            } catch (error) {
+              console.error("弹窗确认失败:", error);
+              setToast({ message: "弹窗确认失败，请重试", type: "error" });
+              return;
+            }
           }
 
           // 同时更新ref和state

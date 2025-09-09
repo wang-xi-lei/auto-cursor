@@ -301,8 +301,8 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                   }
                   className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 >
-                  <option value="China">中国地址</option>
-                  <option value="Japan">日本地址</option>
+                  <option value="China">中国地址（需要直连网络）</option>
+                  <option value="Japan">其他地址（除中国任意地区需要手动填写地址信息，到最终绑卡页面会自动填写卡片信息，填完不会关闭浏览器）</option>
                 </select>
               </div>
 

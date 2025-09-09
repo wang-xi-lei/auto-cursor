@@ -64,7 +64,7 @@ export const DEFAULT_BANK_CARD_CONFIG: BankCardConfig = {
   billingName: '--',
   billingCountry: 'China',
   billingPostalCode: '--',
-  billingAdministrativeArea: '福建省 — Fujian Sheng',
+  billingAdministrativeArea: '--',
   billingLocality: '--',
   billingDependentLocality: '--',
   billingAddressLine1: '--',
