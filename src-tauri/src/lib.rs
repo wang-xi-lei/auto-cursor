@@ -1,5 +1,6 @@
 mod account_manager;
 mod auth_checker;
+mod logger;
 mod machine_id;
 
 use account_manager::{AccountListResult, AccountManager, LogoutResult, SwitchAccountResult};
@@ -20,18 +21,7 @@ use tauri::{Emitter, Manager};
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
-// 日志宏
-macro_rules! log_info {
-    ($($arg:tt)*) => {
-        println!("[INFO] {}", format!($($arg)*));
-    };
-}
-
-macro_rules! log_error {
-    ($($arg:tt)*) => {
-        eprintln!("[ERROR] {}", format!($($arg)*));
-    };
-}
+// 日志宏现在在logger.rs中定义
 
 // 获取应用目录的辅助函数
 pub fn get_app_dir() -> Result<PathBuf, String> {
@@ -218,12 +208,12 @@ async fn create_cloudflare_temp_email() -> Result<(String, String), String> {
         "domain": email_config.email_domain,
     });
 
-    println!("🔍 [DEBUG] 创建邮箱请求详情:");
-    println!("  URL: {}", url);
-    println!("  Headers:");
-    println!("    x-admin-auth: {}", email_config.admin_password);
-    println!("    Content-Type: application/json");
-    println!(
+    log_debug!("创建邮箱请求详情:");
+    log_debug!("  URL: {}", url);
+    log_debug!("  Headers:");
+    log_debug!("    x-admin-auth: {}", email_config.admin_password);
+    log_debug!("    Content-Type: application/json");
+    log_debug!(
         "  Payload: {}",
         serde_json::to_string_pretty(&payload).unwrap_or_default()
     );
@@ -240,9 +230,9 @@ async fn create_cloudflare_temp_email() -> Result<(String, String), String> {
     let status = response.status();
     let headers = response.headers().clone();
 
-    println!("🔍 [DEBUG] 响应详情:");
-    println!("  状态码: {}", status);
-    println!("  响应头: {:?}", headers);
+    log_debug!("响应详情:");
+    log_debug!("  状态码: {}", status);
+    log_debug!("  响应头: {:?}", headers);
 
     // 获取响应文本用于调试
     let response_text = response
@@ -250,17 +240,17 @@ async fn create_cloudflare_temp_email() -> Result<(String, String), String> {
         .await
         .map_err(|e| format!("读取响应文本失败: {}", e))?;
 
-    println!("  响应体: {}", response_text);
+    log_info!("  响应体: {}", response_text);
 
     if status.is_success() {
         let data: CloudflareEmailResponse = serde_json::from_str(&response_text)
             .map_err(|e| format!("解析响应JSON失败: {} | 响应内容: {}", e, response_text))?;
 
-        println!("🔍 [DEBUG] 解析后的数据: {:?}", data);
+        log_debug!("🔍 [DEBUG] 解析后的数据: {:?}", data);
 
         match (data.jwt, data.address) {
             (Some(jwt), Some(address)) => {
-                println!("✅ 创建临时邮箱成功: {}", address);
+                log_info!("✅ 创建临时邮箱成功: {}", address);
                 Ok((jwt, address))
             }
             _ => Err(format!(
@@ -285,15 +275,15 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
 
     // 最多尝试30次，每次等待10秒
     for attempt in 1..=30 {
-        println!("🔍 第{}次尝试获取验证码...", attempt);
+        log_debug!("🔍 第{}次尝试获取验证码...", attempt);
 
         let url = format!("https://{}/api/mails", email_config.worker_domain);
-        println!("🔍 [DEBUG] 获取邮件请求详情:");
-        println!("  URL: {}", url);
-        println!("  Headers:");
-        println!("    Authorization: Bearer {}", jwt);
-        println!("    Content-Type: application/json");
-        println!("  Query: limit=10&offset=0");
+        log_debug!("🔍 [DEBUG] 获取邮件请求详情:");
+        log_info!("  URL: {}", url);
+        log_info!("  Headers:");
+        log_info!("    Authorization: Bearer {}", jwt);
+        log_info!("    Content-Type: application/json");
+        log_info!("  Query: limit=10&offset=0");
 
         let response = client
             .get(&url)
@@ -305,7 +295,7 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
             .map_err(|e| format!("获取邮件请求失败: {}", e))?;
 
         let status = response.status();
-        println!("🔍 [DEBUG] 获取邮件响应状态码: {}", status);
+        log_debug!("🔍 [DEBUG] 获取邮件响应状态码: {}", status);
 
         if response.status().is_success() {
             let response_text = response
@@ -313,27 +303,27 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                 .await
                 .map_err(|e| format!("读取邮件响应文本失败: {}", e))?;
 
-            // println!("🔍 [DEBUG] 邮件响应体: {}", response_text);
+            // log_debug!("🔍 [DEBUG] 邮件响应体: {}", response_text);
 
             let data: CloudflareMailsResponse =
                 serde_json::from_str(&response_text).map_err(|e| {
                     format!("解析邮件响应JSON失败: {} | 响应内容: {}", e, response_text)
                 })?;
 
-            // println!("🔍 [DEBUG] 解析后的邮件数据: {:?}", data);
+            // log_debug!("🔍 [DEBUG] 解析后的邮件数据: {:?}", data);
 
             if let Some(results) = data.results {
-                println!("🔍 [DEBUG] 邮件数量: {}", results.len());
+                log_debug!("🔍 [DEBUG] 邮件数量: {}", results.len());
                 if !results.is_empty() {
                     if let Some(raw_content) = &results[0].raw {
-                        // println!("🔍 [DEBUG] 第一封邮件原始内容: {}", raw_content);
+                        // log_debug!("🔍 [DEBUG] 第一封邮件原始内容: {}", raw_content);
 
                         // 使用正则表达式提取验证码 - 第一种方式
                         let re1 = Regex::new(r"code is: (\d{6})").unwrap();
                         if let Some(captures) = re1.captures(raw_content) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
-                                println!("✅ 成功提取验证码 (方式1): {}", verification_code);
+                                log_info!("✅ 成功提取验证码 (方式1): {}", verification_code);
                                 return Ok(verification_code);
                             }
                         }
@@ -343,7 +333,7 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                         if let Some(captures) = re2.captures(raw_content) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
-                                println!("✅ 成功提取验证码 (方式2): {}", verification_code);
+                                log_info!("✅ 成功提取验证码 (方式2): {}", verification_code);
                                 return Ok(verification_code);
                             }
                         }
@@ -356,7 +346,7 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                         if let Some(captures) = re3.captures(&content_without_colors) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
-                                println!(
+                                log_info!(
                                     "✅ 成功提取验证码 (方式3-连续6位数字): {}",
                                     verification_code
                                 );
@@ -364,29 +354,30 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                             }
                         }
 
-                        println!("🔍 [DEBUG] 未找到匹配的验证码模式");
+                        log_debug!("🔍 [DEBUG] 未找到匹配的验证码模式");
                     } else {
-                        println!("🔍 [DEBUG] 第一封邮件没有raw内容");
+                        log_debug!("🔍 [DEBUG] 第一封邮件没有raw内容");
                     }
                 } else {
-                    println!("🔍 [DEBUG] 邮件列表为空");
+                    log_debug!("🔍 [DEBUG] 邮件列表为空");
                 }
             } else {
-                println!("🔍 [DEBUG] 响应中没有results字段");
+                log_debug!("🔍 [DEBUG] 响应中没有results字段");
             }
         } else {
             let error_text = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "无法读取错误响应".to_string());
-            println!(
+            log_info!(
                 "🔍 [DEBUG] 获取邮件失败，状态码: {} | 错误内容: {}",
-                status, error_text
+                status,
+                error_text
             );
         }
 
         // 等待10秒后重试
-        println!("⏳ 等待10秒后重试...");
+        log_info!("⏳ 等待10秒后重试...");
         tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
     }
 
@@ -400,14 +391,14 @@ async fn get_verification_code_from_outlook(email: &str) -> Result<String, Strin
 
     // 最多尝试30次，每次等待10秒
     for attempt in 1..=30 {
-        println!("🔍 第{}次尝试从Outlook获取验证码...", attempt);
+        log_debug!("🔍 第{}次尝试从Outlook获取验证码...", attempt);
 
         // 获取收件箱邮件
         let inbox_url = format!(
             "http://query.paopaodw.com/api/GetLastEmails?email={}&boxType=1",
             encoded_email
         );
-        println!("🔍 [DEBUG] 获取收件箱邮件: {}", inbox_url);
+        log_debug!("🔍 [DEBUG] 获取收件箱邮件: {}", inbox_url);
 
         let inbox_response = client
             .get(&inbox_url)
@@ -421,14 +412,14 @@ async fn get_verification_code_from_outlook(email: &str) -> Result<String, Strin
                 .await
                 .map_err(|e| format!("读取收件箱响应失败: {}", e))?;
 
-            println!("🔍 [DEBUG] 收件箱响应: {}", inbox_text);
+            log_debug!("🔍 [DEBUG] 收件箱响应: {}", inbox_text);
 
             if let Ok(inbox_data) = serde_json::from_str::<serde_json::Value>(&inbox_text) {
                 if let Some(data) = inbox_data.get("data").and_then(|d| d.as_array()) {
                     for email_item in data {
                         if let Some(body) = email_item.get("Body").and_then(|b| b.as_str()) {
                             if let Some(code) = extract_verification_code_from_content(body) {
-                                println!("✅ 从收件箱找到验证码: {}", code);
+                                log_info!("✅ 从收件箱找到验证码: {}", code);
                                 return Ok(code);
                             }
                         }
@@ -442,7 +433,7 @@ async fn get_verification_code_from_outlook(email: &str) -> Result<String, Strin
             "http://query.paopaodw.com/api/GetLastEmails?email={}&boxType=2",
             encoded_email
         );
-        println!("🔍 [DEBUG] 获取垃圾箱邮件: {}", spam_url);
+        log_debug!("🔍 [DEBUG] 获取垃圾箱邮件: {}", spam_url);
 
         let spam_response = client
             .get(&spam_url)
@@ -456,14 +447,14 @@ async fn get_verification_code_from_outlook(email: &str) -> Result<String, Strin
                 .await
                 .map_err(|e| format!("读取垃圾箱响应失败: {}", e))?;
 
-            println!("🔍 [DEBUG] 垃圾箱响应: {}", spam_text);
+            log_debug!("🔍 [DEBUG] 垃圾箱响应: {}", spam_text);
 
             if let Ok(spam_data) = serde_json::from_str::<serde_json::Value>(&spam_text) {
                 if let Some(data) = spam_data.get("data").and_then(|d| d.as_array()) {
                     for email_item in data {
                         if let Some(body) = email_item.get("Body").and_then(|b| b.as_str()) {
                             if let Some(code) = extract_verification_code_from_content(body) {
-                                println!("✅ 从垃圾箱找到验证码: {}", code);
+                                log_info!("✅ 从垃圾箱找到验证码: {}", code);
                                 return Ok(code);
                             }
                         }
@@ -473,7 +464,7 @@ async fn get_verification_code_from_outlook(email: &str) -> Result<String, Strin
         }
 
         if attempt < 30 {
-            println!("⏰ 第{}次尝试未找到验证码，等待10秒后重试...", attempt);
+            log_info!("⏰ 第{}次尝试未找到验证码，等待10秒后重试...", attempt);
             tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
         }
     }
@@ -557,14 +548,14 @@ async fn delete_backup(backup_path: String) -> Result<serde_json::Value, String>
 
     match fs::remove_file(&backup_path) {
         Ok(_) => {
-            println!("✅ 成功删除备份文件: {}", backup_path);
+            log_info!("✅ 成功删除备份文件: {}", backup_path);
             Ok(serde_json::json!({
                 "success": true,
                 "message": "备份文件删除成功"
             }))
         }
         Err(e) => {
-            println!("❌ 删除备份文件失败: {}", e);
+            log_error!("❌ 删除备份文件失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("删除失败: {}", e)
@@ -695,10 +686,23 @@ async fn complete_cursor_reset() -> Result<ResetResult, String> {
 
 #[tauri::command]
 async fn get_log_file_path() -> Result<String, String> {
-    let restorer =
-        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+    if let Some(log_path) = logger::Logger::get_log_path() {
+        Ok(log_path.to_string_lossy().to_string())
+    } else {
+        Err("Logger not initialized".to_string())
+    }
+}
 
-    Ok(restorer.get_log_file_path().to_string_lossy().to_string())
+#[tauri::command]
+async fn get_log_config() -> Result<serde_json::Value, String> {
+    let (max_size_mb, log_file_name) = logger::get_log_config();
+    Ok(serde_json::json!({
+        "max_size_mb": max_size_mb,
+        "log_file_name": log_file_name,
+        "log_file_path": logger::Logger::get_log_path()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_else(|| "Not initialized".to_string())
+    }))
 }
 
 #[tauri::command]
@@ -751,14 +755,16 @@ async fn clear_custom_cursor_path() -> Result<String, String> {
 
 #[tauri::command]
 async fn open_log_file() -> Result<String, String> {
-    let restorer =
-        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
-
-    let log_path = restorer.get_log_file_path();
+    // 使用新的日志系统获取日志文件路径
+    let log_path = if let Some(path) = logger::Logger::get_log_path() {
+        path
+    } else {
+        return Err("日志系统未初始化".to_string());
+    };
 
     // 检查日志文件是否存在
     if !log_path.exists() {
-        return Err("日志文件不存在，请先执行 Cursor 重置操作".to_string());
+        return Err("日志文件不存在，请先运行应用以生成日志".to_string());
     }
 
     let log_path_str = log_path.to_string_lossy().to_string();
@@ -796,10 +802,13 @@ async fn open_log_file() -> Result<String, String> {
 
 #[tauri::command]
 async fn open_log_directory() -> Result<String, String> {
-    let restorer =
-        MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
+    // 使用新的日志系统获取日志文件路径
+    let log_path = if let Some(path) = logger::Logger::get_log_path() {
+        path
+    } else {
+        return Err("日志系统未初始化".to_string());
+    };
 
-    let log_path = restorer.get_log_file_path();
     let log_dir = log_path
         .parent()
         .unwrap_or_else(|| std::path::Path::new("."));
@@ -936,7 +945,7 @@ async fn edit_account(
     new_refresh_token: Option<String>,
     new_workos_cursor_session_token: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    println!(
+    log_info!(
         "🔍 [DEBUG] edit_account called with email: {}, new_token: {:?}, new_refresh_token: {:?}, new_workos_cursor_session_token: {:?}",
         email,
         new_token
@@ -957,14 +966,14 @@ async fn edit_account(
         new_workos_cursor_session_token,
     ) {
         Ok(()) => {
-            println!("✅ [DEBUG] Account {} updated successfully", email);
+            log_info!("✅ [DEBUG] Account {} updated successfully", email);
             Ok(serde_json::json!({
                 "success": true,
                 "message": format!("Account {} updated successfully", email)
             }))
         }
         Err(e) => {
-            println!("❌ [DEBUG] Failed to update account {}: {}", email, e);
+            log_error!("❌ [DEBUG] Failed to update account {}: {}", email, e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("Failed to update account: {}", e)
@@ -993,21 +1002,50 @@ async fn logout_current_account() -> Result<LogoutResult, String> {
 }
 
 #[tauri::command]
+async fn export_accounts(export_path: String) -> Result<serde_json::Value, String> {
+    match AccountManager::export_accounts(export_path) {
+        Ok(exported_path) => Ok(serde_json::json!({
+            "success": true,
+            "message": format!("账户导出成功: {}", exported_path),
+            "exported_path": exported_path
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "success": false,
+            "message": format!("导出失败: {}", e)
+        })),
+    }
+}
+
+#[tauri::command]
+async fn import_accounts(import_file_path: String) -> Result<serde_json::Value, String> {
+    match AccountManager::import_accounts(import_file_path) {
+        Ok(message) => Ok(serde_json::json!({
+            "success": true,
+            "message": message
+        })),
+        Err(e) => Ok(serde_json::json!({
+            "success": false,
+            "message": format!("导入失败: {}", e)
+        })),
+    }
+}
+
+#[tauri::command]
 async fn open_cancel_subscription_page(
     app: tauri::AppHandle,
     workos_cursor_session_token: String,
 ) -> Result<serde_json::Value, String> {
-    println!("🔄 Opening cancel subscription page with WorkOS token...");
+    log_info!("🔄 Opening cancel subscription page with WorkOS token...");
 
     let url = "https://cursor.com/";
 
     // 先尝试关闭已存在的窗口
     if let Some(existing_window) = app.get_webview_window("cancel_subscription") {
-        println!("🔄 Closing existing cancel subscription window...");
+        log_info!("🔄 Closing existing cancel subscription window...");
         if let Err(e) = existing_window.close() {
-            println!("❌ Failed to close existing window: {}", e);
+            log_error!("❌ Failed to close existing window: {}", e);
         } else {
-            println!("✅ Existing window closed successfully");
+            log_info!("✅ Existing window closed successfully");
         }
         // 等待一小段时间确保窗口完全关闭
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
@@ -1046,10 +1084,10 @@ async fn open_cancel_subscription_page(
                 );
 
                 if let Err(e) = window_clone.eval(&cookie_script) {
-                    println!("❌ Failed to inject cookie: {}", e);
+                    log_error!("❌ Failed to inject cookie: {}", e);
                     return;
                 } else {
-                    println!("✅ Cookie injected successfully");
+                    log_info!("✅ Cookie injected successfully");
                 }
 
                 // 第二步：跳转到billing页面
@@ -1060,10 +1098,10 @@ async fn open_cancel_subscription_page(
                 "#;
 
                 if let Err(e) = window_clone.eval(navigation_script) {
-                    println!("❌ Failed to navigate: {}", e);
+                    log_error!("❌ Failed to navigate: {}", e);
                     return;
                 } else {
-                    println!("✅ Navigation initiated");
+                    log_info!("✅ Navigation initiated");
                 }
             });
 
@@ -1095,7 +1133,7 @@ async fn open_cancel_subscription_page(
                         tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
                     }
                     Err(e) => {
-                        println!("❌ Failed to check URL: {}", e);
+                        log_error!("❌ Failed to check URL: {}", e);
                         return;
                     }
                 }
@@ -1226,20 +1264,20 @@ async fn open_cancel_subscription_page(
                 "#;
 
                 if let Err(e) = window_for_button_click.eval(button_click_script) {
-                    println!("❌ Failed to inject button click script: {}", e);
+                    log_error!("❌ Failed to inject button click script: {}", e);
                 } else {
-                    println!("✅ Button click script injected successfully");
+                    log_info!("✅ Button click script injected successfully");
                 }
             });
 
-            println!("✅ Successfully opened WebView window");
+            log_info!("✅ Successfully opened WebView window");
             Ok(serde_json::json!({
                 "success": true,
                 "message": "已打开取消订阅页面，正在自动登录..."
             }))
         }
         Err(e) => {
-            println!("❌ Failed to create WebView window: {}", e);
+            log_error!("❌ Failed to create WebView window: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("无法打开内置浏览器: {}", e)
@@ -1257,11 +1295,11 @@ async fn show_cancel_subscription_window(app: tauri::AppHandle) -> Result<(), St
         window
             .show()
             .map_err(|e| format!("Failed to show window: {}", e))?;
-        println!("✅ Cancel subscription window shown");
+        log_info!("✅ Cancel subscription window shown");
 
         // 发送事件通知前端操作成功
         if let Err(e) = app.emit("cancel-subscription-success", ()) {
-            println!("❌ Failed to emit success event: {}", e);
+            log_error!("❌ Failed to emit success event: {}", e);
         }
     }
     Ok(())
@@ -1273,11 +1311,11 @@ async fn cancel_subscription_failed(app: tauri::AppHandle) -> Result<(), String>
         window
             .close()
             .map_err(|e| format!("Failed to close window: {}", e))?;
-        println!("❌ Cancel subscription failed, window closed");
+        log_error!("❌ Cancel subscription failed, window closed");
 
         // 发送事件通知前端操作失败
         if let Err(e) = app.emit("cancel-subscription-failed", ()) {
-            println!("❌ Failed to emit failed event: {}", e);
+            log_error!("❌ Failed to emit failed event: {}", e);
         }
     }
     Ok(())
@@ -1289,7 +1327,7 @@ async fn delete_cursor_account(
 ) -> Result<serde_json::Value, String> {
     use reqwest::header::{HeaderMap, HeaderValue};
 
-    println!("🔄 开始调用 Cursor 删除账户 API...");
+    log_info!("🔄 开始调用 Cursor 删除账户 API...");
 
     // 构建请求头
     let mut headers = HeaderMap::new();
@@ -1330,7 +1368,7 @@ async fn delete_cursor_account(
 
     // 使用传入的 WorkosCursorSessionToken
     let cookie_value = format!("WorkosCursorSessionToken={}", workos_cursor_session_token);
-    println!(
+    log_info!(
         "🔍 [DEBUG] Using WorkosCursorSessionToken: {}...",
         &workos_cursor_session_token[..workos_cursor_session_token.len().min(50)]
     );
@@ -1358,12 +1396,12 @@ async fn delete_cursor_account(
                 .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
 
-            println!("📥 API 响应状态: {}", status);
-            println!("📥 响应头: {:?}", headers_map);
+            log_debug!("📥 API 响应状态: {}", status);
+            log_debug!("📥 响应头: {:?}", headers_map);
 
             match response.text().await {
                 Ok(body) => {
-                    println!("📥 响应体: {}", body);
+                    log_debug!("📥 响应体: {}", body);
 
                     Ok(serde_json::json!({
                         "success": status.is_success(),
@@ -1378,7 +1416,7 @@ async fn delete_cursor_account(
                     }))
                 }
                 Err(e) => {
-                    println!("❌ 读取响应体失败: {}", e);
+                    log_error!("❌ 读取响应体失败: {}", e);
                     Ok(serde_json::json!({
                         "success": false,
                         "status": status.as_u16(),
@@ -1389,7 +1427,7 @@ async fn delete_cursor_account(
             }
         }
         Err(e) => {
-            println!("❌ 网络请求失败: {}", e);
+            log_error!("❌ 网络请求失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("❌ 网络请求失败: {}", e)
@@ -1406,9 +1444,9 @@ async fn trigger_authorization_login(
 ) -> Result<serde_json::Value, String> {
     use reqwest::header::{HeaderMap, HeaderValue};
 
-    println!("🔄 开始调用 Cursor 授权登录 API...");
-    println!("🔍 [DEBUG] UUID: {}", uuid);
-    println!("🔍 [DEBUG] Challenge: {}", challenge);
+    log_info!("🔄 开始调用 Cursor 授权登录 API...");
+    log_debug!("🔍 [DEBUG] UUID: {}", uuid);
+    log_debug!("🔍 [DEBUG] Challenge: {}", challenge);
 
     // 构建请求头
     let mut headers = HeaderMap::new();
@@ -1453,7 +1491,7 @@ async fn trigger_authorization_login(
 
     // 使用传入的 WorkosCursorSessionToken
     let cookie_value = format!("WorkosCursorSessionToken={}", workos_cursor_session_token);
-    println!(
+    log_info!(
         "🔍 [DEBUG] Using WorkosCursorSessionToken: {}...",
         &workos_cursor_session_token[..workos_cursor_session_token.len().min(50)]
     );
@@ -1486,12 +1524,12 @@ async fn trigger_authorization_login(
                 .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
 
-            println!("📥 API 响应状态: {}", status);
-            println!("📥 响应头: {:?}", headers_map);
+            log_debug!("📥 API 响应状态: {}", status);
+            log_debug!("📥 响应头: {:?}", headers_map);
 
             match response.text().await {
                 Ok(body) => {
-                    println!("📥 响应体: {}", body);
+                    log_debug!("📥 响应体: {}", body);
 
                     Ok(serde_json::json!({
                         "success": status.is_success(),
@@ -1506,7 +1544,7 @@ async fn trigger_authorization_login(
                     }))
                 }
                 Err(e) => {
-                    println!("❌ 读取响应体失败: {}", e);
+                    log_error!("❌ 读取响应体失败: {}", e);
                     Ok(serde_json::json!({
                         "success": false,
                         "status": status.as_u16(),
@@ -1517,7 +1555,7 @@ async fn trigger_authorization_login(
             }
         }
         Err(e) => {
-            println!("❌ 网络请求授权登录失败: {}", e);
+            log_error!("❌ 网络请求授权登录失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("❌ 网络请求授权登录失败: {}", e)
@@ -1533,9 +1571,9 @@ async fn trigger_authorization_login_poll(
 ) -> Result<serde_json::Value, String> {
     use reqwest::header::{HeaderMap, HeaderValue};
 
-    println!("🔄 开始调用 Cursor 授权登录 Poll API...");
-    println!("🔍 [DEBUG] UUID: {}", uuid);
-    println!("🔍 [DEBUG] verifier: {}", verifier);
+    log_info!("🔄 开始调用 Cursor 授权登录 Poll API...");
+    log_debug!("🔍 [DEBUG] UUID: {}", uuid);
+    log_debug!("🔍 [DEBUG] verifier: {}", verifier);
 
     // 构建请求头
     let mut headers = HeaderMap::new();
@@ -1591,12 +1629,12 @@ async fn trigger_authorization_login_poll(
                 .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
                 .collect();
 
-            println!("📥 API 响应状态: {}", status);
-            println!("📥 响应头: {:?}", headers_map);
+            log_debug!("📥 API 响应状态: {}", status);
+            log_debug!("📥 响应头: {:?}", headers_map);
 
             match response.text().await {
                 Ok(body) => {
-                    println!("📥 响应体: {}", body);
+                    log_debug!("📥 响应体: {}", body);
 
                     Ok(serde_json::json!({
                         "success": status.is_success(),
@@ -1611,7 +1649,7 @@ async fn trigger_authorization_login_poll(
                     }))
                 }
                 Err(e) => {
-                    println!("❌ 读取响应体失败: {}", e);
+                    log_error!("❌ 读取响应体失败: {}", e);
                     Ok(serde_json::json!({
                         "success": false,
                         "status": status.as_u16(),
@@ -1622,7 +1660,7 @@ async fn trigger_authorization_login_poll(
             }
         }
         Err(e) => {
-            println!("❌ 网络请求授权登录Poll失败: {}", e);
+            log_error!("❌ 网络请求授权登录Poll失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("❌ 网络请求授权登录Poll失败: {}", e)
@@ -1638,7 +1676,7 @@ async fn get_usage_for_period(
     end_date: u64,
     team_id: i32,
 ) -> Result<serde_json::Value, String> {
-    println!(
+    log_info!(
         "🔍 获取用量数据请求: token长度={}, start_date={}, end_date={}, team_id={}",
         token.len(),
         start_date,
@@ -1648,7 +1686,7 @@ async fn get_usage_for_period(
 
     match AuthChecker::get_usage_for_period(&token, start_date, end_date, team_id).await {
         Ok(Some(usage_data)) => {
-            println!("✅ 成功获取用量数据");
+            log_info!("✅ 成功获取用量数据");
             Ok(serde_json::json!({
                 "success": true,
                 "message": "Successfully retrieved usage data",
@@ -1656,14 +1694,14 @@ async fn get_usage_for_period(
             }))
         }
         Ok(None) => {
-            println!("⚠️ 未找到用量数据");
+            log_warn!("⚠️ 未找到用量数据");
             Ok(serde_json::json!({
                 "success": false,
                 "message": "No usage data found"
             }))
         }
         Err(e) => {
-            println!("❌ 获取用量数据失败: {}", e);
+            log_error!("❌ 获取用量数据失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("Failed to get usage data: {}", e)
@@ -1680,14 +1718,17 @@ async fn get_user_analytics(
     start_date: String,
     end_date: String,
 ) -> Result<serde_json::Value, String> {
-    println!(
+    log_info!(
         "🔍 获取用户分析数据 - team_id: {}, user_id: {}, 时间范围: {} 到 {}",
-        team_id, user_id, start_date, end_date
+        team_id,
+        user_id,
+        start_date,
+        end_date
     );
 
     match AuthChecker::get_user_analytics(&token, team_id, user_id, &start_date, &end_date).await {
         Ok(Some(analytics_data)) => {
-            println!("✅ 成功获取用户分析数据");
+            log_info!("✅ 成功获取用户分析数据");
             Ok(serde_json::json!({
                 "success": true,
                 "message": "Successfully retrieved user analytics data",
@@ -1695,14 +1736,14 @@ async fn get_user_analytics(
             }))
         }
         Ok(None) => {
-            println!("⚠️ 未找到用户分析数据");
+            log_warn!("⚠️ 未找到用户分析数据");
             Ok(serde_json::json!({
                 "success": false,
                 "message": "No user analytics data found"
             }))
         }
         Err(e) => {
-            println!("❌ 获取用户分析数据失败: {}", e);
+            log_error!("❌ 获取用户分析数据失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("Failed to get user analytics data: {}", e)
@@ -1720,16 +1761,20 @@ async fn get_usage_events(
     page: i32,
     page_size: i32,
 ) -> Result<serde_json::Value, String> {
-    println!(
+    log_info!(
         "🔍 获取使用事件数据 - team_id: {}, 时间范围: {} 到 {}, 页码: {}, 页大小: {}",
-        team_id, start_date, end_date, page, page_size
+        team_id,
+        start_date,
+        end_date,
+        page,
+        page_size
     );
 
     match AuthChecker::get_usage_events(&token, team_id, &start_date, &end_date, page, page_size)
         .await
     {
         Ok(Some(events_data)) => {
-            println!("✅ 成功获取使用事件数据");
+            log_info!("✅ 成功获取使用事件数据");
             Ok(serde_json::json!({
                 "success": true,
                 "message": "Successfully retrieved usage events data",
@@ -1737,14 +1782,14 @@ async fn get_usage_events(
             }))
         }
         Ok(None) => {
-            println!("⚠️ 未找到使用事件数据");
+            log_warn!("⚠️ 未找到使用事件数据");
             Ok(serde_json::json!({
                 "success": false,
                 "message": "No usage events data found"
             }))
         }
         Err(e) => {
-            println!("❌ 获取使用事件数据失败: {}", e);
+            log_error!("❌ 获取使用事件数据失败: {}", e);
             Ok(serde_json::json!({
                 "success": false,
                 "message": format!("Failed to get usage events data: {}", e)
@@ -1758,8 +1803,8 @@ async fn register_cursor_account(
     first_name: String,
     last_name: String,
 ) -> Result<serde_json::Value, String> {
-    println!("🔄 开始注册 Cursor 账户...");
-    println!("👤 姓名: {} {}", first_name, last_name);
+    log_info!("🔄 开始注册 Cursor 账户...");
+    log_info!("👤 姓名: {} {}", first_name, last_name);
 
     // 获取可执行文件路径
     let executable_path = get_python_executable_path()?;
@@ -1768,7 +1813,7 @@ async fn register_cursor_account(
         return Err(format!("找不到Python可执行文件: {:?}", executable_path));
     }
 
-    println!("🐍 调用Python可执行文件: {:?}", executable_path);
+    log_info!("🐍 调用Python可执行文件: {:?}", executable_path);
 
     // 生成随机邮箱
     let random_email = format!(
@@ -1802,12 +1847,12 @@ async fn register_cursor_account(
     // 处理输出
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        println!("❌ Python脚本执行失败: {}", stderr);
+        log_error!("❌ Python脚本执行失败: {}", stderr);
         return Err(format!("注册失败: {}", stderr));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("📝 Python脚本输出: {}", stdout);
+    log_info!("📝 Python脚本输出: {}", stdout);
 
     // 解析JSON响应
     let result: serde_json::Value =
@@ -1822,23 +1867,23 @@ async fn register_cursor_account(
                 None,
                 None,
             ) {
-                Ok(_) => println!("💾 账户信息已保存"),
-                Err(e) => println!("⚠️ 保存账户信息失败: {}", e),
+                Ok(_) => log_info!("💾 账户信息已保存"),
+                Err(e) => log_warn!("⚠️ 保存账户信息失败: {}", e),
             }
         }
 
-        println!("✅ 注册成功!");
+        log_info!("✅ 注册成功!");
         Ok(result)
     } else {
         let error_msg = result["error"].as_str().unwrap_or("未知错误");
-        println!("❌ 泣册失败: {}", error_msg);
+        log_error!("❌ 泣册失败: {}", error_msg);
         Err(error_msg.to_string())
     }
 }
 
 #[tauri::command]
 async fn create_temp_email() -> Result<serde_json::Value, String> {
-    println!("📧 测试Python可执行文件...");
+    log_info!("📧 测试Python可执行文件...");
 
     // 获取可执行文件路径
     let executable_path = get_python_executable_path()?;
@@ -1888,10 +1933,10 @@ async fn register_with_email(
     last_name: String,
     use_incognito: Option<bool>,
 ) -> Result<serde_json::Value, String> {
-    println!("🔄 [DEBUG] register_with_email 函数被调用");
-    println!("🔄 使用指定邮箱注册 Cursor 账户...");
-    println!("📧 邮箱: {}", email);
-    println!("👤 姓名: {} {}", first_name, last_name);
+    log_info!("🔄 [DEBUG] register_with_email 函数被调用");
+    log_info!("🔄 使用指定邮箱注册 Cursor 账户...");
+    log_info!("📧 邮箱: {}", email);
+    log_info!("👤 姓名: {} {}", first_name, last_name);
 
     // 获取可执行文件路径
     let executable_path = get_python_executable_path()?;
@@ -1915,14 +1960,14 @@ async fn register_with_email(
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
     // 调试：显示将要传递的所有参数
-    println!("🔍 [DEBUG] register_with_email 准备传递的参数:");
-    println!("  - 参数1 (email): {}", email);
-    println!("  - 参数2 (first_name): {}", first_name);
-    println!("  - 参数3 (last_name): {}", last_name);
-    println!("  - 参数4 (incognito_flag): {}", incognito_flag);
-    println!("  - 参数5 (app_dir_str): {}", app_dir_str);
-    println!("  - 参数5 (app_dir_base64): {}", app_dir_base64);
-    println!("  - 预期参数总数: 6 (包括脚本名)");
+    log_debug!("🔍 [DEBUG] register_with_email 准备传递的参数:");
+    log_info!("  - 参数1 (email): {}", email);
+    log_info!("  - 参数2 (first_name): {}", first_name);
+    log_info!("  - 参数3 (last_name): {}", last_name);
+    log_info!("  - 参数4 (incognito_flag): {}", incognito_flag);
+    log_info!("  - 参数5 (app_dir_str): {}", app_dir_str);
+    log_info!("  - 参数5 (app_dir_base64): {}", app_dir_base64);
+    log_info!("  - 预期参数总数: 6 (包括脚本名)");
 
     let mut child = create_hidden_command(&executable_path.to_string_lossy())
         .arg(&email)
@@ -1935,7 +1980,7 @@ async fn register_with_email(
         .spawn()
         .map_err(|e| format!("无法启动Python脚本: {}", e))?;
 
-    println!("🔍 [DEBUG] 当前工作目录: {:?}", app_dir_str);
+    log_debug!("🔍 [DEBUG] 当前工作目录: {:?}", app_dir_str);
 
     // 实时读取输出
     use std::io::{BufRead, BufReader};
@@ -1958,7 +2003,7 @@ async fn register_with_email(
         let reader = BufReader::new(stdout);
         for line in reader.lines() {
             if let Ok(line) = line {
-                println!("Python输出: {}", line);
+                log_info!("Python输出: {}", line);
 
                 // 发送实时输出事件到前端
                 if let Err(e) = app_clone.emit(
@@ -1968,10 +2013,10 @@ async fn register_with_email(
                         "line": line.clone()
                     }),
                 ) {
-                    println!("发送事件失败: {}", e);
+                    log_info!("发送事件失败: {}", e);
                 } else {
                     let truncated = line.chars().take(50).collect::<String>();
-                    println!("✅ 事件已发送: {}", truncated);
+                    log_info!("✅ 事件已发送: {}", truncated);
                 }
 
                 // 检查是否需要验证码
@@ -1998,7 +2043,7 @@ async fn register_with_email(
         let reader = BufReader::new(stderr);
         for line in reader.lines() {
             if let Ok(line) = line {
-                println!("Python错误: {}", line);
+                log_info!("Python错误: {}", line);
 
                 // 发送错误输出事件到前端
                 let _ = app_clone2.emit(
@@ -2049,8 +2094,8 @@ async fn register_with_email(
     let final_output_lines = output_lines.lock().unwrap().clone();
     let final_error_lines = error_lines.lock().unwrap().clone();
 
-    println!("收集到 {} 行输出", final_output_lines.len());
-    println!("收集到 {} 行错误", final_error_lines.len());
+    log_info!("收集到 {} 行输出", final_output_lines.len());
+    log_info!("收集到 {} 行错误", final_error_lines.len());
 
     // 构建输出字符串
     let stdout_str = final_output_lines.join("\n");
@@ -2093,9 +2138,9 @@ async fn register_with_email(
     //         .as_str()
     //         .map(|s| s.to_string());
 
-    //     println!("🔑 提取的token: {}", token);
+    //     log_info!("🔑 提取的token: {}", token);
     //     if let Some(ref workos) = workos_token {
-    //         println!(
+    //         log_info!(
     //             "🔐 WorkosCursorSessionToken: {}...",
     //             &workos[..std::cmp::min(50, workos.len())]
     //         );
@@ -2107,8 +2152,8 @@ async fn register_with_email(
     //         None,         // refresh_token
     //         workos_token, // workos_cursor_session_token
     //     ) {
-    //         Ok(_) => println!("💾 账户信息已保存"),
-    //         Err(e) => println!("⚠️ 保存账户信息失败: {}", e),
+    //         Ok(_) => log_info!("💾 账户信息已保存"),
+    //         Err(e) => log_warn!("⚠️ 保存账户信息失败: {}", e),
     //     }
     // }
 
@@ -2122,16 +2167,16 @@ async fn register_with_cloudflare_temp_email(
     last_name: String,
     use_incognito: Option<bool>,
 ) -> Result<serde_json::Value, String> {
-    println!("🔄 使用Cloudflare临时邮箱注册 Cursor 账户...");
-    println!("👤 姓名: {} {}", first_name, last_name);
-    println!(
+    log_info!("🔄 使用Cloudflare临时邮箱注册 Cursor 账户...");
+    log_info!("👤 姓名: {} {}", first_name, last_name);
+    log_info!(
         "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
         use_incognito
     );
 
     // 1. 创建临时邮箱
     let (jwt, email) = create_cloudflare_temp_email().await?;
-    println!("📧 创建的临时邮箱: {}", email);
+    log_info!("📧 创建的临时邮箱: {}", email);
 
     // 2. 获取可执行文件路径
     let executable_path = get_python_executable_path()?;
@@ -2155,17 +2200,21 @@ async fn register_with_cloudflare_temp_email(
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
     // 调试日志
-    println!("🔍 [DEBUG] Rust 启动Python脚本:");
-    println!("  - 可执行文件: {:?}", executable_path);
-    println!("  - 邮箱: {}", email);
-    println!("  - 姓名: {} {}", first_name, last_name);
-    println!("  - use_incognito 原始值: {:?}", use_incognito);
-    println!("  - incognito_flag: {}", incognito_flag);
-    println!("  - app_dir: {}", app_dir_str);
-    println!("  - app_dir_base64: {}", app_dir_base64);
-    println!(
+    log_debug!("🔍 [DEBUG] Rust 启动Python脚本:");
+    log_info!("  - 可执行文件: {:?}", executable_path);
+    log_info!("  - 邮箱: {}", email);
+    log_info!("  - 姓名: {} {}", first_name, last_name);
+    log_info!("  - use_incognito 原始值: {:?}", use_incognito);
+    log_info!("  - incognito_flag: {}", incognito_flag);
+    log_info!("  - app_dir: {}", app_dir_str);
+    log_info!("  - app_dir_base64: {}", app_dir_base64);
+    log_info!(
         "  - 传递的参数: [{}, {}, {}, {}, {}]",
-        email, first_name, last_name, incognito_flag, app_dir_base64
+        email,
+        first_name,
+        last_name,
+        incognito_flag,
+        app_dir_base64
     );
 
     let mut child = create_hidden_command(&executable_path.to_string_lossy())
@@ -2209,13 +2258,13 @@ async fn register_with_cloudflare_temp_email(
         for line in reader.lines() {
             match line {
                 Ok(line_content) => {
-                    println!("📝 Python输出: {}", line_content);
+                    log_info!("📝 Python输出: {}", line_content);
 
                     // 检查是否需要验证码
                     if line_content.contains("等待验证码")
                         || line_content.contains("request_verification_code")
                     {
-                        println!("🔍 检测到验证码请求，开始自动获取验证码...");
+                        log_debug!("🔍 检测到验证码请求，开始自动获取验证码...");
                         verification_needed_clone.store(true, Ordering::Relaxed);
 
                         // 启动验证码获取任务
@@ -2229,11 +2278,11 @@ async fn register_with_cloudflare_temp_email(
                                 tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
 
                                 for attempt in 1..=10 {
-                                    println!("🔍 第{}次尝试获取验证码...", attempt);
+                                    log_debug!("🔍 第{}次尝试获取验证码...", attempt);
 
                                     match get_verification_code_from_cloudflare(&jwt_task).await {
                                         Ok(code) => {
-                                            println!("🎯 自动获取到验证码: {}", code);
+                                            log_info!("🎯 自动获取到验证码: {}", code);
 
                                             // 将验证码写入临时文件
                                             let temp_dir = std::env::temp_dir();
@@ -2241,7 +2290,7 @@ async fn register_with_cloudflare_temp_email(
                                                 temp_dir.join("cursor_verification_code.txt");
 
                                             if let Err(e) = std::fs::write(&code_file, &code) {
-                                                println!("❌ 写入验证码文件失败: {}", e);
+                                                log_error!("❌ 写入验证码文件失败: {}", e);
                                                 return;
                                             }
 
@@ -2249,14 +2298,14 @@ async fn register_with_cloudflare_temp_email(
                                             if let Err(e) = app_task
                                                 .emit("verification-code-auto-filled", &code)
                                             {
-                                                println!("❌ 发送验证码事件失败: {}", e);
+                                                log_error!("❌ 发送验证码事件失败: {}", e);
                                             }
 
-                                            println!("✅ 验证码已自动填入临时文件");
+                                            log_info!("✅ 验证码已自动填入临时文件");
                                             return;
                                         }
                                         Err(e) => {
-                                            println!("🔍 第{}次获取验证码失败: {}", attempt, e);
+                                            log_debug!("🔍 第{}次获取验证码失败: {}", attempt, e);
                                             if attempt < 10 {
                                                 tokio::time::sleep(
                                                     tokio::time::Duration::from_secs(10),
@@ -2267,11 +2316,11 @@ async fn register_with_cloudflare_temp_email(
                                     }
                                 }
 
-                                println!("❌ 自动获取验证码失败，已尝试10次");
+                                log_error!("❌ 自动获取验证码失败，已尝试10次");
                                 if let Err(emit_err) =
                                     app_task.emit("verification-code-failed", "获取验证码失败")
                                 {
-                                    println!("❌ 发送失败事件失败: {}", emit_err);
+                                    log_error!("❌ 发送失败事件失败: {}", emit_err);
                                 }
                             });
                         });
@@ -2285,11 +2334,11 @@ async fn register_with_cloudflare_temp_email(
                             "timestamp": chrono::Utc::now().to_rfc3339()
                         }),
                     ) {
-                        println!("❌ 发送输出事件失败: {}", e);
+                        log_error!("❌ 发送输出事件失败: {}", e);
                     }
                 }
                 Err(e) => {
-                    println!("❌ 读取Python输出失败: {}", e);
+                    log_error!("❌ 读取Python输出失败: {}", e);
                     break;
                 }
             }
@@ -2303,14 +2352,14 @@ async fn register_with_cloudflare_temp_email(
         .wait()
         .map_err(|e| format!("等待Python脚本执行失败: {}", e))?;
 
-    println!("🔍 Python进程已结束");
+    log_debug!("🔍 Python进程已结束");
 
     // 等待输出读取任务完成
     let _ = output_task.join();
 
     // 6. 处理进程退出状态
     if !exit_status.success() {
-        println!("❌ Python脚本执行失败，退出码: {:?}", exit_status.code());
+        log_error!("❌ Python脚本执行失败，退出码: {:?}", exit_status.code());
         return Err(format!(
             "Python脚本执行失败，退出码: {:?}",
             exit_status.code()
@@ -2339,9 +2388,9 @@ async fn register_with_cloudflare_temp_email(
     //         .as_str()
     //         .map(|s| s.to_string());
 
-    //     println!("🔑 提取的token: {}", token);
+    //     log_info!("🔑 提取的token: {}", token);
     //     if let Some(ref workos) = workos_token {
-    //         println!(
+    //         log_info!(
     //             "🔐 WorkosCursorSessionToken: {}...",
     //             &workos[..std::cmp::min(50, workos.len())]
     //         );
@@ -2353,8 +2402,8 @@ async fn register_with_cloudflare_temp_email(
     //         None,         // refresh_token
     //         workos_token, // workos_cursor_session_token
     //     ) {
-    //         Ok(_) => println!("💾 账户信息已保存"),
-    //         Err(e) => println!("⚠️ 保存账户信息失败: {}", e),
+    //         Ok(_) => log_info!("💾 账户信息已保存"),
+    //         Err(e) => log_warn!("⚠️ 保存账户信息失败: {}", e),
     //     }
     // }
 
@@ -2370,10 +2419,10 @@ async fn register_with_outlook(
     last_name: String,
     use_incognito: Option<bool>,
 ) -> Result<serde_json::Value, String> {
-    println!("🔄 使用Outlook邮箱注册 Cursor 账户...");
-    println!("📧 邮箱: {}", email);
-    println!("👤 姓名: {} {}", first_name, last_name);
-    println!(
+    log_info!("🔄 使用Outlook邮箱注册 Cursor 账户...");
+    log_info!("📧 邮箱: {}", email);
+    log_info!("👤 姓名: {} {}", first_name, last_name);
+    log_info!(
         "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
         use_incognito
     );
@@ -2392,11 +2441,11 @@ async fn register_with_outlook(
         "false"
     };
 
-    println!("🔍 [DEBUG] 准备启动注册进程");
-    println!("    可执行文件: {:?}", executable_path);
-    println!("    邮箱: {}", email);
-    println!("    姓名: {} {}", first_name, last_name);
-    println!("    隐身模式: {}", incognito_flag);
+    log_debug!("🔍 [DEBUG] 准备启动注册进程");
+    log_info!("    可执行文件: {:?}", executable_path);
+    log_info!("    邮箱: {}", email);
+    log_info!("    姓名: {} {}", first_name, last_name);
+    log_info!("    隐身模式: {}", incognito_flag);
 
     let mut cmd = create_hidden_command(&executable_path.to_string_lossy());
     cmd.arg(&email)
@@ -2406,7 +2455,7 @@ async fn register_with_outlook(
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
-    println!("🔍 [DEBUG] 命令行: {:?}", cmd);
+    log_debug!("🔍 [DEBUG] 命令行: {:?}", cmd);
 
     let mut child = cmd
         .spawn()
@@ -2430,7 +2479,7 @@ async fn register_with_outlook(
         for line in reader.lines() {
             match line {
                 Ok(line_content) => {
-                    println!("📝 Python输出: {}", line_content);
+                    log_info!("📝 Python输出: {}", line_content);
 
                     // 检查是否需要验证码
                     if line_content.contains("等待验证码")
@@ -2438,7 +2487,7 @@ async fn register_with_outlook(
                         || line_content.contains("需要邮箱验证码")
                         || line_content.contains("请输入验证码")
                     {
-                        println!("🔍 检测到验证码请求，开始从Outlook获取验证码...");
+                        log_debug!("🔍 检测到验证码请求，开始从Outlook获取验证码...");
 
                         // 启动验证码获取任务
                         let app_task = app_for_stdout.clone();
@@ -2451,11 +2500,11 @@ async fn register_with_outlook(
                                 tokio::time::sleep(tokio::time::Duration::from_secs(8)).await;
 
                                 for attempt in 1..=10 {
-                                    println!("🔍 第{}次尝试获取Outlook验证码...", attempt);
+                                    log_debug!("🔍 第{}次尝试获取Outlook验证码...", attempt);
 
                                     match get_verification_code_from_outlook(&email_task).await {
                                         Ok(code) => {
-                                            println!("🎯 自动获取到验证码: {}", code);
+                                            log_info!("🎯 自动获取到验证码: {}", code);
 
                                             // 将验证码写入临时文件
                                             let temp_dir = std::env::temp_dir();
@@ -2463,7 +2512,7 @@ async fn register_with_outlook(
                                                 temp_dir.join("cursor_verification_code.txt");
 
                                             if let Err(e) = std::fs::write(&code_file, &code) {
-                                                println!("❌ 写入验证码文件失败: {}", e);
+                                                log_error!("❌ 写入验证码文件失败: {}", e);
                                                 return;
                                             }
 
@@ -2471,14 +2520,14 @@ async fn register_with_outlook(
                                             if let Err(e) =
                                                 app_task.emit("verification-code-received", &code)
                                             {
-                                                println!("❌ 发送验证码事件失败: {}", e);
+                                                log_error!("❌ 发送验证码事件失败: {}", e);
                                             }
 
-                                            println!("✅ 验证码已自动填入临时文件");
+                                            log_info!("✅ 验证码已自动填入临时文件");
                                             return;
                                         }
                                         Err(e) => {
-                                            println!("🔍 第{}次获取验证码失败: {}", attempt, e);
+                                            log_debug!("🔍 第{}次获取验证码失败: {}", attempt, e);
                                             if attempt < 10 {
                                                 std::thread::sleep(std::time::Duration::from_secs(
                                                     10,
@@ -2488,12 +2537,12 @@ async fn register_with_outlook(
                                     }
                                 }
 
-                                println!("❌ 自动获取验证码失败，已尝试10次，请用户手动输入");
+                                log_error!("❌ 自动获取验证码失败，已尝试10次，请用户手动输入");
                                 if let Err(emit_err) = app_task.emit(
                                     "verification-code-manual-input-required",
                                     "自动获取验证码失败，请手动输入验证码",
                                 ) {
-                                    println!("❌ 发送手动输入提示事件失败: {}", emit_err);
+                                    log_error!("❌ 发送手动输入提示事件失败: {}", emit_err);
                                 }
                             });
                         });
@@ -2507,11 +2556,11 @@ async fn register_with_outlook(
                             "timestamp": chrono::Utc::now().to_rfc3339()
                         }),
                     ) {
-                        println!("❌ 发送输出事件失败: {}", e);
+                        log_error!("❌ 发送输出事件失败: {}", e);
                     }
                 }
                 Err(e) => {
-                    println!("❌ 读取Python输出失败: {}", e);
+                    log_error!("❌ 读取Python输出失败: {}", e);
                     break;
                 }
             }
@@ -2527,7 +2576,7 @@ async fn register_with_outlook(
         for line in reader.lines() {
             match line {
                 Ok(line_content) => {
-                    println!("📝 Python错误: {}", line_content);
+                    log_info!("📝 Python错误: {}", line_content);
 
                     // 发送错误输出到前端
                     if let Err(e) = app_for_stderr.emit(
@@ -2537,11 +2586,11 @@ async fn register_with_outlook(
                             "timestamp": chrono::Utc::now().to_rfc3339()
                         }),
                     ) {
-                        println!("❌ 发送错误输出事件失败: {}", e);
+                        log_error!("❌ 发送错误输出事件失败: {}", e);
                     }
                 }
                 Err(e) => {
-                    println!("❌ 读取Python错误输出失败: {}", e);
+                    log_error!("❌ 读取Python错误输出失败: {}", e);
                     break;
                 }
             }
@@ -2553,14 +2602,14 @@ async fn register_with_outlook(
     //     .wait()
     //     .map_err(|e| format!("等待注册进程完成失败: {}", e))?;
 
-    // println!("🔍 Python进程已结束");
+    // log_debug!("🔍 Python进程已结束");
 
     // // 等待输出读取任务完成
     // let _ = stdout_task.join();
     // let _ = stderr_task.join();
 
-    // println!("🔍 [DEBUG] 注册完成");
-    // println!("    退出代码: {:?}", exit_status.code());
+    // log_debug!("🔍 [DEBUG] 注册完成");
+    // log_info!("    退出代码: {:?}", exit_status.code());
 
     // // 构建返回结果
     // let result = if exit_status.success() {
@@ -2581,14 +2630,14 @@ async fn register_with_outlook(
         .wait()
         .map_err(|e| format!("等待Python脚本执行失败: {}", e))?;
 
-    println!("🔍 Python进程已结束");
+    log_debug!("🔍 Python进程已结束");
 
     // 等待输出读取任务完成
     let _ = stdout_task.join();
 
     // 6. 处理进程退出状态
     if !exit_status.success() {
-        println!("❌ Python脚本执行失败，退出码: {:?}", exit_status.code());
+        log_error!("❌ Python脚本执行失败，退出码: {:?}", exit_status.code());
         return Err(format!(
             "Python脚本执行失败，退出码: {:?}",
             exit_status.code()
@@ -2610,7 +2659,7 @@ async fn register_with_outlook(
 
 #[tauri::command]
 async fn submit_verification_code(code: String) -> Result<serde_json::Value, String> {
-    println!("🔢 接收到验证码: {}", code);
+    log_info!("🔢 接收到验证码: {}", code);
 
     // 验证验证码格式
     if !code.chars().all(|c| c.is_ascii_digit()) || code.len() != 6 {
@@ -2621,12 +2670,12 @@ async fn submit_verification_code(code: String) -> Result<serde_json::Value, Str
     let temp_dir = std::env::temp_dir();
     let code_file = temp_dir.join("cursor_verification_code.txt");
 
-    println!("📁 临时目录: {:?}", temp_dir);
-    println!("📄 验证码文件: {:?}", code_file);
+    log_info!("📁 临时目录: {:?}", temp_dir);
+    log_info!("📄 验证码文件: {:?}", code_file);
 
     match std::fs::write(&code_file, &code) {
         Ok(_) => {
-            println!("✅ 验证码已保存到临时文件: {:?}", code_file);
+            log_info!("✅ 验证码已保存到临时文件: {:?}", code_file);
             Ok(serde_json::json!({
                 "success": true,
                 "message": "验证码已提交"
@@ -2644,12 +2693,12 @@ async fn cancel_registration() -> Result<String, String> {
     let temp_dir = std::env::temp_dir();
     let cancel_file = temp_dir.join("cursor_registration_cancel.txt");
 
-    println!("📁 临时目录: {:?}", temp_dir);
-    println!("🚫 取消文件: {:?}", cancel_file);
+    log_info!("📁 临时目录: {:?}", temp_dir);
+    log_info!("🚫 取消文件: {:?}", cancel_file);
 
     match fs::write(&cancel_file, "cancel") {
         Ok(_) => {
-            println!("🚫 注册取消请求已发送到: {:?}", cancel_file);
+            log_info!("🚫 注册取消请求已发送到: {:?}", cancel_file);
             Ok("注册已取消".to_string())
         }
         Err(e) => Err(format!("发送取消请求失败: {}", e)),
@@ -2705,7 +2754,7 @@ async fn save_bank_card_config(config: String) -> Result<(), String> {
     fs::write(&config_path, config)
         .map_err(|e| format!("Failed to save bank card config: {}", e))?;
 
-    println!("✅ 银行卡配置已保存到: {:?}", config_path);
+    log_info!("✅ 银行卡配置已保存到: {:?}", config_path);
     Ok(())
 }
 
@@ -2740,7 +2789,7 @@ async fn save_email_config(config: String) -> Result<(), String> {
 
     fs::write(&config_path, config).map_err(|e| format!("Failed to save email config: {}", e))?;
 
-    println!("✅ 邮箱配置已保存到: {:?}", config_path);
+    log_info!("✅ 邮箱配置已保存到: {:?}", config_path);
     Ok(())
 }
 
@@ -2829,7 +2878,15 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            // 初始化日志系统
+            if let Err(e) = logger::Logger::init() {
+                eprintln!("Failed to initialize logger: {}", e);
+            } else {
+                log_info!("Application starting up...");
+            }
+
             // 只在生产环境下复制 pyBuild 文件夹并且是macos，开发模式下跳过
             if !cfg!(debug_assertions) && cfg!(target_os = "macos") {
                 if let Err(e) = copy_pybuild_to_app_dir(app.handle()) {
@@ -2856,6 +2913,7 @@ pub fn run() {
             reset_machine_ids,
             complete_cursor_reset,
             get_log_file_path,
+            get_log_config,
             test_logging,
             debug_windows_cursor_paths,
             set_custom_cursor_path,
@@ -2876,6 +2934,8 @@ pub fn run() {
             switch_account_with_token,
             remove_account,
             logout_current_account,
+            export_accounts,
+            import_accounts,
             open_cancel_subscription_page,
             show_cancel_subscription_window,
             cancel_subscription_failed,

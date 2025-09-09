@@ -117,5 +117,55 @@ export class AccountService {
     }
   }
 
+  // Export accounts to specified directory
+  static async exportAccounts(exportPath: string): Promise<{ success: boolean; message: string; exported_path?: string }> {
+    try {
+      console.log('🔄 Exporting accounts to:', exportPath);
+
+      const result = await invoke<any>("export_accounts", {
+        exportPath: exportPath
+      });
+
+      console.log('📥 Export result:', result);
+
+      return {
+        success: result.success || false,
+        message: result.message || '未知响应',
+        exported_path: result.exported_path
+      };
+    } catch (error) {
+      console.error('Failed to export accounts:', error);
+
+      return {
+        success: false,
+        message: `❌ 导出失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+  }
+
+  // Import accounts from specified file
+  static async importAccounts(importFilePath: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🔄 Importing accounts from:', importFilePath);
+
+      const result = await invoke<any>("import_accounts", {
+        importFilePath: importFilePath
+      });
+
+      console.log('📥 Import result:', result);
+
+      return {
+        success: result.success || false,
+        message: result.message || '未知响应'
+      };
+    } catch (error) {
+      console.error('Failed to import accounts:', error);
+
+      return {
+        success: false,
+        message: `❌ 导入失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+  }
 
 }

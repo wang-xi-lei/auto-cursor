@@ -1,3 +1,4 @@
+use crate::{log_debug, log_error, log_info, log_warn};
 use anyhow::{Context, Result};
 use chrono::Local;
 use dirs;
@@ -92,7 +93,7 @@ impl MachineIdRestorer {
         let log_entry = format!("[{}] [{}] {}\n", timestamp, level, message);
 
         // 输出到控制台
-        println!("{}", log_entry.trim());
+        log_info!("{}", log_entry.trim());
 
         // 写入日志文件
         if let Ok(mut file) = OpenOptions::new()
@@ -851,18 +852,18 @@ impl MachineIdRestorer {
                 let package_json = custom_path_buf.join("package.json");
                 let main_js = custom_path_buf.join("out").join("main.js");
 
-                println!("🎯 [DEBUG] 使用自定义路径: {:?}", custom_path_buf);
-                println!(
+                log_info!("🎯 [DEBUG] 使用自定义路径: {:?}", custom_path_buf);
+                log_info!(
                     "🎯 [DEBUG] 自定义路径验证 - package.json存在: {}, main.js存在: {}",
                     package_json.exists(),
                     main_js.exists()
                 );
 
                 if package_json.exists() && main_js.exists() {
-                    println!("✅ [DEBUG] 自定义路径有效，使用自定义路径");
+                    log_info!("✅ [DEBUG] 自定义路径有效，使用自定义路径");
                     return Ok((package_json, main_js));
                 } else {
-                    println!("❌ [DEBUG] 自定义路径无效，继续使用自动搜索");
+                    log_error!("❌ [DEBUG] 自定义路径无效，继续使用自动搜索");
                 }
             }
         }
@@ -907,20 +908,20 @@ impl MachineIdRestorer {
                 let package_json = cursor_path.join("package.json");
                 let main_js = cursor_path.join("out").join("main.js");
 
-                println!("🔍 [DEBUG] Windows路径搜索 {}: {:?}", i + 1, cursor_path);
-                println!(
+                log_debug!("🔍 [DEBUG] Windows路径搜索 {}: {:?}", i + 1, cursor_path);
+                log_info!(
                     "🔍 [DEBUG] package.json: {:?}, 存在: {}",
                     package_json,
                     package_json.exists()
                 );
-                println!(
+                log_info!(
                     "🔍 [DEBUG] main.js: {:?}, 存在: {}",
                     main_js,
                     main_js.exists()
                 );
 
                 if package_json.exists() && main_js.exists() {
-                    println!(
+                    log_info!(
                         "✅ [DEBUG] 找到有效的Windows Cursor安装路径: {:?}",
                         cursor_path
                     );
@@ -986,17 +987,17 @@ impl MachineIdRestorer {
                     .join("workbench")
                     .join("workbench.desktop.main.js");
 
-                println!("🎯 [DEBUG] 使用自定义workbench路径: {:?}", custom_workbench);
-                println!(
+                log_info!("🎯 [DEBUG] 使用自定义workbench路径: {:?}", custom_workbench);
+                log_info!(
                     "🎯 [DEBUG] 自定义workbench存在: {}",
                     custom_workbench.exists()
                 );
 
                 if custom_workbench.exists() {
-                    println!("✅ [DEBUG] 自定义workbench路径有效");
+                    log_info!("✅ [DEBUG] 自定义workbench路径有效");
                     return Ok(custom_workbench);
                 } else {
-                    println!("❌ [DEBUG] 自定义workbench路径无效，继续使用自动搜索");
+                    log_error!("❌ [DEBUG] 自定义workbench路径无效，继续使用自动搜索");
                 }
             }
         }
@@ -1050,15 +1051,15 @@ impl MachineIdRestorer {
 
             // 搜索存在的路径
             for (i, workbench_path) in possible_workbench_paths.iter().enumerate() {
-                println!(
+                log_info!(
                     "🔍 [DEBUG] Windows workbench路径搜索 {}: {:?}",
                     i + 1,
                     workbench_path
                 );
-                println!("🔍 [DEBUG] workbench存在: {}", workbench_path.exists());
+                log_debug!("🔍 [DEBUG] workbench存在: {}", workbench_path.exists());
 
                 if workbench_path.exists() {
-                    println!(
+                    log_info!(
                         "✅ [DEBUG] 找到有效的Windows workbench路径: {:?}",
                         workbench_path
                     );
@@ -1297,7 +1298,7 @@ impl MachineIdRestorer {
                 fs::write(&workbench_path, modified_content)
                     .context("Failed to write modified workbench.desktop.main.js")?;
 
-                println!("Email update script injected for: {}", email);
+                log_info!("Email update script injected for: {}", email);
                 Ok(())
             }
             Err(e) => Err(anyhow::anyhow!(

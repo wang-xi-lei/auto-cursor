@@ -1,5 +1,6 @@
 use crate::machine_id::MachineIdRestorer;
-use anyhow::{anyhow, Result};
+use crate::{log_debug, log_error, log_info, log_warn};
+use anyhow::{Result, anyhow};
 use dirs;
 use rusqlite::Connection;
 use serde::{Deserialize, Serialize};
@@ -403,9 +404,9 @@ impl AccountManager {
         }
 
         // Wait for database updates to complete (CRITICAL!)
-        println!("🔍 [DEBUG] Waiting for database updates to complete...");
+        log_debug!("🔍 [DEBUG] Waiting for database updates to complete...");
         std::thread::sleep(std::time::Duration::from_millis(500));
-        println!("✅ [DEBUG] Database update wait completed");
+        log_info!("✅ [DEBUG] Database update wait completed");
         details.push("Waited for database updates to complete".to_string());
 
         SwitchAccountResult {
@@ -445,52 +446,52 @@ impl AccountManager {
         details.push(format!("Switching to account: {}", email));
 
         // 0. Force close Cursor processes (CRITICAL!)
-        println!("🔍 [DEBUG] Checking if Cursor is running...");
+        log_debug!("🔍 [DEBUG] Checking if Cursor is running...");
         if Self::is_cursor_running() {
-            println!("🔍 [DEBUG] Cursor is running, force closing...");
+            log_debug!("🔍 [DEBUG] Cursor is running, force closing...");
             match Self::force_close_cursor() {
                 Ok(()) => {
-                    println!("✅ [DEBUG] Successfully closed Cursor");
+                    log_info!("✅ [DEBUG] Successfully closed Cursor");
                     details.push("Successfully closed Cursor processes".to_string());
                 }
                 Err(e) => {
-                    println!("❌ [DEBUG] Failed to close Cursor: {}", e);
+                    log_error!("❌ [DEBUG] Failed to close Cursor: {}", e);
                     details.push(format!("Warning: Failed to close Cursor: {}", e));
                 }
             }
         } else {
-            println!("✅ [DEBUG] Cursor is not running");
+            log_info!("✅ [DEBUG] Cursor is not running");
             details.push("Cursor is not running".to_string());
         }
 
         // 1. Inject email to SQLite database
-        println!(
+        log_info!(
             "🔍 [DEBUG] Starting email injection for: {}",
             target_account.email
         );
         match Self::inject_email_to_sqlite(&target_account.email) {
             Ok(()) => {
-                println!("✅ [DEBUG] Email injection successful");
+                log_info!("✅ [DEBUG] Email injection successful");
                 details.push("Successfully injected email to SQLite database".to_string());
             }
             Err(e) => {
-                println!("❌ [DEBUG] Email injection failed: {}", e);
+                log_error!("❌ [DEBUG] Email injection failed: {}", e);
                 details.push(format!("Warning: Failed to inject email to SQLite: {}", e));
             }
         }
 
         // 2. Inject token to SQLite database
-        println!(
+        log_info!(
             "🔍 [DEBUG] Starting token injection, token length: {}",
             target_account.token.len()
         );
         match Self::inject_token_to_sqlite(&target_account.token) {
             Ok(()) => {
-                println!("✅ [DEBUG] Token injection successful");
+                log_info!("✅ [DEBUG] Token injection successful");
                 details.push("Successfully injected token to SQLite database".to_string());
             }
             Err(e) => {
-                println!("❌ [DEBUG] Token injection failed: {}", e);
+                log_error!("❌ [DEBUG] Token injection failed: {}", e);
                 return SwitchAccountResult {
                     success: false,
                     message: format!("Failed to inject token: {}", e),
@@ -532,9 +533,9 @@ impl AccountManager {
         }
 
         // Wait for database updates to complete (CRITICAL!)
-        println!("🔍 [DEBUG] Legacy switch - Waiting for database updates to complete...");
+        log_debug!("🔍 [DEBUG] Legacy switch - Waiting for database updates to complete...");
         std::thread::sleep(std::time::Duration::from_millis(500));
-        println!("✅ [DEBUG] Legacy switch - Database update wait completed");
+        log_info!("✅ [DEBUG] Legacy switch - Database update wait completed");
         details.push("Waited for database updates to complete".to_string());
 
         SwitchAccountResult {
@@ -546,33 +547,33 @@ impl AccountManager {
 
     /// Inject email to SQLite database with complete email fields
     fn inject_email_to_sqlite(email: &str) -> Result<()> {
-        println!(
+        log_info!(
             "🔍 [DEBUG] inject_email_to_sqlite called with email: {}",
             email
         );
 
         let (_, sqlite_path) = Self::get_cursor_paths()?;
-        println!("🔍 [DEBUG] SQLite path: {:?}", sqlite_path);
+        log_debug!("🔍 [DEBUG] SQLite path: {:?}", sqlite_path);
 
         if !sqlite_path.exists() {
-            println!(
+            log_info!(
                 "❌ [DEBUG] SQLite database not found at path: {:?}",
                 sqlite_path
             );
             return Err(anyhow!("SQLite database not found"));
         }
 
-        println!("🔍 [DEBUG] Opening SQLite connection...");
+        log_debug!("🔍 [DEBUG] Opening SQLite connection...");
         let conn = Connection::open(&sqlite_path)?;
-        println!("✅ [DEBUG] SQLite connection opened successfully");
+        log_info!("✅ [DEBUG] SQLite connection opened successfully");
 
         // Set database optimization parameters (skip PRAGMA for now to avoid issues)
-        println!("🔍 [DEBUG] Email - Skipping PRAGMA settings to avoid compatibility issues");
+        log_debug!("🔍 [DEBUG] Email - Skipping PRAGMA settings to avoid compatibility issues");
 
         // Begin transaction
-        println!("🔍 [DEBUG] Email - Beginning transaction...");
+        log_debug!("🔍 [DEBUG] Email - Beginning transaction...");
         conn.execute("BEGIN TRANSACTION", [])?;
-        println!("✅ [DEBUG] Email - Transaction begun successfully");
+        log_info!("✅ [DEBUG] Email - Transaction begun successfully");
 
         // Complete list of email fields to update - based on CursorPool_Client implementation
         let email_fields = vec![
@@ -583,50 +584,51 @@ impl AccountManager {
         let mut success_count = 0;
 
         for (key, value) in email_fields {
-            println!("🔍 [DEBUG] Processing email field: {} = {}", key, value);
+            log_debug!("🔍 [DEBUG] Processing email field: {} = {}", key, value);
 
             // Check if record exists using direct query
-            println!("🔍 [DEBUG] Checking if record exists for key: {}", key);
+            log_debug!("🔍 [DEBUG] Checking if record exists for key: {}", key);
             let exists: i64 = conn.query_row(
                 "SELECT COUNT(*) FROM ItemTable WHERE key = ?",
                 [key],
                 |row| row.get(0),
             )?;
-            println!("🔍 [DEBUG] Record exists check result: {}", exists);
+            log_debug!("🔍 [DEBUG] Record exists check result: {}", exists);
 
             if exists > 0 {
                 // Update existing record
-                println!(
+                log_info!(
                     "🔍 [DEBUG] Email - Updating existing record for key: {}",
                     key
                 );
                 match conn.execute("UPDATE ItemTable SET value = ? WHERE key = ?", [value, key]) {
                     Ok(rows_affected) => {
                         if rows_affected > 0 {
-                            println!(
+                            log_info!(
                                 "✅ [DEBUG] Updated email field: {} (rows affected: {})",
-                                key, rows_affected
+                                key,
+                                rows_affected
                             );
                             success_count += 1;
                         }
                     }
                     Err(e) => {
-                        println!("❌ [DEBUG] Failed to update email field {}: {}", key, e);
+                        log_error!("❌ [DEBUG] Failed to update email field {}: {}", key, e);
                     }
                 }
             } else {
                 // Insert new record
-                println!("🔍 [DEBUG] Email - Inserting new record for key: {}", key);
+                log_debug!("🔍 [DEBUG] Email - Inserting new record for key: {}", key);
                 match conn.execute(
                     "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
                     [key, value],
                 ) {
                     Ok(_) => {
-                        println!("✅ [DEBUG] Inserted new email field: {}", key);
+                        log_info!("✅ [DEBUG] Inserted new email field: {}", key);
                         success_count += 1;
                     }
                     Err(e) => {
-                        println!("❌ [DEBUG] Failed to insert email field {}: {}", key, e);
+                        log_error!("❌ [DEBUG] Failed to insert email field {}: {}", key, e);
                     }
                 }
             }
@@ -634,18 +636,18 @@ impl AccountManager {
 
         if success_count > 0 {
             // Commit transaction
-            println!(
+            log_info!(
                 "🔍 [DEBUG] Email - Committing transaction with {} successful updates",
                 success_count
             );
             conn.execute("COMMIT", [])?;
-            println!(
+            log_info!(
                 "✅ [DEBUG] Successfully updated {} email fields",
                 success_count
             );
         } else {
             // Rollback transaction
-            println!("❌ [DEBUG] Email - Rolling back transaction, no successful updates");
+            log_error!("❌ [DEBUG] Email - Rolling back transaction, no successful updates");
             conn.execute("ROLLBACK", [])?;
             return Err(anyhow!("Failed to update any email fields"));
         }
@@ -655,28 +657,28 @@ impl AccountManager {
 
     /// Inject token to SQLite database with complete authentication fields
     fn inject_token_to_sqlite(token: &str) -> Result<()> {
-        println!(
+        log_info!(
             "🔍 [DEBUG] inject_token_to_sqlite called with token length: {}",
             token.len()
         );
 
         let (_, sqlite_path) = Self::get_cursor_paths()?;
-        println!(
+        log_info!(
             "🔍 [DEBUG] Token injection - SQLite path: {:?}",
             sqlite_path
         );
 
         if !sqlite_path.exists() {
-            println!(
+            log_info!(
                 "❌ [DEBUG] Token injection - SQLite database not found at path: {:?}",
                 sqlite_path
             );
             return Err(anyhow!("SQLite database not found"));
         }
 
-        println!("🔍 [DEBUG] Token injection - Opening SQLite connection...");
+        log_debug!("🔍 [DEBUG] Token injection - Opening SQLite connection...");
         let conn = Connection::open(&sqlite_path)?;
-        println!("✅ [DEBUG] Token injection - SQLite connection opened successfully");
+        log_info!("✅ [DEBUG] Token injection - SQLite connection opened successfully");
 
         // Process token - handle formats like "user_01XXX%3A%3Atoken" or "user_01XXX::token"
         let processed_token = if token.contains("%3A%3A") {
@@ -687,19 +689,19 @@ impl AccountManager {
             token
         };
 
-        println!(
+        log_info!(
             "Processing token: original length {}, processed length {}",
             token.len(),
             processed_token.len()
         );
 
         // Set database optimization parameters (skip PRAGMA for now to avoid issues)
-        println!("🔍 [DEBUG] Token - Skipping PRAGMA settings to avoid compatibility issues");
+        log_debug!("🔍 [DEBUG] Token - Skipping PRAGMA settings to avoid compatibility issues");
 
         // Begin transaction
-        println!("🔍 [DEBUG] Token - Beginning transaction...");
+        log_debug!("🔍 [DEBUG] Token - Beginning transaction...");
         conn.execute("BEGIN TRANSACTION", [])?;
-        println!("✅ [DEBUG] Token - Transaction begun successfully");
+        log_info!("✅ [DEBUG] Token - Transaction begun successfully");
 
         // Complete list of authentication fields to update - this is the key fix!
         let auth_fields = vec![
@@ -712,10 +714,10 @@ impl AccountManager {
         let mut success_count = 0;
 
         for (key, value) in auth_fields {
-            println!("🔍 [DEBUG] Processing token field: {} = {}", key, value);
+            log_debug!("🔍 [DEBUG] Processing token field: {} = {}", key, value);
 
             // Check if record exists using direct query
-            println!(
+            log_info!(
                 "🔍 [DEBUG] Token - Checking if record exists for key: {}",
                 key
             );
@@ -724,41 +726,42 @@ impl AccountManager {
                 [key],
                 |row| row.get(0),
             )?;
-            println!("🔍 [DEBUG] Token - Record exists check result: {}", exists);
+            log_debug!("🔍 [DEBUG] Token - Record exists check result: {}", exists);
 
             if exists > 0 {
                 // Update existing record
-                println!(
+                log_info!(
                     "🔍 [DEBUG] Token - Updating existing record for key: {}",
                     key
                 );
                 match conn.execute("UPDATE ItemTable SET value = ? WHERE key = ?", [value, key]) {
                     Ok(rows_affected) => {
                         if rows_affected > 0 {
-                            println!(
+                            log_info!(
                                 "✅ [DEBUG] Updated token field: {} (rows affected: {})",
-                                key, rows_affected
+                                key,
+                                rows_affected
                             );
                             success_count += 1;
                         }
                     }
                     Err(e) => {
-                        println!("❌ [DEBUG] Failed to update token field {}: {}", key, e);
+                        log_error!("❌ [DEBUG] Failed to update token field {}: {}", key, e);
                     }
                 }
             } else {
                 // Insert new record
-                println!("🔍 [DEBUG] Token - Inserting new record for key: {}", key);
+                log_debug!("🔍 [DEBUG] Token - Inserting new record for key: {}", key);
                 match conn.execute(
                     "INSERT INTO ItemTable (key, value) VALUES (?, ?)",
                     [key, value],
                 ) {
                     Ok(_) => {
-                        println!("✅ [DEBUG] Inserted new token field: {}", key);
+                        log_info!("✅ [DEBUG] Inserted new token field: {}", key);
                         success_count += 1;
                     }
                     Err(e) => {
-                        println!("❌ [DEBUG] Failed to insert token field {}: {}", key, e);
+                        log_error!("❌ [DEBUG] Failed to insert token field {}: {}", key, e);
                     }
                 }
             }
@@ -766,18 +769,18 @@ impl AccountManager {
 
         if success_count > 0 {
             // Commit transaction
-            println!(
+            log_info!(
                 "🔍 [DEBUG] Token - Committing transaction with {} successful updates",
                 success_count
             );
             conn.execute("COMMIT", [])?;
-            println!(
+            log_info!(
                 "✅ [DEBUG] Successfully updated {} authentication fields",
                 success_count
             );
         } else {
             // Rollback transaction
-            println!("❌ [DEBUG] Token - Rolling back transaction, no successful updates");
+            log_error!("❌ [DEBUG] Token - Rolling back transaction, no successful updates");
             conn.execute("ROLLBACK", [])?;
             return Err(anyhow!("Failed to update any authentication fields"));
         }
@@ -804,7 +807,7 @@ impl AccountManager {
             token
         };
 
-        println!(
+        log_info!(
             "Processing token with auth type {}: original length {}, processed length {}",
             auth_type,
             token.len(),
@@ -812,7 +815,9 @@ impl AccountManager {
         );
 
         // Set database optimization parameters (skip PRAGMA for now to avoid issues)
-        println!("🔍 [DEBUG] Token with auth type - Skipping PRAGMA settings to avoid compatibility issues");
+        log_info!(
+            "🔍 [DEBUG] Token with auth type - Skipping PRAGMA settings to avoid compatibility issues"
+        );
 
         // Begin transaction
         conn.execute("BEGIN TRANSACTION", [])?;
@@ -840,12 +845,12 @@ impl AccountManager {
                 match conn.execute("UPDATE ItemTable SET value = ? WHERE key = ?", [value, key]) {
                     Ok(rows_affected) => {
                         if rows_affected > 0 {
-                            println!("Updated field: {} (rows affected: {})", key, rows_affected);
+                            log_info!("Updated field: {} (rows affected: {})", key, rows_affected);
                             success_count += 1;
                         }
                     }
                     Err(e) => {
-                        println!("Failed to update field {}: {}", key, e);
+                        log_info!("Failed to update field {}: {}", key, e);
                     }
                 }
             } else {
@@ -855,11 +860,11 @@ impl AccountManager {
                     [key, value],
                 ) {
                     Ok(_) => {
-                        println!("Inserted new field: {}", key);
+                        log_info!("Inserted new field: {}", key);
                         success_count += 1;
                     }
                     Err(e) => {
-                        println!("Failed to insert field {}: {}", key, e);
+                        log_info!("Failed to insert field {}: {}", key, e);
                     }
                 }
             }
@@ -868,9 +873,10 @@ impl AccountManager {
         if success_count > 0 {
             // Commit transaction
             conn.execute("COMMIT", [])?;
-            println!(
+            log_info!(
                 "Successfully updated {} authentication fields with auth type {}",
-                success_count, auth_type
+                success_count,
+                auth_type
             );
         } else {
             // Rollback transaction
@@ -930,11 +936,11 @@ impl AccountManager {
 
             match output {
                 Ok(_) => {
-                    println!("✅ [DEBUG] Windows: Cursor processes terminated");
+                    log_info!("✅ [DEBUG] Windows: Cursor processes terminated");
                     Ok(())
                 }
                 Err(e) => {
-                    println!("❌ [DEBUG] Windows: Failed to terminate Cursor: {}", e);
+                    log_error!("❌ [DEBUG] Windows: Failed to terminate Cursor: {}", e);
                     Err(anyhow!("Failed to terminate Cursor on Windows: {}", e))
                 }
             }
@@ -946,11 +952,11 @@ impl AccountManager {
 
             match output {
                 Ok(_) => {
-                    println!("✅ [DEBUG] macOS: Cursor processes terminated");
+                    log_info!("✅ [DEBUG] macOS: Cursor processes terminated");
                     Ok(())
                 }
                 Err(e) => {
-                    println!("❌ [DEBUG] macOS: Failed to terminate Cursor: {}", e);
+                    log_error!("❌ [DEBUG] macOS: Failed to terminate Cursor: {}", e);
                     Err(anyhow!("Failed to terminate Cursor on macOS: {}", e))
                 }
             }
@@ -962,11 +968,11 @@ impl AccountManager {
 
             match output {
                 Ok(_) => {
-                    println!("✅ [DEBUG] Linux: Cursor processes terminated");
+                    log_info!("✅ [DEBUG] Linux: Cursor processes terminated");
                     Ok(())
                 }
                 Err(e) => {
-                    println!("❌ [DEBUG] Linux: Failed to terminate Cursor: {}", e);
+                    log_error!("❌ [DEBUG] Linux: Failed to terminate Cursor: {}", e);
                     Err(anyhow!("Failed to terminate Cursor on Linux: {}", e))
                 }
             }
@@ -975,17 +981,17 @@ impl AccountManager {
 
     /// Update storage.json with new email and token (CRITICAL for authentication!)
     fn update_storage_json(email: &str, token: &str) -> Result<()> {
-        println!(
+        log_info!(
             "🔍 [DEBUG] Updating storage.json with email: {}, token length: {}",
             email,
             token.len()
         );
 
         let (storage_path, _) = Self::get_cursor_paths()?;
-        println!("🔍 [DEBUG] Storage.json path: {:?}", storage_path);
+        log_debug!("🔍 [DEBUG] Storage.json path: {:?}", storage_path);
 
         if !storage_path.exists() {
-            println!(
+            log_info!(
                 "❌ [DEBUG] storage.json not found at path: {:?}",
                 storage_path
             );
@@ -994,7 +1000,7 @@ impl AccountManager {
 
         let content = fs::read_to_string(&storage_path)?;
         let mut data: serde_json::Value = serde_json::from_str(&content)?;
-        println!("✅ [DEBUG] Successfully read and parsed storage.json");
+        log_info!("✅ [DEBUG] Successfully read and parsed storage.json");
 
         // Process token - handle formats like "user_01XXX%3A%3Atoken" or "user_01XXX::token"
         let processed_token = if token.contains("%3A%3A") {
@@ -1004,7 +1010,7 @@ impl AccountManager {
         } else {
             token
         };
-        println!(
+        log_info!(
             "🔍 [DEBUG] Processed token length: {}",
             processed_token.len()
         );
@@ -1039,12 +1045,12 @@ impl AccountManager {
                 serde_json::Value::String(processed_token.to_string()),
             );
 
-            println!("✅ [DEBUG] Updated all authentication fields in storage.json");
+            log_info!("✅ [DEBUG] Updated all authentication fields in storage.json");
         }
 
         let updated_content = serde_json::to_string_pretty(&data)?;
         fs::write(&storage_path, updated_content)?;
-        println!("✅ [DEBUG] Successfully wrote updated storage.json");
+        log_info!("✅ [DEBUG] Successfully wrote updated storage.json");
 
         Ok(())
     }
@@ -1054,7 +1060,7 @@ impl AccountManager {
         let mut details = Vec::new();
         let mut success = true;
 
-        println!("🔍 [DEBUG] Starting logout process...");
+        log_debug!("🔍 [DEBUG] Starting logout process...");
 
         // 1. Force close Cursor if running
         if Self::is_cursor_running() {
@@ -1111,17 +1117,17 @@ impl AccountManager {
 
     /// Clear authentication data from SQLite database
     fn clear_sqlite_auth_data() -> Result<()> {
-        println!("🔍 [DEBUG] Clearing SQLite authentication data...");
+        log_debug!("🔍 [DEBUG] Clearing SQLite authentication data...");
 
         let (_, sqlite_path) = Self::get_cursor_paths()?;
 
         if !sqlite_path.exists() {
-            println!("❌ [DEBUG] SQLite database not found");
+            log_error!("❌ [DEBUG] SQLite database not found");
             return Err(anyhow!("SQLite database not found"));
         }
 
         let conn = Connection::open(&sqlite_path)?;
-        println!("✅ [DEBUG] SQLite connection opened successfully");
+        log_info!("✅ [DEBUG] SQLite connection opened successfully");
 
         // Begin transaction
         conn.execute("BEGIN TRANSACTION", [])?;
@@ -1141,40 +1147,40 @@ impl AccountManager {
             match conn.execute("DELETE FROM ItemTable WHERE key = ?", [field]) {
                 Ok(changes) => {
                     if changes > 0 {
-                        println!("✅ [DEBUG] Cleared field: {}", field);
+                        log_info!("✅ [DEBUG] Cleared field: {}", field);
                         cleared_count += 1;
                     } else {
-                        println!("ℹ️ [DEBUG] Field not found: {}", field);
+                        log_info!("ℹ️ [DEBUG] Field not found: {}", field);
                     }
                 }
                 Err(e) => {
-                    println!("❌ [DEBUG] Failed to clear field {}: {}", field, e);
+                    log_error!("❌ [DEBUG] Failed to clear field {}: {}", field, e);
                 }
             }
         }
 
         // Commit transaction
         conn.execute("COMMIT", [])?;
-        println!("✅ [DEBUG] Transaction committed successfully");
-        println!("📊 [DEBUG] Cleared {} authentication fields", cleared_count);
+        log_info!("✅ [DEBUG] Transaction committed successfully");
+        log_info!("📊 [DEBUG] Cleared {} authentication fields", cleared_count);
 
         Ok(())
     }
 
     /// Clear authentication data from storage.json
     fn clear_storage_json_auth_data() -> Result<()> {
-        println!("🔍 [DEBUG] Clearing storage.json authentication data...");
+        log_debug!("🔍 [DEBUG] Clearing storage.json authentication data...");
 
         let (storage_path, _) = Self::get_cursor_paths()?;
 
         if !storage_path.exists() {
-            println!("❌ [DEBUG] storage.json not found");
+            log_error!("❌ [DEBUG] storage.json not found");
             return Err(anyhow!("storage.json not found"));
         }
 
         let content = fs::read_to_string(&storage_path)?;
         let mut data: serde_json::Value = serde_json::from_str(&content)?;
-        println!("✅ [DEBUG] Successfully read storage.json");
+        log_info!("✅ [DEBUG] Successfully read storage.json");
 
         // List of authentication fields to remove
         let auth_fields = vec![
@@ -1190,18 +1196,18 @@ impl AccountManager {
         if let Some(obj) = data.as_object_mut() {
             for field in auth_fields {
                 if obj.remove(field).is_some() {
-                    println!("✅ [DEBUG] Removed field: {}", field);
+                    log_info!("✅ [DEBUG] Removed field: {}", field);
                     removed_count += 1;
                 } else {
-                    println!("ℹ️ [DEBUG] Field not found: {}", field);
+                    log_info!("ℹ️ [DEBUG] Field not found: {}", field);
                 }
             }
         }
 
         let updated_content = serde_json::to_string_pretty(&data)?;
         fs::write(&storage_path, updated_content)?;
-        println!("✅ [DEBUG] Successfully updated storage.json");
-        println!("📊 [DEBUG] Removed {} authentication fields", removed_count);
+        log_info!("✅ [DEBUG] Successfully updated storage.json");
+        log_info!("📊 [DEBUG] Removed {} authentication fields", removed_count);
 
         Ok(())
     }
@@ -1213,28 +1219,28 @@ impl AccountManager {
         new_refresh_token: Option<String>,
         new_workos_cursor_session_token: Option<String>,
     ) -> Result<()> {
-        println!(
+        log_info!(
             "🔍 [DEBUG] AccountManager::edit_account called for email: {}",
             email
         );
 
         let mut accounts = Self::load_accounts()?;
-        println!("🔍 [DEBUG] Loaded {} accounts", accounts.len());
+        log_debug!("🔍 [DEBUG] Loaded {} accounts", accounts.len());
 
         let account = accounts.iter_mut().find(|acc| acc.email == email);
 
         match account {
             Some(acc) => {
-                println!("🔍 [DEBUG] Found account to edit: {}", acc.email);
+                log_debug!("🔍 [DEBUG] Found account to edit: {}", acc.email);
 
                 let mut updated = false;
                 if let Some(token) = new_token {
-                    println!("🔍 [DEBUG] Updating token (length: {})", token.len());
+                    log_debug!("🔍 [DEBUG] Updating token (length: {})", token.len());
                     acc.token = token;
                     updated = true;
                 }
                 if let Some(refresh_token) = new_refresh_token {
-                    println!(
+                    log_info!(
                         "🔍 [DEBUG] Updating refresh_token (length: {})",
                         refresh_token.len()
                     );
@@ -1242,7 +1248,7 @@ impl AccountManager {
                     updated = true;
                 }
                 if let Some(workos_token) = new_workos_cursor_session_token {
-                    println!(
+                    log_info!(
                         "🔍 [DEBUG] Updating workos_cursor_session_token (length: {})",
                         workos_token.len()
                     );
@@ -1251,17 +1257,17 @@ impl AccountManager {
                 }
 
                 if updated {
-                    println!("🔍 [DEBUG] Saving updated accounts to file...");
+                    log_debug!("🔍 [DEBUG] Saving updated accounts to file...");
                     Self::save_accounts(&accounts)?;
-                    println!("✅ [DEBUG] Account updated and saved successfully");
+                    log_info!("✅ [DEBUG] Account updated and saved successfully");
                 } else {
-                    println!("ℹ️ [DEBUG] No changes to save");
+                    log_info!("ℹ️ [DEBUG] No changes to save");
                 }
 
                 Ok(())
             }
             None => {
-                println!("❌ [DEBUG] Account not found: {}", email);
+                log_error!("❌ [DEBUG] Account not found: {}", email);
                 Err(anyhow!("Account not found"))
             }
         }
@@ -1280,5 +1286,86 @@ impl AccountManager {
 
         Self::save_accounts(&accounts)?;
         Ok(())
+    }
+
+    /// Export accounts to a specified directory
+    pub fn export_accounts(export_path: String) -> Result<String> {
+        log_info!(
+            "🔍 [DEBUG] AccountManager::export_accounts called with path: {}",
+            export_path
+        );
+
+        let account_file = Self::get_account_file_path()?;
+        log_debug!("🔍 [DEBUG] Source account file: {:?}", account_file);
+
+        if !account_file.exists() {
+            return Err(anyhow!("Account file does not exist"));
+        }
+
+        let export_file_path = PathBuf::from(&export_path).join("account.json");
+        log_debug!("🔍 [DEBUG] Export destination: {:?}", export_file_path);
+
+        // Ensure the export directory exists
+        if let Some(parent) = export_file_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| anyhow!("Failed to create export directory: {}", e))?;
+        }
+
+        // Copy the account file to the export location
+        fs::copy(&account_file, &export_file_path)
+            .map_err(|e| anyhow!("Failed to copy account file: {}", e))?;
+
+        log_info!(
+            "✅ [DEBUG] Account file exported successfully to: {:?}",
+            export_file_path
+        );
+        Ok(export_file_path.to_string_lossy().to_string())
+    }
+
+    /// Import accounts from a specified file
+    pub fn import_accounts(import_file_path: String) -> Result<String> {
+        log_info!(
+            "🔍 [DEBUG] AccountManager::import_accounts called with file: {}",
+            import_file_path
+        );
+
+        let import_path = PathBuf::from(&import_file_path);
+        if !import_path.exists() {
+            return Err(anyhow!("Import file does not exist"));
+        }
+
+        // Validate the imported file by trying to parse it
+        let import_content = fs::read_to_string(&import_path)
+            .map_err(|e| anyhow!("Failed to read import file: {}", e))?;
+
+        let _imported_accounts: Vec<AccountInfo> = serde_json::from_str(&import_content)
+            .map_err(|e| anyhow!("Invalid account file format: {}", e))?;
+
+        let current_account_file = Self::get_account_file_path()?;
+        log_info!(
+            "🔍 [DEBUG] Current account file: {:?}",
+            current_account_file
+        );
+
+        // Create backup of current account file if it exists
+        if current_account_file.exists() {
+            let backup_path = current_account_file.with_file_name("account_back.json");
+            log_debug!("🔍 [DEBUG] Creating backup at: {:?}", backup_path);
+
+            fs::copy(&current_account_file, &backup_path)
+                .map_err(|e| anyhow!("Failed to create backup: {}", e))?;
+
+            log_info!("✅ [DEBUG] Backup created successfully");
+        }
+
+        // Copy the imported file to replace the current account file
+        fs::copy(&import_path, &current_account_file)
+            .map_err(|e| anyhow!("Failed to import account file: {}", e))?;
+
+        log_info!("✅ [DEBUG] Account file imported successfully");
+        Ok(format!(
+            "Successfully imported {} accounts",
+            _imported_accounts.len()
+        ))
     }
 }

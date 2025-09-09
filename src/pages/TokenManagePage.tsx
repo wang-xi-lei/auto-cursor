@@ -6,6 +6,7 @@ import { LoadingSpinner } from "../components/LoadingSpinner";
 import { Toast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { UsageDisplay } from "../components/UsageDisplay";
+import { open } from "@tauri-apps/plugin-dialog";
 
 export const TokenManagePage: React.FC = () => {
   const [accountData, setAccountData] = useState<AccountListResult | null>(
@@ -448,6 +449,94 @@ export const TokenManagePage: React.FC = () => {
     setEditWorkosSessionToken("");
   };
 
+  const handleExportAccounts = async () => {
+    try {
+      // 使用Tauri 2的dialog插件选择导出目录
+      const selectedPath = await open({
+        multiple: false,
+        directory: true,
+        title: "选择导出目录",
+      });
+
+      if (!selectedPath) {
+        return; // 用户取消选择
+      }
+
+      const result = await AccountService.exportAccounts(selectedPath);
+      if (result.success) {
+        setToast({
+          message: `账户导出成功！文件保存在：${result.exported_path}`,
+          type: "success",
+        });
+      } else {
+        setToast({ message: result.message, type: "error" });
+      }
+    } catch (error) {
+      console.error("Failed to export accounts:", error);
+      setToast({ message: "导出账户失败", type: "error" });
+    }
+  };
+
+  const handleImportAccounts = async () => {
+    setConfirmDialog({
+      show: true,
+      title: "导入账户",
+      message:
+        "导入将会覆盖当前的账户文件，原文件将备份为account_back.json。确定要继续吗？",
+      onConfirm: async () => {
+        try {
+          // 使用Tauri 2的dialog插件选择要导入的文件
+          const selectedFile = await open({
+            multiple: false,
+            directory: false,
+            filters: [
+              {
+                name: "JSON Files",
+                extensions: ["json"],
+              },
+            ],
+            title: "选择要导入的account.json文件",
+          });
+
+          if (!selectedFile) {
+            setConfirmDialog({ ...confirmDialog, show: false });
+            return; // 用户取消选择
+          }
+
+          // 验证文件名是否为account.json
+          const fileName =
+            selectedFile.split("/").pop() ||
+            selectedFile.split("\\").pop() ||
+            "";
+          if (fileName !== "account.json") {
+            setToast({
+              message: "请选择名为 account.json 的文件",
+              type: "error",
+            });
+            setConfirmDialog({ ...confirmDialog, show: false });
+            return;
+          }
+
+          const result = await AccountService.importAccounts(selectedFile);
+          if (result.success) {
+            setToast({
+              message: result.message,
+              type: "success",
+            });
+            // 重新加载账户列表
+            await loadAccounts();
+          } else {
+            setToast({ message: result.message, type: "error" });
+          }
+        } catch (error) {
+          console.error("Failed to import accounts:", error);
+          setToast({ message: "导入账户失败", type: "error" });
+        }
+        setConfirmDialog({ ...confirmDialog, show: false });
+      },
+    });
+  };
+
   const formatDate = (dateString: string) => {
     try {
       return new Date(dateString).toLocaleString("zh-CN");
@@ -516,7 +605,7 @@ export const TokenManagePage: React.FC = () => {
           )}
 
           {/* Action Buttons */}
-          <div className="flex mb-4 space-x-3">
+          <div className="flex flex-wrap gap-3 mb-4">
             <button
               type="button"
               onClick={() => setShowAddForm(!showAddForm)}
@@ -530,6 +619,20 @@ export const TokenManagePage: React.FC = () => {
               className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               🚀 快速切换
+            </button>
+            <button
+              type="button"
+              onClick={handleExportAccounts}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-600 border border-transparent rounded-md shadow-sm hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500"
+            >
+              📤 导出账户
+            </button>
+            <button
+              type="button"
+              onClick={handleImportAccounts}
+              className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-orange-600 border border-transparent rounded-md shadow-sm hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+            >
+              📥 导入账户
             </button>
           </div>
 

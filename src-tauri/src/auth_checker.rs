@@ -1,5 +1,6 @@
-use anyhow::{anyhow, Result};
-use base64::{engine::general_purpose, Engine as _};
+use crate::{log_debug, log_error, log_info, log_warn};
+use anyhow::{Result, anyhow};
+use base64::{Engine as _, engine::general_purpose};
 use dirs;
 use regex::Regex;
 use rusqlite::Connection;
@@ -495,7 +496,7 @@ impl AuthChecker {
             }
             Err(e) => {
                 // Log error but continue to next method
-                eprintln!("Error reading storage.json: {}", e);
+                log_error!("Error reading storage.json: {}", e);
             }
         }
 
@@ -514,7 +515,7 @@ impl AuthChecker {
             }
             Err(e) => {
                 // Log error but continue to next method
-                eprintln!("Error reading SQLite database: {}", e);
+                log_error!("Error reading SQLite database: {}", e);
             }
         }
 
@@ -533,7 +534,7 @@ impl AuthChecker {
             }
             Err(e) => {
                 // Log error but continue
-                eprintln!("Error reading session storage: {}", e);
+                log_error!("Error reading session storage: {}", e);
             }
         }
 
@@ -650,7 +651,7 @@ impl AuthChecker {
                     // Try cursorAuth/cachedEmail first
                     if let Some(email) = json_data.get("cursorAuth/cachedEmail") {
                         if let Some(email_str) = email.as_str() {
-                            println!("📧 从storage.json找到邮箱: {}", email_str);
+                            log_info!("📧 从storage.json找到邮箱: {}", email_str);
                             return Some(email_str.to_string());
                         }
                     }
@@ -661,9 +662,10 @@ impl AuthChecker {
                             if key.to_lowercase().contains("email") {
                                 if let Some(email_str) = value.as_str() {
                                     if email_str.contains('@') {
-                                        println!(
+                                        log_info!(
                                             "📧 从storage.json的{}字段找到邮箱: {}",
-                                            key, email_str
+                                            key,
+                                            email_str
                                         );
                                         return Some(email_str.to_string());
                                     }
@@ -682,7 +684,7 @@ impl AuthChecker {
         if let Some(sqlite_path) = Self::get_cursor_sqlite_path() {
             match rusqlite::Connection::open(&sqlite_path) {
                 Ok(conn) => {
-                    println!("🔍 正在从SQLite数据库查找邮箱: {}", sqlite_path);
+                    log_debug!("🔍 正在从SQLite数据库查找邮箱: {}", sqlite_path);
 
                     // Query records containing email or cursorAuth
                     let query = "SELECT value FROM ItemTable WHERE key LIKE '%email%' OR key LIKE '%cursorAuth%'";
@@ -701,7 +703,7 @@ impl AuthChecker {
                                                 && value.len() > 5
                                                 && value.len() < 100
                                             {
-                                                println!("📧 从SQLite直接找到邮箱: {}", value);
+                                                log_info!("📧 从SQLite直接找到邮箱: {}", value);
                                                 return Some(value);
                                             }
 
@@ -713,7 +715,10 @@ impl AuthChecker {
                                                     // Check for email field
                                                     if let Some(email) = obj.get("email") {
                                                         if let Some(email_str) = email.as_str() {
-                                                            println!("📧 从SQLite JSON email字段找到邮箱: {}", email_str);
+                                                            log_info!(
+                                                                "📧 从SQLite JSON email字段找到邮箱: {}",
+                                                                email_str
+                                                            );
                                                             return Some(email_str.to_string());
                                                         }
                                                     }
@@ -725,7 +730,10 @@ impl AuthChecker {
                                                         if let Some(email_str) =
                                                             cached_email.as_str()
                                                         {
-                                                            println!("📧 从SQLite JSON cachedEmail字段找到邮箱: {}", email_str);
+                                                            log_info!(
+                                                                "📧 从SQLite JSON cachedEmail字段找到邮箱: {}",
+                                                                email_str
+                                                            );
                                                             return Some(email_str.to_string());
                                                         }
                                                     }
@@ -735,17 +743,17 @@ impl AuthChecker {
                                     }
                                 }
                                 Err(e) => {
-                                    println!("❌ SQLite查询执行失败: {}", e);
+                                    log_error!("❌ SQLite查询执行失败: {}", e);
                                 }
                             }
                         }
                         Err(e) => {
-                            println!("❌ SQLite查询准备失败: {}", e);
+                            log_error!("❌ SQLite查询准备失败: {}", e);
                         }
                     }
                 }
                 Err(e) => {
-                    println!("❌ 无法打开SQLite数据库: {}", e);
+                    log_error!("❌ 无法打开SQLite数据库: {}", e);
                 }
             }
         }
@@ -761,12 +769,12 @@ impl AuthChecker {
                 "{}/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
                 home_dir
             );
-            println!("🔍 检查macOS SQLite路径: {}", sqlite_path);
+            log_debug!("🔍 检查macOS SQLite路径: {}", sqlite_path);
             if std::path::Path::new(&sqlite_path).exists() {
-                println!("✅ 找到SQLite文件: {}", sqlite_path);
+                log_info!("✅ 找到SQLite文件: {}", sqlite_path);
                 Some(sqlite_path)
             } else {
-                println!("❌ SQLite文件不存在: {}", sqlite_path);
+                log_error!("❌ SQLite文件不存在: {}", sqlite_path);
                 None
             }
         }
@@ -775,12 +783,12 @@ impl AuthChecker {
         {
             let appdata = std::env::var("APPDATA").ok()?;
             let sqlite_path = format!("{}\\Cursor\\User\\globalStorage\\state.vscdb", appdata);
-            println!("🔍 检查Windows SQLite路径: {}", sqlite_path);
+            log_debug!("🔍 检查Windows SQLite路径: {}", sqlite_path);
             if std::path::Path::new(&sqlite_path).exists() {
-                println!("✅ 找到SQLite文件: {}", sqlite_path);
+                log_info!("✅ 找到SQLite文件: {}", sqlite_path);
                 Some(sqlite_path)
             } else {
-                println!("❌ SQLite文件不存在: {}", sqlite_path);
+                log_error!("❌ SQLite文件不存在: {}", sqlite_path);
                 None
             }
         }
@@ -789,12 +797,12 @@ impl AuthChecker {
         {
             let home_dir = std::env::var("HOME").ok()?;
             let sqlite_path = format!("{}/.config/Cursor/User/globalStorage/state.vscdb", home_dir);
-            println!("🔍 检查Linux SQLite路径: {}", sqlite_path);
+            log_debug!("🔍 检查Linux SQLite路径: {}", sqlite_path);
             if std::path::Path::new(&sqlite_path).exists() {
-                println!("✅ 找到SQLite文件: {}", sqlite_path);
+                log_info!("✅ 找到SQLite文件: {}", sqlite_path);
                 Some(sqlite_path)
             } else {
-                println!("❌ SQLite文件不存在: {}", sqlite_path);
+                log_error!("❌ SQLite文件不存在: {}", sqlite_path);
                 None
             }
         }
@@ -809,12 +817,12 @@ impl AuthChecker {
                 "{}/Library/Application Support/Cursor/User/globalStorage/storage.json",
                 home_dir
             );
-            println!("🔍 检查macOS存储路径: {}", storage_path);
+            log_debug!("🔍 检查macOS存储路径: {}", storage_path);
             if std::path::Path::new(&storage_path).exists() {
-                println!("✅ 找到存储文件: {}", storage_path);
+                log_info!("✅ 找到存储文件: {}", storage_path);
                 Some(storage_path)
             } else {
-                println!("❌ 存储文件不存在: {}", storage_path);
+                log_error!("❌ 存储文件不存在: {}", storage_path);
                 None
             }
         }
@@ -823,12 +831,12 @@ impl AuthChecker {
         {
             let appdata = std::env::var("APPDATA").ok()?;
             let storage_path = format!("{}\\Cursor\\User\\globalStorage\\storage.json", appdata);
-            println!("🔍 检查Windows存储路径: {}", storage_path);
+            log_debug!("🔍 检查Windows存储路径: {}", storage_path);
             if std::path::Path::new(&storage_path).exists() {
-                println!("✅ 找到存储文件: {}", storage_path);
+                log_info!("✅ 找到存储文件: {}", storage_path);
                 Some(storage_path)
             } else {
-                println!("❌ 存储文件不存在: {}", storage_path);
+                log_error!("❌ 存储文件不存在: {}", storage_path);
                 None
             }
         }
@@ -840,12 +848,12 @@ impl AuthChecker {
                 "{}/.config/Cursor/User/globalStorage/storage.json",
                 home_dir
             );
-            println!("🔍 检查Linux存储路径: {}", storage_path);
+            log_debug!("🔍 检查Linux存储路径: {}", storage_path);
             if std::path::Path::new(&storage_path).exists() {
-                println!("✅ 找到存储文件: {}", storage_path);
+                log_info!("✅ 找到存储文件: {}", storage_path);
                 Some(storage_path)
             } else {
-                println!("❌ 存储文件不存在: {}", storage_path);
+                log_error!("❌ 存储文件不存在: {}", storage_path);
                 None
             }
         }
@@ -862,7 +870,7 @@ impl AuthChecker {
         let client = reqwest::Client::new();
 
         details.push("Attempting to get aggregated usage data...".to_string());
-        println!("🔍 正在获取聚合用量数据...");
+        log_debug!("🔍 正在获取聚合用量数据...");
 
         let mut usage_headers = reqwest::header::HeaderMap::new();
         usage_headers.insert("Accept", "*/*".parse()?);
@@ -914,14 +922,14 @@ impl AuthChecker {
         match usage_response {
             Ok(resp) => {
                 let status = resp.status();
-                println!("📡 聚合用量API响应状态: {}", status);
+                log_info!("📡 聚合用量API响应状态: {}", status);
                 details.push(format!("Aggregated usage API response status: {}", status));
 
                 if status.is_success() {
                     match resp.text().await {
                         Ok(body) => {
-                            println!("📦 聚合用量响应数据长度: {} bytes", body.len());
-                            println!("📝 聚合用量响应内容: {}", body);
+                            log_info!("📦 聚合用量响应数据长度: {} bytes", body.len());
+                            log_info!("📝 聚合用量响应内容: {}", body);
                             details.push(format!(
                                 "Aggregated usage response body length: {} bytes",
                                 body.len()
@@ -930,7 +938,7 @@ impl AuthChecker {
                             // Try to parse JSON response
                             if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body)
                             {
-                                println!("✅ 成功解析聚合用量JSON数据");
+                                log_info!("✅ 成功解析聚合用量JSON数据");
 
                                 // Parse aggregated usage data according to the new structure
                                 let mut aggregations = Vec::new();
@@ -1004,13 +1012,13 @@ impl AuthChecker {
 
                                 return Ok(Some(aggregated_usage));
                             } else {
-                                println!("❌ 无法解析聚合用量JSON数据");
+                                log_error!("❌ 无法解析聚合用量JSON数据");
                                 details
                                     .push("Failed to parse aggregated usage JSON data".to_string());
                             }
                         }
                         Err(e) => {
-                            println!("❌ 读取聚合用量响应体失败: {}", e);
+                            log_error!("❌ 读取聚合用量响应体失败: {}", e);
                             details.push(format!(
                                 "Failed to read aggregated usage response body: {}",
                                 e
@@ -1018,7 +1026,7 @@ impl AuthChecker {
                         }
                     }
                 } else {
-                    println!("❌ 聚合用量API失败，状态码: {}", status);
+                    log_error!("❌ 聚合用量API失败，状态码: {}", status);
                     details.push(format!(
                         "Aggregated usage API failed with status: {}",
                         status
@@ -1026,7 +1034,7 @@ impl AuthChecker {
                 }
             }
             Err(e) => {
-                println!("❌ 聚合用量API请求失败: {}", e);
+                log_error!("❌ 聚合用量API请求失败: {}", e);
                 details.push(format!("Aggregated usage API request failed: {}", e));
             }
         }
@@ -1081,8 +1089,8 @@ impl AuthChecker {
             end_date: end_date.to_string(),
         };
 
-        println!("🔄 发送用户分析API请求到: https://cursor.com/api/dashboard/get-user-analytics");
-        println!("📦 请求参数: {:?}", request_body);
+        log_info!("🔄 发送用户分析API请求到: https://cursor.com/api/dashboard/get-user-analytics");
+        log_info!("📦 请求参数: {:?}", request_body);
 
         let analytics_response = client
             .post("https://cursor.com/api/dashboard/get-user-analytics")
@@ -1095,14 +1103,14 @@ impl AuthChecker {
         match analytics_response {
             Ok(resp) => {
                 let status = resp.status();
-                println!("📡 用户分析API响应状态: {}", status);
+                log_info!("📡 用户分析API响应状态: {}", status);
                 details.push(format!("User analytics API response status: {}", status));
 
                 if status.is_success() {
                     match resp.text().await {
                         Ok(body) => {
-                            println!("📦 用户分析响应数据长度: {} bytes", body.len());
-                            println!("📝 用户分析响应内容: {}", body);
+                            log_info!("📦 用户分析响应数据长度: {} bytes", body.len());
+                            log_info!("📝 用户分析响应内容: {}", body);
                             details.push(format!(
                                 "User analytics response body length: {} bytes",
                                 body.len()
@@ -1111,14 +1119,14 @@ impl AuthChecker {
                             // Try to parse JSON response
                             match serde_json::from_str::<UserAnalyticsData>(&body) {
                                 Ok(analytics_data) => {
-                                    println!("✅ 成功解析用户分析数据");
+                                    log_info!("✅ 成功解析用户分析数据");
                                     details.push(
                                         "Successfully parsed user analytics data".to_string(),
                                     );
                                     return Ok(Some(analytics_data));
                                 }
                                 Err(e) => {
-                                    println!("❌ 解析用户分析数据失败: {}", e);
+                                    log_error!("❌ 解析用户分析数据失败: {}", e);
                                     details.push(format!(
                                         "Failed to parse user analytics data: {}",
                                         e
@@ -1127,12 +1135,12 @@ impl AuthChecker {
                             }
                         }
                         Err(e) => {
-                            println!("❌ 读取用户分析响应失败: {}", e);
+                            log_error!("❌ 读取用户分析响应失败: {}", e);
                             details.push(format!("Failed to read user analytics response: {}", e));
                         }
                     }
                 } else {
-                    println!("❌ 用户分析API返回错误状态码: {}", status);
+                    log_error!("❌ 用户分析API返回错误状态码: {}", status);
                     details.push(format!(
                         "User analytics API returned error status: {}",
                         status
@@ -1140,7 +1148,7 @@ impl AuthChecker {
                 }
             }
             Err(e) => {
-                println!("❌ 用户分析API请求失败: {}", e);
+                log_error!("❌ 用户分析API请求失败: {}", e);
                 details.push(format!("User analytics API request failed: {}", e));
             }
         }
@@ -1197,8 +1205,10 @@ impl AuthChecker {
             page_size,
         };
 
-        println!("🔄 发送过滤使用事件API请求到: https://cursor.com/api/dashboard/get-filtered-usage-events");
-        println!("📦 请求参数: {:?}", request_body);
+        log_info!(
+            "🔄 发送过滤使用事件API请求到: https://cursor.com/api/dashboard/get-filtered-usage-events"
+        );
+        log_info!("📦 请求参数: {:?}", request_body);
 
         let events_response = client
             .post("https://cursor.com/api/dashboard/get-filtered-usage-events")
@@ -1211,7 +1221,7 @@ impl AuthChecker {
         match events_response {
             Ok(resp) => {
                 let status = resp.status();
-                println!("📡 过滤使用事件API响应状态: {}", status);
+                log_info!("📡 过滤使用事件API响应状态: {}", status);
                 details.push(format!(
                     "Filtered usage events API response status: {}",
                     status
@@ -1220,8 +1230,8 @@ impl AuthChecker {
                 if status.is_success() {
                     match resp.text().await {
                         Ok(body) => {
-                            println!("📦 过滤使用事件响应数据长度: {} bytes", body.len());
-                            println!("📝 过滤使用事件响应内容: {}", body);
+                            log_info!("📦 过滤使用事件响应数据长度: {} bytes", body.len());
+                            log_info!("📝 过滤使用事件响应内容: {}", body);
                             details.push(format!(
                                 "Filtered usage events response body length: {} bytes",
                                 body.len()
@@ -1230,7 +1240,7 @@ impl AuthChecker {
                             // Try to parse JSON response
                             match serde_json::from_str::<FilteredUsageEventsData>(&body) {
                                 Ok(events_data) => {
-                                    println!("✅ 成功解析过滤使用事件数据");
+                                    log_info!("✅ 成功解析过滤使用事件数据");
                                     details.push(
                                         "Successfully parsed filtered usage events data"
                                             .to_string(),
@@ -1238,7 +1248,7 @@ impl AuthChecker {
                                     return Ok(Some(events_data));
                                 }
                                 Err(e) => {
-                                    println!("❌ 解析过滤使用事件数据失败: {}", e);
+                                    log_error!("❌ 解析过滤使用事件数据失败: {}", e);
                                     details.push(format!(
                                         "Failed to parse filtered usage events data: {}",
                                         e
@@ -1247,7 +1257,7 @@ impl AuthChecker {
                             }
                         }
                         Err(e) => {
-                            println!("❌ 读取过滤使用事件响应失败: {}", e);
+                            log_error!("❌ 读取过滤使用事件响应失败: {}", e);
                             details.push(format!(
                                 "Failed to read filtered usage events response: {}",
                                 e
@@ -1255,7 +1265,7 @@ impl AuthChecker {
                         }
                     }
                 } else {
-                    println!("❌ 过滤使用事件API返回错误状态码: {}", status);
+                    log_error!("❌ 过滤使用事件API返回错误状态码: {}", status);
                     details.push(format!(
                         "Filtered usage events API returned error status: {}",
                         status
@@ -1263,7 +1273,7 @@ impl AuthChecker {
                 }
             }
             Err(e) => {
-                println!("❌ 过滤使用事件API请求失败: {}", e);
+                log_error!("❌ 过滤使用事件API请求失败: {}", e);
                 details.push(format!("Filtered usage events API request failed: {}", e));
             }
         }
@@ -1283,7 +1293,7 @@ impl AuthChecker {
                 }
             }
             Err(e) => {
-                println!("❌ 无法加载账户列表: {}", e);
+                log_error!("❌ 无法加载账户列表: {}", e);
             }
         }
         None
@@ -1311,15 +1321,15 @@ impl AuthChecker {
         if let Some(local_email) = Self::get_email_from_local_storage() {
             account_info.email = Some(local_email.clone());
             details.push(format!("Email found in local storage: {}", local_email));
-            println!("📧 从本地存储获取到邮箱: {}", local_email);
+            log_info!("📧 从本地存储获取到邮箱: {}", local_email);
         } else {
-            println!("⚠️ 本地存储中未找到邮箱，将尝试从API获取");
+            log_warn!("⚠️ 本地存储中未找到邮箱，将尝试从API获取");
             details.push("Email not found in local storage, will try API".to_string());
         }
 
         // Try to get subscription info using the correct API endpoint
         details.push("Attempting to get subscription info...".to_string());
-        println!("🔍 正在获取订阅信息...");
+        log_debug!("🔍 正在获取订阅信息...");
 
         let mut subscription_headers = reqwest::header::HeaderMap::new();
         subscription_headers.insert("Accept", "*/*".parse()?);
@@ -1360,14 +1370,14 @@ impl AuthChecker {
         match subscription_response {
             Ok(resp) => {
                 let status = resp.status();
-                println!("📡 订阅API响应状态: {}", status);
+                log_info!("📡 订阅API响应状态: {}", status);
                 details.push(format!("Subscription API response status: {}", status));
 
                 if status.is_success() {
                     match resp.text().await {
                         Ok(body) => {
-                            println!("📦 订阅响应数据长度: {} bytes", body.len());
-                            println!("📝 订阅响应内容: {}", body);
+                            log_info!("📦 订阅响应数据长度: {} bytes", body.len());
+                            log_info!("📝 订阅响应内容: {}", body);
                             details.push(format!(
                                 "Subscription response body length: {} bytes",
                                 body.len()
@@ -1377,8 +1387,8 @@ impl AuthChecker {
                             // Try to parse JSON response
                             if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body)
                             {
-                                println!("✅ 成功解析订阅JSON数据");
-                                println!(
+                                log_info!("✅ 成功解析订阅JSON数据");
+                                log_info!(
                                     "🔍 JSON数据结构: {}",
                                     serde_json::to_string_pretty(&json_data)
                                         .unwrap_or_else(|_| "无法格式化".to_string())
@@ -1389,7 +1399,7 @@ impl AuthChecker {
                                     if let Some(email) = customer.get("email") {
                                         if let Some(email_str) = email.as_str() {
                                             account_info.email = Some(email_str.to_string());
-                                            println!("� 找到邮箱: {}", email_str);
+                                            log_info!("� 找到邮箱: {}", email_str);
                                         }
                                     }
                                 }
@@ -1399,7 +1409,7 @@ impl AuthChecker {
                                     if let Some(membership_str) = membership_type.as_str() {
                                         account_info.subscription_type =
                                             Some(membership_str.to_string());
-                                        println!("� 订阅类型: {}", membership_str);
+                                        log_info!("� 订阅类型: {}", membership_str);
                                     }
                                 }
 
@@ -1409,7 +1419,7 @@ impl AuthChecker {
                                     if let Some(status_str) = subscription_status.as_str() {
                                         account_info.subscription_status =
                                             Some(status_str.to_string());
-                                        println!("📊 订阅状态: {}", status_str);
+                                        log_info!("📊 订阅状态: {}", status_str);
                                     }
                                 }
 
@@ -1418,36 +1428,36 @@ impl AuthChecker {
                                 {
                                     if let Some(days) = days_remaining.as_i64() {
                                         account_info.trial_days_remaining = Some(days as i32);
-                                        println!("⏰ 试用剩余天数: {}", days);
+                                        log_info!("⏰ 试用剩余天数: {}", days);
                                     }
                                 }
 
                                 account_info.usage_info = Some("订阅信息获取成功".to_string());
                             } else {
-                                println!("❌ 无法解析订阅JSON数据");
+                                log_error!("❌ 无法解析订阅JSON数据");
                                 account_info.subscription_status = Some("数据解析失败".to_string());
                             }
                         }
                         Err(e) => {
-                            println!("❌ 读取订阅响应体失败: {}", e);
+                            log_error!("❌ 读取订阅响应体失败: {}", e);
                             details
                                 .push(format!("Failed to read subscription response body: {}", e));
                         }
                     }
                 } else {
-                    println!("❌ 订阅API失败，状态码: {}", status);
+                    log_error!("❌ 订阅API失败，状态码: {}", status);
                     details.push(format!("Subscription API failed with status: {}", status));
                 }
             }
             Err(e) => {
-                println!("❌ 订阅API请求失败: {}", e);
+                log_error!("❌ 订阅API请求失败: {}", e);
                 details.push(format!("Subscription API request failed: {}", e));
             }
         }
 
         // Try to get usage info using the correct API endpoint
         details.push("Attempting to get usage info...".to_string());
-        println!("🔍 正在获取使用情况信息...");
+        log_debug!("🔍 正在获取使用情况信息...");
 
         let mut usage_headers = reqwest::header::HeaderMap::new();
         usage_headers.insert("Accept", "*/*".parse()?);
@@ -1499,14 +1509,14 @@ impl AuthChecker {
         match user_response {
             Ok(resp) => {
                 let status = resp.status();
-                println!("📡 使用情况API响应状态: {}", status);
+                log_info!("📡 使用情况API响应状态: {}", status);
                 details.push(format!("Usage API response status: {}", status));
 
                 if status.is_success() {
                     match resp.text().await {
                         Ok(body) => {
-                            println!("📦 使用情况响应数据长度: {} bytes", body.len());
-                            println!("📝 使用情况响应内容: {}", body);
+                            log_info!("📦 使用情况响应数据长度: {} bytes", body.len());
+                            log_info!("📝 使用情况响应内容: {}", body);
                             details
                                 .push(format!("Usage response body length: {} bytes", body.len()));
                             details.push(format!("Usage response content: {}", body));
@@ -1514,7 +1524,7 @@ impl AuthChecker {
                             // Try to parse JSON response
                             if let Ok(json_data) = serde_json::from_str::<serde_json::Value>(&body)
                             {
-                                println!("✅ 成功解析使用情况JSON数据");
+                                log_info!("✅ 成功解析使用情况JSON数据");
 
                                 // Extract GPT-4 usage (Premium)
                                 if let Some(gpt4_data) = json_data.get("gpt-4") {
@@ -1525,7 +1535,7 @@ impl AuthChecker {
                                                 premium_usage.as_i64().unwrap_or(0),
                                                 max_usage.as_i64().unwrap_or(999)
                                             );
-                                            println!("⭐ {}", usage_text);
+                                            log_info!("⭐ {}", usage_text);
 
                                             if account_info.usage_info.is_some() {
                                                 account_info.usage_info = Some(format!(
@@ -1547,7 +1557,7 @@ impl AuthChecker {
                                             "Basic: {}/无限制",
                                             basic_usage.as_i64().unwrap_or(0)
                                         );
-                                        println!("� {}", usage_text);
+                                        log_info!("� {}", usage_text);
 
                                         if account_info.usage_info.is_some() {
                                             account_info.usage_info = Some(format!(
@@ -1563,7 +1573,7 @@ impl AuthChecker {
 
                                 account_info.username = Some("Cursor用户".to_string());
                             } else {
-                                println!("❌ 无法解析使用情况JSON数据");
+                                log_error!("❌ 无法解析使用情况JSON数据");
                                 if account_info.usage_info.is_none() {
                                     account_info.usage_info =
                                         Some("使用情况数据解析失败".to_string());
@@ -1571,17 +1581,17 @@ impl AuthChecker {
                             }
                         }
                         Err(e) => {
-                            println!("❌ 读取使用情况响应体失败: {}", e);
+                            log_error!("❌ 读取使用情况响应体失败: {}", e);
                             details.push(format!("Failed to read usage response body: {}", e));
                         }
                     }
                 } else {
-                    println!("❌ 使用情况API失败，状态码: {}", status);
+                    log_error!("❌ 使用情况API失败，状态码: {}", status);
                     details.push(format!("Usage API failed with status: {}", status));
                 }
             }
             Err(e) => {
-                println!("❌ 使用情况API请求失败: {}", e);
+                log_error!("❌ 使用情况API请求失败: {}", e);
                 details.push(format!("Usage API request failed: {}", e));
             }
         }
@@ -1592,7 +1602,7 @@ impl AuthChecker {
                 "Found WorkOS Session Token, attempting to get aggregated usage data..."
                     .to_string(),
             );
-            println!(
+            log_info!(
                 "✅ 找到 WorkOS Session Token，正在获取聚合用量数据...{}",
                 workos_token
             );
@@ -1610,20 +1620,20 @@ impl AuthChecker {
                 Ok(Some(aggregated_usage)) => {
                     account_info.aggregated_usage = Some(aggregated_usage);
                     details.push("Successfully retrieved aggregated usage data".to_string());
-                    println!("✅ 成功获取聚合用量数据");
+                    log_info!("✅ 成功获取聚合用量数据");
                 }
                 Ok(None) => {
                     details.push("No aggregated usage data available".to_string());
-                    println!("⚠️ 无聚合用量数据");
+                    log_warn!("⚠️ 无聚合用量数据");
                 }
                 Err(e) => {
                     details.push(format!("Failed to get aggregated usage data: {}", e));
-                    println!("❌ 获取聚合用量数据失败: {}", e);
+                    log_error!("❌ 获取聚合用量数据失败: {}", e);
                 }
             }
         } else {
             details.push("No WorkOS Session Token found for aggregated usage data".to_string());
-            println!("⚠️ 未找到 WorkOS Session Token，无法获取聚合用量数据");
+            log_warn!("⚠️ 未找到 WorkOS Session Token，无法获取聚合用量数据");
         }
 
         Ok(Some(account_info))
@@ -1641,7 +1651,7 @@ impl AuthChecker {
         // Find WorkOS Session Token for the given access token
         if let Some(workos_token) = Self::find_workos_session_token(token) {
             details.push("Found WorkOS Session Token for usage data request".to_string());
-            println!("✅ 找到 WorkOS Session Token，获取指定时间段用量数据");
+            log_info!("✅ 找到 WorkOS Session Token，获取指定时间段用量数据");
 
             Self::get_aggregated_usage_data(
                 &workos_token,
@@ -1652,7 +1662,7 @@ impl AuthChecker {
             )
             .await
         } else {
-            println!("❌ 未找到对应的 WorkOS Session Token");
+            log_error!("❌ 未找到对应的 WorkOS Session Token");
             Err(anyhow!(
                 "No WorkOS Session Token found for the given access token"
             ))
@@ -1672,7 +1682,7 @@ impl AuthChecker {
         // Find WorkOS Session Token for the given access token
         if let Some(workos_token) = Self::find_workos_session_token(token) {
             details.push("Found WorkOS Session Token for user analytics request".to_string());
-            println!("✅ 找到 WorkOS Session Token，获取用户分析数据");
+            log_info!("✅ 找到 WorkOS Session Token，获取用户分析数据");
 
             return Self::get_user_analytics_data(
                 &workos_token,
@@ -1684,7 +1694,7 @@ impl AuthChecker {
             )
             .await;
         } else {
-            println!("❌ 未找到对应的 WorkOS Session Token");
+            log_error!("❌ 未找到对应的 WorkOS Session Token");
             Err(anyhow!(
                 "No WorkOS Session Token found for the given access token"
             ))
@@ -1705,7 +1715,7 @@ impl AuthChecker {
         // Find WorkOS Session Token for the given access token
         if let Some(workos_token) = Self::find_workos_session_token(token) {
             details.push("Found WorkOS Session Token for usage events request".to_string());
-            println!("✅ 找到 WorkOS Session Token，获取使用事件数据");
+            log_info!("✅ 找到 WorkOS Session Token，获取使用事件数据");
 
             return Self::get_filtered_usage_events(
                 &workos_token,
@@ -1718,7 +1728,7 @@ impl AuthChecker {
             )
             .await;
         } else {
-            println!("❌ 未找到对应的 WorkOS Session Token");
+            log_error!("❌ 未找到对应的 WorkOS Session Token");
             Err(anyhow!(
                 "No WorkOS Session Token found for the given access token"
             ))
