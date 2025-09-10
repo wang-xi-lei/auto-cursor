@@ -1042,7 +1042,7 @@ async fn open_cancel_subscription_page(
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 Opening cancel subscription page with WorkOS token...");
 
-    let url = "https://cursor.com/";
+    let url = "https://cursor.com/dashboard?tab=billing";
 
     // 先尝试关闭已存在的窗口
     if let Some(existing_window) = app.get_webview_window("cancel_subscription") {
@@ -1065,216 +1065,70 @@ async fn open_cancel_subscription_page(
     .title("Cursor - 取消订阅")
     .inner_size(1200.0, 800.0)
     .resizable(true)
+    .initialization_script(&format!(
+        r#"
+        // 在页面加载前设置 Cookie
+        document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
+        console.log('Cookie injected via initialization script');
+        
+        // 可选：检查 Cookie 是否设置成功
+        console.log('Current cookies:', document.cookie);
+        "#,
+        workos_cursor_session_token
+    ))
+    .on_page_load(move |window, payload| {
+        // 在页面加载完成时注入 Cookie
+        let cus_script = r#"
+            function findAndClickCancelButton () {
+            console.log('Current page URL:', window.location.href);
+
+            const manBtn = document.querySelector('.dashboard-outline-button') || document.querySelector('.dashboard-outline-button-medium')
+            if (manBtn) {
+                console.log('找到了');
+                manBtn.click();
+                setTimeout(() => {
+                manBtn.click();
+                setTimeout(() => {
+                    manBtn.click();
+                }, 1000)
+                }, 1000)
+                setTimeout(() => {
+                window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
+                }, 1500)
+            } else {
+                if (location.href.includes('dashboard')) {
+                window.__TAURI_INTERNALS__.invoke('cancel_subscription_failed');
+                console.log('没找到按钮');
+                }
+            }
+            }
+            if (document.readyState === 'complete') {
+            console.log('页面已经加载完成');
+            setTimeout(() => {
+                findAndClickCancelButton()
+            }, 2500)
+            } else {
+            // 监听页面加载完成事件
+            window.addEventListener('load', function () {
+                console.log('window load 事件触发');
+                setTimeout(() => {
+                findAndClickCancelButton()
+                }, 2500)
+            });
+            }
+            "#;
+        
+        if let Err(e) = window.eval(cus_script) {
+            log_error!("❌ Failed to inject page load: {}", e);
+        } else {
+            log_info!("✅ Page load injected successfully on page load");
+        }
+    })
     .visible(true) // 默认隐藏窗口
     .build();
 
     match webview_window {
         Ok(window) => {
-            // 等待页面加载完成后注入 cookie
-            let token = workos_cursor_session_token.clone();
-            let window_clone = window.clone();
-
-            // 使用 tauri::async_runtime::spawn 来处理异步操作
-            tauri::async_runtime::spawn(async move {
-                // 等待一段时间让页面加载
-                tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
-
-                // 第一步：注入 cookie
-                let cookie_script = format!(
-                    r#"
-                    document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
-                    console.log('Cookie injected successfully');
-                    "#,
-                    token
-                );
-
-                if let Err(e) = window_clone.eval(&cookie_script) {
-                    log_error!("❌ Failed to inject cookie: {}", e);
-                    return;
-                } else {
-                    log_info!("✅ Cookie injected successfully");
-                }
-
-                // 第二步：跳转到billing页面
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                let navigation_script = r#"
-                    console.log('Navigating to billing page...');
-                    window.location.href = 'https://cursor.com/dashboard?tab=billing';
-                "#;
-
-                if let Err(e) = window_clone.eval(navigation_script) {
-                    log_error!("❌ Failed to navigate: {}", e);
-                    return;
-                } else {
-                    log_info!("✅ Navigation initiated");
-                }
-            });
-
-            // 监听页面导航事件，在新页面加载后注入按钮点击脚本
-            let window_for_button_click = window.clone();
-
-            // 使用另一个异步任务来处理按钮点击
-            tauri::async_runtime::spawn(async move {
-                // 等待页面跳转和加载
-                tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-
-                // 首先检查当前页面URL是否正确
-                let url_check_script = r#"
-                    console.log('Current URL:', window.location.href);
-                    if (!window.location.href.includes('cursor.com/dashboard')) {
-                        console.log('Not on dashboard page, navigating...');
-                        window.location.href = 'https://cursor.com/dashboard?tab=billing';
-                        false; // 表示需要重新导航
-                    } else {
-                        console.log('Already on dashboard page');
-                        true; // 表示可以继续查找按钮
-                    }
-                "#;
-
-                // 检查页面URL
-                match window_for_button_click.eval(url_check_script) {
-                    Ok(_) => {
-                        // 等待一段时间让页面稳定
-                        tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-                    }
-                    Err(e) => {
-                        log_error!("❌ Failed to check URL: {}", e);
-                        return;
-                    }
-                }
-
-                // 注入查找并点击按钮的脚本
-                let button_click_script = r#"
-                    console.log('Looking for cancel subscription button...');
-
-                    function findAndClickCancelButton() {
-                        console.log('Current page URL:', window.location.href);
-                        console.log('Page title:', document.title);
-
-                        // 确保我们在正确的页面上
-                        if (!window.location.href.includes('cursor.com/dashboard')) {
-                            console.log('Not on dashboard page, redirecting...');
-                            window.location.href = 'https://cursor.com/dashboard?tab=billing';
-                            return false;
-                        }
-
-                        // 等待页面元素加载
-                        if (document.readyState !== 'complete') {
-                            console.log('Page not fully loaded, waiting...');
-                            return false;
-                        }
-
-                        // 查找具有指定类名的按钮
-                        const buttons = document.querySelectorAll('button.dashboard-outline-button.dashboard-outline-button-medium');
-                        console.log('Found buttons with target classes:', buttons.length);
-
-                        // 打印所有按钮的文本内容用于调试
-                        buttons.forEach((btn, index) => {
-                            console.log(`Button ${index}: "${btn.textContent?.trim()}"`);
-                        });
-
-                        for (let button of buttons) {
-                            const buttonText = button.textContent?.trim() || '';
-                            console.log('Checking button text:', buttonText);
-
-                            // 查找包含取消订阅相关文本的按钮
-                            if (buttonText && (
-                                buttonText.toLowerCase().includes('cancel') ||
-                                buttonText.toLowerCase().includes('unsubscribe') ||
-                                buttonText.toLowerCase().includes('manage subscription') ||
-                                buttonText.toLowerCase().includes('manage') ||
-                                buttonText.toLowerCase().includes('subscription') ||
-                                buttonText.includes('取消') ||
-                                buttonText.includes('订阅')
-                            )) {
-                                console.log('Found potential cancel subscription button:', buttonText);
-                                button.click();
-                                console.log('Button clicked');
-
-                                // 等待一段时间后再次点击确保操作生效
-                                setTimeout(() => {
-                                    button.click();
-                                    console.log('Button clicked again');
-                                     window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
-                                    // 通知 Rust 端显示窗口
-                                    setTimeout(() => {
-                                        button.click();
-                                        window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
-                                        console.log('Notified Rust to show window');
-                                    }, 500);
-                                }, 500);
-                                return true;
-                            }
-                        }
-
-                        // 如果没找到，尝试查找所有相关按钮
-                        console.log('No buttons found with specified classes, searching all buttons...');
-                        const allButtons = document.querySelectorAll('button');
-                        console.log('Total buttons found:', allButtons.length);
-
-                        for (let button of allButtons) {
-                            const buttonText = button.textContent?.trim() || '';
-                            if (buttonText && (
-                                buttonText.toLowerCase().includes('cancel') ||
-                                buttonText.toLowerCase().includes('unsubscribe') ||
-                                buttonText.toLowerCase().includes('manage subscription') ||
-                                buttonText.toLowerCase().includes('manage') ||
-                                buttonText.toLowerCase().includes('subscription') ||
-                                buttonText.includes('取消') ||
-                                buttonText.includes('订阅')
-                            )) {
-                                console.log('Found cancel button in all buttons:', buttonText);
-                                button.click();
-                                console.log('All buttons search - button clicked');
-
-                                // 通知 Rust 端显示窗口
-                                setTimeout(() => {
-                                    window.__TAURI_INTERNALS__.invoke('show_cancel_subscription_window');
-                                    console.log('All buttons search - notified Rust to show window');
-                                }, 500);
-                                return true;
-                            }
-                        }
-
-                        return false;
-                    }
-
-                    // 智能等待并查找按钮
-                    function waitAndFindButton(maxAttempts = 15) {
-                        let attempts = 0;
-
-                        function tryFind() {
-                            attempts++;
-                            console.log(`Searching for button, attempt ${attempts}/${maxAttempts}`);
-
-                            if (findAndClickCancelButton()) {
-                                console.log('Button found and clicked successfully!');
-                                return;
-                            }
-
-                            if (attempts < maxAttempts) {
-                                setTimeout(tryFind, 1000); // 每1000ms尝试一次
-                            } else {
-                                console.log('Max attempts reached, button not found');
-                                // 通知 Rust 端操作失败
-                                window.__TAURI_INTERNALS__.invoke('cancel_subscription_failed');
-                            }
-                        }
-
-                        tryFind();
-                    }
-
-                    // 开始查找按钮
-                    waitAndFindButton();
-                "#;
-
-                if let Err(e) = window_for_button_click.eval(button_click_script) {
-                    log_error!("❌ Failed to inject button click script: {}", e);
-                } else {
-                    log_info!("✅ Button click script injected successfully");
-                }
-            });
-
             log_info!("✅ Successfully opened WebView window");
             Ok(serde_json::json!({
                 "success": true,
@@ -1333,7 +1187,7 @@ async fn open_manual_bind_card_page(
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 Opening manual bind card page with WorkOS token...");
 
-    let url = "https://cursor.com/";
+    let url = "https://cursor.com/dashboard";
 
     // 先尝试关闭已存在的窗口
     if let Some(existing_window) = app.get_webview_window("manual_bind_card") {
@@ -1356,227 +1210,92 @@ async fn open_manual_bind_card_page(
     .title("Cursor - 手动绑卡")
     .inner_size(1200.0, 800.0)
     .resizable(true)
+    .initialization_script(&format!(
+        r#"
+        // 在页面加载前设置 Cookie
+        document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
+        console.log('Cookie injected via initialization script');
+        
+        // 可选：检查 Cookie 是否设置成功
+        console.log('Current cookies:', document.cookie);
+        "#,
+        workos_cursor_session_token
+    ))
     .visible(false) // 默认隐藏窗口
+    .on_page_load(move |window, payload| {
+        // 在页面加载完成时注入 Cookie
+        let cus_script = r#"
+        (function () {
+            console.log('页面加载检测脚本已注入');
+            localStorage.removeItem('isFind')
+            function findAndClickTrialButton () {
+                console.log('Current page URL:', window.location.href);
+                console.log('Page title:', document.title);
+                // 查找包含 "Start 14-day trial" 文本的按钮
+                console.log('Searching for Start 14-day trial button...');
+                // 方法1: 直接查找包含文本的按钮
+                let trialButton = null;
+                const buttons = document.querySelectorAll('button');
+                console.log('Found total buttons:', buttons.length);
+                // 查找包含 "Start 14-day trial" 的按钮
+                for (let button of buttons) {
+                const buttonText = button.textContent.trim() || '';
+                const innerSpan = button.querySelector('span');
+                const spanText = innerSpan ? innerSpan.textContent.trim() || '' : '';
+                console.log('Checking button text:', buttonText);
+                console.log('Checking span text:', spanText);
+                if (buttonText.includes('Start 14-day trial') || spanText.includes('Start 14-day trial') || spanText.includes('trial')) {
+                    console.log('Found Start 14-day trial button:', buttonText || spanText);
+                    trialButton = button;
+                    break;
+                }
+                }
+                if (trialButton) {
+                console.log('Clicking Start 14-day trial button...');
+                localStorage.setItem('isFind',1)
+                trialButton.click();
+                console.log('Button clicked');
+                // 等待1000ms后通知前端显示窗口
+                setTimeout(() => {
+                    console.log('Notifying frontend to show window...');
+                    window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
+                }, 100);
+                } else {
+                if (location.href.includes('dashboard') && document.readyState === 'complete' && !localStorage.getItem('isFind')) {
+                    window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
+                    console.log('没找到按钮');
+                }
+                }
+            }
+
+            // 检查页面加载状态
+            if (document.readyState === 'complete') {
+                console.log('页面已经加载完成');
+                setTimeout(() => {
+                findAndClickTrialButton()
+                }, 1000)
+            } else {
+                // 监听页面加载完成事件
+                window.addEventListener('load', function () {
+                console.log('window load 事件触发');
+                setTimeout(() => {
+                    findAndClickTrialButton()
+                }, 1000)
+                });
+            }
+        })();
+            "#;
+        
+        if let Err(e) = window.eval(cus_script) {
+            log_error!("❌ Failed to inject page load: {}", e);
+        } else {
+            log_info!("✅ Page load injected successfully on page load");
+        }
+    })
     .build();
 
     match webview_window {
         Ok(window) => {
-            // 等待页面加载完成后注入 cookie
-            let token = workos_cursor_session_token.clone();
-            let window_clone = window.clone();
-
-            // 使用 tauri::async_runtime::spawn 来处理异步操作
-            tauri::async_runtime::spawn(async move {
-                // 等待一段时间让页面加载
-                tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
-
-                // 第一步：注入 cookie
-                let cookie_script = format!(
-                    r#"
-                    document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
-                    console.log('Cookie injected successfully');
-                    "#,
-                    token
-                );
-
-                if let Err(e) = window_clone.eval(&cookie_script) {
-                    log_error!("❌ Failed to inject cookie: {}", e);
-                    return;
-                } else {
-                    log_info!("✅ Cookie injected successfully");
-                }
-
-                // 第二步：跳转到首页dashboard
-                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
-                let navigation_script = r#"
-                    console.log('Navigating to dashboard page...');
-                    window.location.href = 'https://cursor.com/dashboard';
-                "#;
-
-                if let Err(e) = window_clone.eval(navigation_script) {
-                    log_error!("❌ Failed to navigate: {}", e);
-                    return;
-                } else {
-                    log_info!("✅ Navigation initiated");
-                }
-            });
-
-            // 监听页面导航事件，在新页面加载后注入按钮点击脚本
-            let window_for_button_click = window.clone();
-
-            // 使用另一个异步任务来处理按钮点击
-            tauri::async_runtime::spawn(async move {
-                // 等待页面跳转和加载
-                tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-
-                // 首先检查当前页面URL是否正确
-                let url_check_script = r#"
-                   console.log('我被注入了');
-                   (() => {
-                    if (!window.location.href.includes('cursor.com/dashboard')) {
-                        console.log('Not on dashboard page, navigating...');
-                        window.location.href = 'https://cursor.com/dashboard';
-                        false; // 表示需要重新导航
-                    } else {
-                        console.log('Already on dashboard page');
-                        console.log('Looking for Start 14-day trial button...');
-
-                        function findAndClickTrialButton() {
-                            console.log('Current page URL:', window.location.href);
-                            console.log('Page title:', document.title);
-
-                            // 确保我们在正确的页面上
-                            if (!window.location.href.includes('cursor.com/dashboard')) {
-                                console.log('Not on dashboard page, redirecting...');
-                                window.location.href = 'https://cursor.com/dashboard';
-                                return false;
-                            }
-
-                            // 等待页面元素加载
-                            if (document.readyState !== 'complete') {
-                                console.log('Page not fully loaded, waiting...');
-                                return false;
-                            }
-
-                            // 查找包含 "Start 14-day trial" 文本的按钮
-                            console.log('Searching for Start 14-day trial button...');
-
-                            // 方法1: 直接查找包含文本的按钮
-                            let trialButton = null;
-                            const buttons = document.querySelectorAll('button');
-                            console.log('Found total buttons:', buttons.length);
-
-                            // 打印所有按钮的文本内容用于调试
-                            buttons.forEach((btn, index) => {
-                                const text = btn.textContent.trim();
-                                if (text) {
-                                    console.log(`Button ${index}: "${text}"`);
-                                }
-                            });
-
-                            // 查找包含 "Start 14-day trial" 的按钮
-                            for (let button of buttons) {
-                                const buttonText = button.textContent.trim() || '';
-                                const innerSpan = button.querySelector('span');
-                                const spanText = innerSpan ? innerSpan.textContent.trim() || '' : '';
-
-                                console.log('Checking button text:', buttonText);
-                                console.log('Checking span text:', spanText);
-
-                                if (buttonText.includes('Start 14-day trial') || spanText.includes('Start 14-day trial')) {
-                                    console.log('Found Start 14-day trial button:', buttonText || spanText);
-                                    trialButton = button;
-                                    break;
-                                }
-                            }
-
-                            if (trialButton) {
-                                console.log('Clicking Start 14-day trial button...');
-                                trialButton.click();
-                                console.log('Button clicked');
-
-                                // 等待1000ms后通知前端显示窗口
-                                setTimeout(() => {
-                                    console.log('Notifying frontend to show window...');
-                                    window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
-                                }, 1000);
-                                return true;
-                            }
-
-                            // 如果没找到，尝试查找所有可能的试用相关按钮
-                            console.log('No Start 14-day trial button found, searching for trial related buttons...');
-                            try {
-
-                                for (let button of buttons) {
-                                    // 查找button下的span
-                                    const spanA = button.querySelector('span')
-                                    if (!spanA) {
-                                        console.log('Max attempts reached, trial button not found');
-                                        // 通知 Rust 端操作失败
-                                        window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
-                                        return
-                                    }
-
-                                    const spanText = spanA.textContent.trim() || '';
-                                    const buttonText = button.textContent.trim() || '';
-                                    if (spanText && (
-                                        spanText.toLowerCase().includes('trial') ||
-                                        spanText.toLowerCase().includes('start')
-                                        // spanText.toLowerCase().includes('upgrade') ||
-                                        // spanText.toLowerCase().includes('pro')
-                                    )) {
-                                        console.log('Found potential trial button:', spanText);
-                                        button.click();
-                                        console.log('Trial related button clicked');
-
-                                        // 等待1000ms后通知前端显示窗口
-                                        setTimeout(() => {
-                                            console.log('Notifying frontend to show window...');
-                                            window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
-                                        }, 1000);
-                                        return true;
-                                    }
-                                }
-                            } catch (e) {
-                                console.log('Max attempts reached, trial button not found');
-                                // 通知 Rust 端操作失败
-                                window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
-                            }
-
-                            return false;
-                        }
-                        // 智能等待并查找按钮
-                        function waitAndFindButton(maxAttempts = 15) {
-                            let attempts = 0;
-
-                            function tryFind() {
-                                attempts++;
-                                if (findAndClickTrialButton()) {
-                                    console.log('Trial button found and clicked successfully!');
-                                    return;
-                                }
-
-                                if (attempts < maxAttempts) {
-                                    setTimeout(tryFind, 1000);
-                                } else {
-                                    console.log('Max attempts reached, trial button not found');
-                                    // 通知 Rust 端操作失败
-                                    window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
-                                }
-                            }
-                            tryFind();
-                        }
-                        // 开始查找按钮
-                        waitAndFindButton();
-                        true; // 表示可以继续查找按钮
-                    }
-                    })()
-                "#;
-
-                // 检查页面URL
-                match window_for_button_click.eval(url_check_script) {
-                    Ok(_) => {
-                        // 等待一段时间让页面稳定
-                        tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
-                    }
-                    Err(e) => {
-                        log_error!("❌ Failed to check URL: {}", e);
-                        return;
-                    }
-                }
-
-                // // 注入查找并点击"Start 14-day trial"按钮的脚本
-                // let button_click_script = r#"
-
-                // "#;
-
-                // if let Err(e) = window_for_button_click.eval(button_click_script) {
-                //     log_error!("❌ Failed to inject button click script: {}", e);
-                // } else {
-                //     log_info!("✅ Button click script injected successfully");
-                // }
-            });
-
             log_info!("✅ Successfully opened WebView window");
             Ok(serde_json::json!({
                 "success": true,
