@@ -16,6 +16,9 @@ export const TokenManagePage: React.FC = () => {
   const [cancelSubscriptionLoading, setCancelSubscriptionLoading] = useState<
     string | null
   >(null); // 存储正在处理的账户邮箱
+  const [manualBindCardLoading, setManualBindCardLoading] = useState<
+    string | null
+  >(null); // 存储正在处理手动绑卡的账户邮箱
   const [showAddForm, setShowAddForm] = useState(false);
   const [showQuickSwitchForm, setShowQuickSwitchForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
@@ -73,9 +76,38 @@ export const TokenManagePage: React.FC = () => {
         });
       });
 
+      // 手动绑卡事件监听器
+      const bindCardSuccessUnlisten = await listen(
+        "manual-bind-card-success",
+        () => {
+          console.log("Manual bind card success event received");
+          setManualBindCardLoading(null);
+          setToast({
+            message: "手动绑卡页面已打开，请继续完成操作",
+            type: "success",
+          });
+        }
+      );
+
+      const bindCardFailedUnlisten = await listen(
+        "manual-bind-card-failed",
+        () => {
+          console.log("Manual bind card failed event received");
+          setManualBindCardLoading(null);
+          setTimeout(() => {
+            setToast({
+              message: "未找到开始试用按钮，可能已经绑卡！",
+              type: "error",
+            });
+          }, 1000);
+        }
+      );
+
       cleanupListeners = () => {
         successUnlisten();
         failedUnlisten();
+        bindCardSuccessUnlisten();
+        bindCardFailedUnlisten();
       };
     };
 
@@ -368,6 +400,46 @@ export const TokenManagePage: React.FC = () => {
       setCancelSubscriptionLoading(null);
       setToast({
         message: "打开取消订阅页面失败",
+        type: "error",
+      });
+    }
+  };
+
+  const handleManualBindCard = async (account: AccountInfo) => {
+    if (!account.workos_cursor_session_token) {
+      setToast({
+        message: "该账户没有 WorkOS Session Token，无法进行手动绑卡",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      setManualBindCardLoading(account.email);
+      setToast({
+        message: "正在打开手动绑卡页面，请稍候...",
+        type: "success",
+      });
+
+      const result = await AccountService.openManualBindCardPage(
+        account.workos_cursor_session_token
+      );
+
+      if (result.success) {
+        // 不要关闭 toast，等待 Rust 端的事件响应
+        // setToast 会在事件监听器中处理
+      } else {
+        setManualBindCardLoading(null);
+        setToast({
+          message: result.message,
+          type: "error",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to open manual bind card page:", error);
+      setManualBindCardLoading(null);
+      setToast({
+        message: "打开手动绑卡页面失败",
         type: "error",
       });
     }
@@ -858,6 +930,20 @@ export const TokenManagePage: React.FC = () => {
                         </button>
                         {account.workos_cursor_session_token && (
                           <>
+                            <button
+                              type="button"
+                              onClick={() => handleManualBindCard(account)}
+                              disabled={manualBindCardLoading === account.email}
+                              className={`inline-flex items-center px-3 py-1 text-xs font-medium border border-transparent rounded focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                manualBindCardLoading === account.email
+                                  ? "text-gray-500 bg-gray-100 cursor-not-allowed"
+                                  : "text-blue-700 bg-blue-100 hover:bg-blue-200 focus:ring-blue-500"
+                              }`}
+                            >
+                              {manualBindCardLoading === account.email
+                                ? "🔄 处理中..."
+                                : "💳 手动绑卡"}
+                            </button>
                             <button
                               type="button"
                               onClick={() => handleCancelSubscription(account)}

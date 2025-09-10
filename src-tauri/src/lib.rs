@@ -1327,6 +1327,308 @@ async fn cancel_subscription_failed(app: tauri::AppHandle) -> Result<(), String>
 }
 
 #[tauri::command]
+async fn open_manual_bind_card_page(
+    app: tauri::AppHandle,
+    workos_cursor_session_token: String,
+) -> Result<serde_json::Value, String> {
+    log_info!("🔄 Opening manual bind card page with WorkOS token...");
+
+    let url = "https://cursor.com/";
+
+    // 先尝试关闭已存在的窗口
+    if let Some(existing_window) = app.get_webview_window("manual_bind_card") {
+        log_info!("🔄 Closing existing manual bind card window...");
+        if let Err(e) = existing_window.close() {
+            log_error!("❌ Failed to close existing window: {}", e);
+        } else {
+            log_info!("✅ Existing window closed successfully");
+        }
+        // 等待一小段时间确保窗口完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    // 创建新的 WebView 窗口（默认隐藏）
+    let webview_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "manual_bind_card",
+        tauri::WebviewUrl::External(url.parse().unwrap()),
+    )
+    .title("Cursor - 手动绑卡")
+    .inner_size(1200.0, 800.0)
+    .resizable(true)
+    .visible(false) // 默认隐藏窗口
+    .build();
+
+    match webview_window {
+        Ok(window) => {
+            // 等待页面加载完成后注入 cookie
+            let token = workos_cursor_session_token.clone();
+            let window_clone = window.clone();
+
+            // 使用 tauri::async_runtime::spawn 来处理异步操作
+            tauri::async_runtime::spawn(async move {
+                // 等待一段时间让页面加载
+                tokio::time::sleep(tokio::time::Duration::from_millis(800)).await;
+
+                // 第一步：注入 cookie
+                let cookie_script = format!(
+                    r#"
+                    document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
+                    console.log('Cookie injected successfully');
+                    "#,
+                    token
+                );
+
+                if let Err(e) = window_clone.eval(&cookie_script) {
+                    log_error!("❌ Failed to inject cookie: {}", e);
+                    return;
+                } else {
+                    log_info!("✅ Cookie injected successfully");
+                }
+
+                // 第二步：跳转到首页dashboard
+                tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+                let navigation_script = r#"
+                    console.log('Navigating to dashboard page...');
+                    window.location.href = 'https://cursor.com/dashboard';
+                "#;
+
+                if let Err(e) = window_clone.eval(navigation_script) {
+                    log_error!("❌ Failed to navigate: {}", e);
+                    return;
+                } else {
+                    log_info!("✅ Navigation initiated");
+                }
+            });
+
+            // 监听页面导航事件，在新页面加载后注入按钮点击脚本
+            let window_for_button_click = window.clone();
+
+            // 使用另一个异步任务来处理按钮点击
+            tauri::async_runtime::spawn(async move {
+                // 等待页面跳转和加载
+                tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+
+                // 首先检查当前页面URL是否正确
+                let url_check_script = r#"
+                   console.log('我被注入了');
+                   (() => {
+                    if (!window.location.href.includes('cursor.com/dashboard')) {
+                        console.log('Not on dashboard page, navigating...');
+                        window.location.href = 'https://cursor.com/dashboard';
+                        false; // 表示需要重新导航
+                    } else {
+                        console.log('Already on dashboard page');
+                        console.log('Looking for Start 14-day trial button...');
+
+                        function findAndClickTrialButton() {
+                            console.log('Current page URL:', window.location.href);
+                            console.log('Page title:', document.title);
+
+                            // 确保我们在正确的页面上
+                            if (!window.location.href.includes('cursor.com/dashboard')) {
+                                console.log('Not on dashboard page, redirecting...');
+                                window.location.href = 'https://cursor.com/dashboard';
+                                return false;
+                            }
+
+                            // 等待页面元素加载
+                            if (document.readyState !== 'complete') {
+                                console.log('Page not fully loaded, waiting...');
+                                return false;
+                            }
+
+                            // 查找包含 "Start 14-day trial" 文本的按钮
+                            console.log('Searching for Start 14-day trial button...');
+
+                            // 方法1: 直接查找包含文本的按钮
+                            let trialButton = null;
+                            const buttons = document.querySelectorAll('button');
+                            console.log('Found total buttons:', buttons.length);
+
+                            // 打印所有按钮的文本内容用于调试
+                            buttons.forEach((btn, index) => {
+                                const text = btn.textContent.trim();
+                                if (text) {
+                                    console.log(`Button ${index}: "${text}"`);
+                                }
+                            });
+
+                            // 查找包含 "Start 14-day trial" 的按钮
+                            for (let button of buttons) {
+                                const buttonText = button.textContent.trim() || '';
+                                const innerSpan = button.querySelector('span');
+                                const spanText = innerSpan ? innerSpan.textContent.trim() || '' : '';
+
+                                console.log('Checking button text:', buttonText);
+                                console.log('Checking span text:', spanText);
+
+                                if (buttonText.includes('Start 14-day trial') || spanText.includes('Start 14-day trial')) {
+                                    console.log('Found Start 14-day trial button:', buttonText || spanText);
+                                    trialButton = button;
+                                    break;
+                                }
+                            }
+
+                            if (trialButton) {
+                                console.log('Clicking Start 14-day trial button...');
+                                trialButton.click();
+                                console.log('Button clicked');
+
+                                // 等待1000ms后通知前端显示窗口
+                                setTimeout(() => {
+                                    console.log('Notifying frontend to show window...');
+                                    window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
+                                }, 1000);
+                                return true;
+                            }
+
+                            // 如果没找到，尝试查找所有可能的试用相关按钮
+                            console.log('No Start 14-day trial button found, searching for trial related buttons...');
+                            try {
+
+                                for (let button of buttons) {
+                                    // 查找button下的span
+                                    const spanA = button.querySelector('span')
+                                    if (!spanA) {
+                                        console.log('Max attempts reached, trial button not found');
+                                        // 通知 Rust 端操作失败
+                                        window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
+                                        return
+                                    }
+
+                                    const spanText = spanA.textContent.trim() || '';
+                                    const buttonText = button.textContent.trim() || '';
+                                    if (spanText && (
+                                        spanText.toLowerCase().includes('trial') ||
+                                        spanText.toLowerCase().includes('start')
+                                        // spanText.toLowerCase().includes('upgrade') ||
+                                        // spanText.toLowerCase().includes('pro')
+                                    )) {
+                                        console.log('Found potential trial button:', spanText);
+                                        button.click();
+                                        console.log('Trial related button clicked');
+
+                                        // 等待1000ms后通知前端显示窗口
+                                        setTimeout(() => {
+                                            console.log('Notifying frontend to show window...');
+                                            window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
+                                        }, 1000);
+                                        return true;
+                                    }
+                                }
+                            } catch (e) {
+                                console.log('Max attempts reached, trial button not found');
+                                // 通知 Rust 端操作失败
+                                window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
+                            }
+
+                            return false;
+                        }
+                        // 智能等待并查找按钮
+                        function waitAndFindButton(maxAttempts = 15) {
+                            let attempts = 0;
+
+                            function tryFind() {
+                                attempts++;
+                                if (findAndClickTrialButton()) {
+                                    console.log('Trial button found and clicked successfully!');
+                                    return;
+                                }
+
+                                if (attempts < maxAttempts) {
+                                    setTimeout(tryFind, 1000);
+                                } else {
+                                    console.log('Max attempts reached, trial button not found');
+                                    // 通知 Rust 端操作失败
+                                    window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
+                                }
+                            }
+                            tryFind();
+                        }
+                        // 开始查找按钮
+                        waitAndFindButton();
+                        true; // 表示可以继续查找按钮
+                    }
+                    })()
+                "#;
+
+                // 检查页面URL
+                match window_for_button_click.eval(url_check_script) {
+                    Ok(_) => {
+                        // 等待一段时间让页面稳定
+                        tokio::time::sleep(tokio::time::Duration::from_millis(2000)).await;
+                    }
+                    Err(e) => {
+                        log_error!("❌ Failed to check URL: {}", e);
+                        return;
+                    }
+                }
+
+                // // 注入查找并点击"Start 14-day trial"按钮的脚本
+                // let button_click_script = r#"
+
+                // "#;
+
+                // if let Err(e) = window_for_button_click.eval(button_click_script) {
+                //     log_error!("❌ Failed to inject button click script: {}", e);
+                // } else {
+                //     log_info!("✅ Button click script injected successfully");
+                // }
+            });
+
+            log_info!("✅ Successfully opened WebView window");
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "已打开手动绑卡页面，正在自动登录..."
+            }))
+        }
+        Err(e) => {
+            log_error!("❌ Failed to create WebView window: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("无法打开内置浏览器: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn show_manual_bind_card_window(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("manual_bind_card") {
+        // 延迟1000ms再显示窗口
+        tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+
+        window
+            .show()
+            .map_err(|e| format!("Failed to show window: {}", e))?;
+        log_info!("✅ Manual bind card window shown");
+
+        // 发送事件通知前端操作成功
+        if let Err(e) = app.emit("manual-bind-card-success", ()) {
+            log_error!("❌ Failed to emit success event: {}", e);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn manual_bind_card_failed(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("manual_bind_card") {
+        window
+            .close()
+            .map_err(|e| format!("Failed to close window: {}", e))?;
+        log_error!("❌ Manual bind card failed, window closed");
+
+        // 发送事件通知前端操作失败
+        if let Err(e) = app.emit("manual-bind-card-failed", ()) {
+            log_error!("❌ Failed to emit failed event: {}", e);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn delete_cursor_account(
     workos_cursor_session_token: String,
 ) -> Result<serde_json::Value, String> {
@@ -2978,6 +3280,9 @@ pub fn run() {
             open_cancel_subscription_page,
             show_cancel_subscription_window,
             cancel_subscription_failed,
+            open_manual_bind_card_page,
+            show_manual_bind_card_window,
+            manual_bind_card_failed,
             delete_cursor_account,
             trigger_authorization_login,
             trigger_authorization_login_poll,

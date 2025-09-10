@@ -117,6 +117,31 @@ export class AccountService {
     }
   }
 
+  // Open manual bind card page with WorkOS Session Token
+  static async openManualBindCardPage(workosSessionToken: string): Promise<{ success: boolean; message: string }> {
+    try {
+      console.log('🔄 Opening manual bind card page...');
+
+      const result = await invoke<any>("open_manual_bind_card_page", {
+        workosCursorSessionToken: workosSessionToken
+      });
+
+      console.log('📥 Open manual bind card page result:', result);
+
+      return {
+        success: result.success || false,
+        message: result.message || '未知响应'
+      };
+    } catch (error) {
+      console.error('Failed to open manual bind card page:', error);
+
+      return {
+        success: false,
+        message: `❌ 打开页面失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+  }
+
   // Export accounts to specified directory
   static async exportAccounts(exportPath: string): Promise<{ success: boolean; message: string; exported_path?: string }> {
     try {
