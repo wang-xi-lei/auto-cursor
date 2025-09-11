@@ -1221,69 +1221,71 @@ async fn open_manual_bind_card_page(
         "#,
         workos_cursor_session_token
     ))
-    .visible(false) // 默认隐藏窗口
+    .visible(true) // 默认隐藏窗口
     .on_page_load(move |window, payload| {
         // 在页面加载完成时注入 Cookie
         let cus_script = r#"
-        (function () {
-            console.log('页面加载检测脚本已注入');
-            localStorage.removeItem('isFind')
-            function findAndClickTrialButton () {
-                console.log('Current page URL:', window.location.href);
-                console.log('Page title:', document.title);
-                // 查找包含 "Start 14-day trial" 文本的按钮
-                console.log('Searching for Start 14-day trial button...');
-                // 方法1: 直接查找包含文本的按钮
-                let trialButton = null;
-                const buttons = document.querySelectorAll('button');
-                console.log('Found total buttons:', buttons.length);
-                // 查找包含 "Start 14-day trial" 的按钮
-                for (let button of buttons) {
-                const buttonText = button.textContent.trim() || '';
-                const innerSpan = button.querySelector('span');
-                const spanText = innerSpan ? innerSpan.textContent.trim() || '' : '';
-                console.log('Checking button text:', buttonText);
-                console.log('Checking span text:', spanText);
-                if (buttonText.includes('Start 14-day trial') || spanText.includes('Start 14-day trial') || spanText.includes('trial')) {
-                    console.log('Found Start 14-day trial button:', buttonText || spanText);
-                    trialButton = button;
-                    break;
+            (function () {
+                console.log('页面加载检测脚本已注入');
+                localStorage.removeItem('isFind')
+                let timeoutId = null
+
+                function observeSpan (targetText, callback) {
+                    timeoutId = setTimeout(() => {
+                    console.log('在 10 秒内未找到目标 span 元素: Start 14-day trial');
+                    clearTimeout(timeoutId);
+                    window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
+                    // callback(null);
+                    // observer.disconnect();
+                    }, 10000);
+
+                    console.log('Initial DOM loaded');
+
+                    const observer = new MutationObserver(function (mutationsList, observer) {
+                    // 当 DOM 发生变化时执行
+                    for (let mutation of mutationsList) {
+                        if (mutation.type === 'childList') {
+                        mutation.addedNodes.forEach(node => {
+                            if (node.classList.contains('ease') && node.classList.contains('container')) {
+                            console.log('目标 div 元素已出现:', node);
+                            // callback(node); // 执行回调函数，并将目标元素传递给它
+                            document.querySelectorAll('span').forEach(span => {
+                                if (span.textContent.trim() === targetText) {
+                                console.log('目标 span 元素已出现:', span);
+                                localStorage.setItem('isFind', 1)
+
+                                callback(span);
+                                observer.disconnect();
+                                }
+                            });
+                            observer.disconnect(); // 找到目标元素后停止监听
+                            }
+                        });
+                        }
+                    }
+                    });
+
+                    const config = { childList: true, subtree: true };
+                    observer.observe(document.body, config);
+
                 }
-                }
-                if (trialButton) {
-                console.log('Clicking Start 14-day trial button...');
-                localStorage.setItem('isFind',1)
-                trialButton.click();
-                console.log('Button clicked');
-                // 等待1000ms后通知前端显示窗口
-                setTimeout(() => {
+
+                // 使用示例：
+                observeSpan('Start 14-day trial', function (targetSpan) {
+                    // 在这里执行当目标 span 元素出现后的操作
+                    console.log('找到了目标 span 元素!', targetSpan);
+                    targetSpan.click();
+                    clearTimeout(timeoutId);
+                    setTimeout(() => {
                     console.log('Notifying frontend to show window...');
                     window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
-                }, 100);
-                } else {
-                if (location.href.includes('dashboard') && document.readyState === 'complete' && !localStorage.getItem('isFind')) {
-                    window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
-                    console.log('没找到按钮');
-                }
-                }
-            }
-
-            // 检查页面加载状态
-            if (document.readyState === 'complete') {
-                console.log('页面已经加载完成');
-                setTimeout(() => {
-                findAndClickTrialButton()
-                }, 1000)
-            } else {
-                // 监听页面加载完成事件
-                window.addEventListener('load', function () {
-                console.log('window load 事件触发');
-                setTimeout(() => {
-                    findAndClickTrialButton()
-                }, 1000)
+                    }, 100);
+                    // 例如：给它添加一个点击事件监听器
+                    // targetSpan.addEventListener('click', function () {
+                    //   console.log('目标 span 元素被点击了!');
+                    // });
                 });
-            }
-        })();
+            })();
             "#;
         
         if let Err(e) = window.eval(cus_script) {
