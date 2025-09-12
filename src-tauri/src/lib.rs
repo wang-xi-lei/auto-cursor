@@ -1076,7 +1076,7 @@ async fn open_cancel_subscription_page(
         "#,
         workos_cursor_session_token
     ))
-    .on_page_load(move |window, payload| {
+    .on_page_load(move |_window, _payload| {
         // 在页面加载完成时注入 Cookie
         let cus_script = r#"
             function findAndClickCancelButton () {
@@ -1118,7 +1118,7 @@ async fn open_cancel_subscription_page(
             }
             "#;
         
-        if let Err(e) = window.eval(cus_script) {
+        if let Err(e) = _window.eval(cus_script) {
             log_error!("❌ Failed to inject page load: {}", e);
         } else {
             log_info!("✅ Page load injected successfully on page load");
@@ -1222,7 +1222,7 @@ async fn open_manual_bind_card_page(
         workos_cursor_session_token
     ))
     .visible(true) // 默认隐藏窗口
-    .on_page_load(move |window, payload| {
+    .on_page_load(move |_window, _payload| {
         // 在页面加载完成时注入 Cookie
         let cus_script = r#"
             (function () {
@@ -1288,7 +1288,7 @@ async fn open_manual_bind_card_page(
             })();
             "#;
         
-        if let Err(e) = window.eval(cus_script) {
+        if let Err(e) = _window.eval(cus_script) {
             log_error!("❌ Failed to inject page load: {}", e);
         } else {
             log_info!("✅ Page load injected successfully on page load");
@@ -3024,8 +3024,350 @@ pub fn run() {
             save_email_config,
             get_app_version,
             open_update_url,
-            copy_pybuild_resources
+            copy_pybuild_resources,
+            auto_login_and_get_cookie,
+            check_login_cookies,
+            auto_login_success,
+            auto_login_failed
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[tauri::command]
+async fn auto_login_and_get_cookie(
+    app: tauri::AppHandle,
+    email: String,
+    password: String,
+    show_window: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    log_info!("🚀 开始自动登录获取Cookie: {}", email);
+
+    // 检查是否已经有同名窗口，如果有则关闭
+    if let Some(existing_window) = app.get_webview_window("auto_login") {
+        log_info!("🔄 关闭现有的自动登录窗口");
+        if let Err(e) = existing_window.close() {
+            log_error!("❌ Failed to close existing auto login window: {}", e);
+        } else {
+            log_info!("✅ Existing auto login window closed successfully");
+        }
+        // 等待一小段时间确保窗口完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    // 根据参数决定是否显示窗口
+    let should_show_window = show_window.unwrap_or(false);
+    log_info!("🖥️ 窗口显示设置: {}", if should_show_window { "显示" } else { "隐藏" });
+    
+    // 创建新的 WebView 窗口（根据配置显示/隐藏，启用无痕模式）
+    let webview_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "auto_login",
+        tauri::WebviewUrl::External("https://authenticator.cursor.sh/".parse().unwrap()),
+    )
+    .title("Cursor - 自动登录")
+    .inner_size(1200.0, 800.0)
+    .resizable(true)
+    .visible(should_show_window) // 根据参数决定是否显示
+    .incognito(true) // 启用无痕模式
+    .on_page_load(move |window, _payload| {
+        let email_clone = email.clone();
+        let password_clone = password.clone();
+        
+        // 创建自动登录脚本
+        let login_script = format!(
+            r#"
+            (function() {{
+                console.log('自动登录脚本已注入');
+                
+                function performLogin() {{
+                    console.log('开始执行登录流程');
+                    console.log('Current page URL:', window.location.href);
+                    console.log('Page title:', document.title);
+                    
+                    // 检查是否已经登录成功（在dashboard页面）
+                    if (window.location.href.includes('/dashboard')) {{
+                        console.log('检测到已经在dashboard页面，直接获取cookie');
+                        window.__TAURI_INTERNALS__.invoke('check_login_cookies');
+                        return;
+                    }}
+                    
+                    // 等待页面完全加载
+                    if (document.readyState !== 'complete') {{
+                        console.log('页面未完全加载，等待中...');
+                        return;
+                    }}
+                    
+                    // 步骤1: 填写邮箱
+                    setTimeout(() => {{
+                        console.log('步骤1: 填写邮箱');
+                        const emailInput = document.querySelector('.rt-reset .rt-TextFieldInput');
+                        if (emailInput) {{
+                            emailInput.value = '{}';
+                            console.log('邮箱已填写:', emailInput.value);
+                            
+                            // 触发input事件以确保值被正确设置
+                            emailInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            emailInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }} else {{
+                            console.error('未找到邮箱输入框');
+                        }}
+                    }}, 1000);
+                    
+                    // 步骤2: 点击第一个按钮（继续）
+                    setTimeout(() => {{
+                        console.log('步骤2: 点击继续按钮');
+                        const firstButton = document.querySelector('.BrandedButton');
+                        if (firstButton) {{
+                            firstButton.click();
+                            console.log('继续按钮已点击');
+                        }} else {{
+                            console.error('未找到继续按钮');
+                        }}
+                    }}, 2000);
+                    
+                    // 步骤3: 填写密码
+                    setTimeout(() => {{
+                        console.log('步骤3: 填写密码');
+                        const passwordInput = document.querySelector('[name="password"]');
+                        if (passwordInput) {{
+                            passwordInput.value = '{}';
+                            console.log('密码已填写');
+                            
+                            // 触发input事件以确保值被正确设置
+                            passwordInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            passwordInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }} else {{
+                            console.error('未找到密码输入框');
+                        }}
+                    }}, 6000);
+                    
+                    // 步骤4: 点击登录按钮
+                    setTimeout(() => {{
+                        console.log('步骤4: 点击登录按钮');
+                        const loginButton = document.querySelector('.BrandedButton');
+                        if (loginButton) {{
+                            loginButton.click();
+                            console.log('登录按钮已点击');
+                            
+                            // 等待登录完成后检查cookie
+                            setTimeout(() => {{
+                                console.log('检查登录状态和cookie');
+                                checkLoginSuccess();
+                            }}, 3000);
+                        }} else {{
+                            console.error('未找到登录按钮');
+                        }}
+                    }}, 9000);
+                }}
+                
+                function checkLoginSuccess() {{
+                    console.log('检查登录是否成功');
+                    console.log('当前URL:', window.location.href);
+                    
+                    // 检查是否登录成功（通过URL变化或页面元素判断）
+                    if (window.location.href.includes('/dashboard')) {{
+                        console.log('登录成功，通知Rust获取cookie');
+                        
+                        // 通知Rust后端登录成功，让Rust获取httpOnly cookie
+                        // window.__TAURI_INTERNALS__.invoke('check_login_cookies');
+                    }} else {{
+                        console.log('登录可能未完成，继续检查...');
+                        // 再次检查
+                        setTimeout(() => {{
+                            checkLoginSuccess();
+                        }}, 2000);
+                    }}
+                }}
+                
+                // 监听URL变化（用于检测重定向）
+                let lastUrl = location.href;
+                new MutationObserver(() => {{
+                    const url = location.href;
+                    if (url !== lastUrl) {{
+                        lastUrl = url;
+                        console.log('检测到URL变化:', url);
+                        // 如果重定向到dashboard，直接获取cookie
+                        if (url.includes('dashboard') || url.includes('app')) {{
+                            console.log('重定向到dashboard，获取cookie');
+                            setTimeout(() => {{
+                                // window.__TAURI_INTERNALS__.invoke('check_login_cookies');
+                            }}, 1000);
+                        }}
+                    }}
+                }}).observe(document, {{ subtree: true, childList: true }});
+
+                // 检查页面加载状态
+                if (document.readyState === 'complete') {{
+                    console.log('页面已经加载完成，开始登录流程');
+                    setTimeout(() => {{
+                        performLogin();
+                    }}, 1000);
+                }} else {{
+                    // 监听页面加载完成事件
+                    window.addEventListener('load', function() {{
+                        console.log('window load 事件触发，开始登录流程');
+                        setTimeout(() => {{
+                            performLogin();
+                        }}, 1000);
+                    }});
+                }}
+            }})();
+            "#,
+            email_clone, password_clone
+        );
+
+        if let Err(e) = window.eval(&login_script) {
+            log_error!("❌ Failed to inject login script: {}", e);
+        } else {
+            log_info!("✅ Login script injected successfully");
+        }
+    })
+    .build();
+
+    match webview_window {
+        Ok(_window) => {
+            let message = if should_show_window {
+                "自动登录窗口已打开，正在执行登录流程..."
+            } else {
+                "正在后台执行自动登录流程..."
+            };
+            log_info!("✅ Successfully created auto login WebView window ({})", if should_show_window { "visible" } else { "hidden" });
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "message": message
+            }))
+        }
+        Err(e) => {
+            log_error!("❌ Failed to create auto login WebView window: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("无法打开自动登录窗口: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn check_login_cookies(app: tauri::AppHandle) -> Result<(), String> {
+    log_info!("🔍 开始检查登录Cookie");
+    
+    if let Some(window) = app.get_webview_window("auto_login") {
+        // 尝试多个可能的URL来获取cookie
+        let urls_to_try = vec![
+            "https://authenticator.cursor.sh/",
+            "https://cursor.com/",
+            "https://app.cursor.com/",
+            "https://www.cursor.com/",
+        ];
+        
+        for url_str in urls_to_try {
+            log_info!("🔍 尝试从 {} 获取cookie", url_str);
+            let url = url_str.parse().map_err(|e| format!("Invalid URL {}: {}", url_str, e))?;
+        
+            match window.cookies_for_url(url) {
+                Ok(cookies) => {
+                    log_info!("📋 从 {} 找到 {} 个cookie", url_str, cookies.len());
+                    
+                    // 查找 WorkosCursorSessionToken
+                    for cookie in cookies {
+                        log_info!("🍪 Cookie: {} = {}...", cookie.name(), &cookie.value()[..cookie.value().len().min(20)]);
+                        
+                        if cookie.name() == "WorkosCursorSessionToken" {
+                            let token = cookie.value().to_string();
+                            log_info!("🎉 在 {} 找到 WorkosCursorSessionToken: {}...", url_str, &token[..token.len().min(20)]);
+                            
+                            // 关闭自动登录窗口
+                            if let Err(e) = window.close() {
+                                log_error!("❌ Failed to close auto login window: {}", e);
+                            } else {
+                                log_info!("✅ Auto login window closed successfully");
+                            }
+                            
+                            // 发送事件通知前端获取到了token
+                            if let Err(e) = app.emit("auto-login-success", serde_json::json!({
+                                "token": token
+                            })) {
+                                log_error!("❌ Failed to emit auto login success event: {}", e);
+                            } else {
+                                log_info!("✅ Auto login success event emitted");
+                            }
+                            
+                            return Ok(());
+                        }
+                    }
+                }
+                Err(e) => {
+                    log_error!("❌ 从 {} 获取cookie失败: {}", url_str, e);
+                }
+            }
+        }
+        
+        // 如果所有URL都没找到目标cookie
+        log_info!("⏳ 在所有URL中都未找到 WorkosCursorSessionToken");
+        if let Err(e) = app.emit("auto-login-failed", serde_json::json!({
+            "error": "未找到 WorkosCursorSessionToken cookie"
+        })) {
+            log_error!("❌ Failed to emit auto login failed event: {}", e);
+        }
+    } else {
+        log_error!("❌ 未找到自动登录窗口");
+        if let Err(e) = app.emit("auto-login-failed", serde_json::json!({
+            "error": "未找到自动登录窗口"
+        })) {
+            log_error!("❌ Failed to emit auto login failed event: {}", e);
+        }
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn auto_login_success(
+    app: tauri::AppHandle,
+    token: String,
+) -> Result<(), String> {
+    log_info!("🎉 自动登录成功，获取到Token: {}...", &token[..token.len().min(20)]);
+    
+    // 关闭自动登录窗口
+    if let Some(window) = app.get_webview_window("auto_login") {
+        if let Err(e) = window.close() {
+            log_error!("❌ Failed to close auto login window: {}", e);
+        } else {
+            log_info!("✅ Auto login window closed successfully");
+        }
+    }
+    
+    // 发送事件通知前端获取到了token
+    if let Err(e) = app.emit("auto-login-success", serde_json::json!({
+        "token": token
+    })) {
+        log_error!("❌ Failed to emit auto login success event: {}", e);
+    } else {
+        log_info!("✅ Auto login success event emitted");
+    }
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn auto_login_failed(app: tauri::AppHandle, error: String) -> Result<(), String> {
+    log_error!("❌ 自动登录失败: {}", error);
+    
+    // 关闭自动登录窗口
+    if let Some(window) = app.get_webview_window("auto_login") {
+        if let Err(e) = window.close() {
+            log_error!("❌ Failed to close auto login window: {}", e);
+        }
+    }
+    
+    // 发送事件通知前端登录失败
+    if let Err(e) = app.emit("auto-login-failed", serde_json::json!({
+        "error": error
+    })) {
+        log_error!("❌ Failed to emit auto login failed event: {}", e);
+    }
+    
+    Ok(())
 }

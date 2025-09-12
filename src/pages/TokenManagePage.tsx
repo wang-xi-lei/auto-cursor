@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { AccountService } from "../services/accountService";
 import { CursorService } from "../services/cursorService";
 import type { AccountInfo, AccountListResult } from "../types/account";
@@ -7,6 +7,9 @@ import { Toast } from "../components/Toast";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { UsageDisplay } from "../components/UsageDisplay";
 import { open } from "@tauri-apps/plugin-dialog";
+import { invoke } from "@tauri-apps/api/core";
+import { base64URLEncode, K, sha256 } from "../utils/cursorToken";
+import { confirm } from "@tauri-apps/plugin-dialog";
 
 export const TokenManagePage: React.FC = () => {
   const [accountData, setAccountData] = useState<AccountListResult | null>(
@@ -22,10 +25,15 @@ export const TokenManagePage: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showQuickSwitchForm, setShowQuickSwitchForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
+  const [addAccountType, setAddAccountType] = useState<"token" | "email">("token"); // 新增：添加账户类型选择
   const [newEmail, setNewEmail] = useState("");
   const [newToken, setNewToken] = useState("");
+  const [newPassword, setNewPassword] = useState(""); // 新增：密码字段
   const [newRefreshToken, setNewRefreshToken] = useState("");
   const [newWorkosSessionToken, setNewWorkosSessionToken] = useState("");
+  const [autoLoginLoading, setAutoLoginLoading] = useState(false); // 新增：自动登录loading状态
+  const [showLoginWindow, setShowLoginWindow] = useState(false); // 新增：是否显示登录窗口
+  const currentEmailRef = useRef<string>(""); // 用于在事件监听器中访问当前邮箱
   const [editingAccount, setEditingAccount] = useState<AccountInfo | null>(
     null
   );
@@ -103,11 +111,123 @@ export const TokenManagePage: React.FC = () => {
         }
       );
 
+      // 自动登录事件监听器
+      const autoLoginSuccessUnlisten = await listen(
+        "auto-login-success",
+        async (event: any) => {
+          console.log("Auto login success event received", event.payload);
+          const webToken = event.payload?.token;
+          if (webToken) {
+            // 显示获取AccessToken的提示
+            setToast({
+              message: "WebToken获取成功！正在获取AccessToken...",
+              type: "success",
+            });
+            
+            try {
+              // 获取AccessToken
+              const accessTokenData = await getClientAccessToken(webToken);
+              console.log("AccessToken data:", accessTokenData);
+              
+              if (accessTokenData && (accessTokenData as any).accessToken) {
+                const accessToken = (accessTokenData as any).accessToken;
+                const refreshToken = (accessTokenData as any).refreshToken || accessToken;
+                
+                // 显示保存账户的提示
+                setToast({
+                  message: "AccessToken获取成功！正在保存账户信息...",
+                  type: "success",
+                });
+                
+                // 自动保存账户 - 使用ref中的邮箱
+                const currentEmail = currentEmailRef.current; // 从ref获取当前邮箱
+                console.log(currentEmail, "currentEmail");
+                const result = await AccountService.addAccount(
+                  currentEmail,
+                  accessToken,
+                  refreshToken,
+                  webToken
+                );
+                
+                if (result.success) {
+                  setToast({
+                    message: "账户添加成功！所有Token已自动获取并保存",
+                    type: "success",
+                  });
+
+                  await confirm(
+                    "账户添加成功：\n\n" +
+                      `${currentEmail}账户所有Token已自动获取并保存\n`,
+                    {
+                      title: "账户添加成功",
+                      kind: "info",
+                    }
+                  );
+                  
+                  // 清空表单并关闭
+                  setNewEmail("");
+                  setNewPassword("");
+                  setNewToken("");
+                  setNewRefreshToken("");
+                  setNewWorkosSessionToken("");
+                  currentEmailRef.current = ""; // 也清空ref
+                  setShowAddForm(false);
+                  setAutoLoginLoading(false);
+                  setShowLoginWindow(false);
+                  
+                  // 刷新账户列表
+                  await loadAccounts();
+                } else {
+                  setToast({
+                    message: `保存账户失败: ${result.message}`,
+                    type: "error",
+                  });
+                  setAutoLoginLoading(false);
+                }
+              } else {
+                // 如果获取AccessToken失败，至少保存WebToken
+                setNewWorkosSessionToken(webToken);
+                setToast({
+                  message: "获取AccessToken失败，但WebToken已填充，请手动添加",
+                  type: "error",
+                });
+                setAutoLoginLoading(false);
+              }
+            } catch (error) {
+              console.error("获取AccessToken失败:", error);
+              // 如果获取AccessToken失败，至少保存WebToken
+              setNewWorkosSessionToken(webToken);
+              setToast({
+                message: "获取AccessToken失败，但WebToken已填充，请手动添加",
+                type: "error",
+              });
+              setAutoLoginLoading(false);
+            }
+          } else {
+            setAutoLoginLoading(false);
+          }
+        }
+      );
+
+      const autoLoginFailedUnlisten = await listen(
+        "auto-login-failed",
+        (event: any) => {
+          console.log("Auto login failed event received", event.payload);
+          setAutoLoginLoading(false);
+          setToast({
+            message: `自动登录失败: ${event.payload?.error || "未知错误"}`,
+            type: "error",
+          });
+        }
+      );
+
       cleanupListeners = () => {
         successUnlisten();
         failedUnlisten();
         bindCardSuccessUnlisten();
         bindCardFailedUnlisten();
+        autoLoginSuccessUnlisten();
+        autoLoginFailedUnlisten();
       };
     };
 
@@ -119,6 +239,51 @@ export const TokenManagePage: React.FC = () => {
       }
     };
   }, []);
+
+  // 根据webToken获取客户端accessToken
+  const getClientAccessToken = (workos_cursor_session_token: string) => {
+    return new Promise(async (resolve, _reject) => {
+      try {
+        let verifier = base64URLEncode(K);
+        let challenge = base64URLEncode(new Uint8Array(await sha256(verifier)));
+        let uuid = crypto.randomUUID();
+        
+        // 轮询查token
+        let interval = setInterval(() => {
+          invoke("trigger_authorization_login_poll", {
+            uuid,
+            verifier,
+          }).then((res: any) => {
+            console.log(res, "trigger_authorization_login_poll res");
+            if (res.success) {
+              const data = JSON.parse(res.response_body);
+              console.log(data, "access token data");
+              resolve(data);
+              clearInterval(interval);
+            }
+          }).catch((error) => {
+            console.error("轮询获取token失败:", error);
+          });
+        }, 1000);
+
+        // 20秒后清除定时器
+        setTimeout(() => {
+          clearInterval(interval);
+          resolve(null);
+        }, 1000 * 20);
+
+        // 触发授权登录-rust
+        await invoke("trigger_authorization_login", {
+          uuid,
+          challenge,
+          workosCursorSessionToken: workos_cursor_session_token,
+        });
+      } catch (error) {
+        console.error("getClientAccessToken error:", error);
+        resolve(null);
+      }
+    });
+  };
 
   const loadAccounts = async () => {
     try {
@@ -134,14 +299,30 @@ export const TokenManagePage: React.FC = () => {
   };
 
   const handleAddAccount = async () => {
-    if (!newEmail || !newToken) {
-      setToast({ message: "请填写邮箱和Token", type: "error" });
+    if (!newEmail) {
+      setToast({ message: "请填写邮箱地址", type: "error" });
       return;
     }
 
     if (!newEmail.includes("@")) {
       setToast({ message: "请输入有效的邮箱地址", type: "error" });
       return;
+    }
+
+    // 根据添加类型进行不同的验证
+    if (addAccountType === "token") {
+      if (!newToken) {
+        setToast({ message: "请填写Token", type: "error" });
+        return;
+      }
+    } else if (addAccountType === "email") {
+      if (!newPassword) {
+        setToast({ message: "请填写密码", type: "error" });
+        return;
+      }
+      // 执行自动登录获取token
+      await handleAutoLogin();
+      return; // 自动登录完成后会自动填充token，用户可以再次点击添加
     }
 
     try {
@@ -155,6 +336,7 @@ export const TokenManagePage: React.FC = () => {
         setToast({ message: "账户添加成功", type: "success" });
         setNewEmail("");
         setNewToken("");
+        setNewPassword("");
         setNewRefreshToken("");
         setNewWorkosSessionToken("");
         setShowAddForm(false);
@@ -165,6 +347,37 @@ export const TokenManagePage: React.FC = () => {
     } catch (error) {
       console.error("Failed to add account:", error);
       setToast({ message: "添加账户失败", type: "error" });
+    }
+  };
+
+  const handleAutoLogin = async () => {
+    if (!newEmail || !newPassword) {
+      setToast({ message: "请填写邮箱和密码", type: "error" });
+      return;
+    }
+
+    try {
+      setAutoLoginLoading(true);
+      setToast({
+        message: "正在后台执行自动登录，请稍候...",
+        type: "success",
+      });
+
+      // 调用Rust后端的自动登录函数
+      const result = await invoke("auto_login_and_get_cookie", {
+        email: newEmail,
+        password: newPassword,
+        showWindow: showLoginWindow,
+      });
+
+      console.log("Auto login result:", result);
+    } catch (error) {
+      console.error("Failed to start auto login:", error);
+      setAutoLoginLoading(false);
+      setToast({
+        message: "启动自动登录失败",
+        type: "error",
+      });
     }
   };
 
@@ -714,6 +927,38 @@ export const TokenManagePage: React.FC = () => {
               <h4 className="mb-3 font-medium text-gray-900 text-md">
                 添加新账户
               </h4>
+              
+              {/* 添加类型选择 */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  添加方式
+                </label>
+                <div className="flex space-x-4">
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="addAccountType"
+                      value="token"
+                      checked={addAccountType === "token"}
+                      onChange={(e) => setAddAccountType(e.target.value as "token" | "email")}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-700">🔑 使用Token</span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="addAccountType"
+                      value="email"
+                      checked={addAccountType === "email"}
+                      onChange={(e) => setAddAccountType(e.target.value as "token" | "email")}
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-700">📧 使用邮箱密码 <span className="text-xs text-gray-500">（ip需要纯净最好是直连或者干净的代理不然容易失败）</span></span>
+                  </label>
+                </div>
+              </div>
+
               <div className="space-y-3">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -722,23 +967,63 @@ export const TokenManagePage: React.FC = () => {
                   <input
                     type="email"
                     value={newEmail}
-                    onChange={(e) => setNewEmail(e.target.value)}
+                    onChange={(e) => {
+                      setNewEmail(e.target.value);
+                      currentEmailRef.current = e.target.value; // 同时更新ref
+                    }}
                     className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="请输入邮箱地址"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Token
-                  </label>
-                  <textarea
-                    value={newToken}
-                    onChange={(e) => setNewToken(e.target.value)}
-                    rows={3}
-                    className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="请输入Token"
-                  />
-                </div>
+                {/* 根据添加类型显示不同的输入框 */}
+                {addAccountType === "token" ? (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Token
+                    </label>
+                    <textarea
+                      value={newToken}
+                      onChange={(e) => setNewToken(e.target.value)}
+                      rows={3}
+                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="请输入Token"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      密码
+                    </label>
+                    <input
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      placeholder="请输入密码"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      将自动登录获取所有Token并保存账户：
+                      <br />1. 获取 WorkOS Session Token
+                      <br />2. 获取 Access Token 和 Refresh Token  
+                      <br />3. 自动保存完整账户信息
+                    </p>
+                    
+                    {/* 显示窗口选项 */}
+                    <div className="mt-3">
+                      <label className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={showLoginWindow}
+                          onChange={(e) => setShowLoginWindow(e.target.checked)}
+                          className="mr-2 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-gray-600">
+                          显示登录窗口 (如果获取失败可勾选此项查看原因)
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Refresh Token (可选)
@@ -767,9 +1052,18 @@ export const TokenManagePage: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleAddAccount}
-                    className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-white bg-green-600 border border-transparent rounded-md hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                    disabled={autoLoginLoading}
+                    className={`inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                      autoLoginLoading
+                        ? "bg-gray-400 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700 focus:ring-green-500"
+                    }`}
                   >
-                    ✅ 添加
+                    {autoLoginLoading ? (
+                      <>🔄 {addAccountType === "email" ? "自动登录获取中..." : "处理中..."}</>
+                    ) : (
+                      <>✅ {addAccountType === "email" ? "自动登录并添加" : "添加"}</>
+                    )}
                   </button>
                   <button
                     type="button"
@@ -777,8 +1071,12 @@ export const TokenManagePage: React.FC = () => {
                       setShowAddForm(false);
                       setNewEmail("");
                       setNewToken("");
+                      setNewPassword("");
                       setNewRefreshToken("");
                       setNewWorkosSessionToken("");
+                      currentEmailRef.current = ""; // 也清空ref
+                      setAddAccountType("token");
+                      setShowLoginWindow(false);
                     }}
                     className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
