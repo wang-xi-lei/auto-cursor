@@ -52,8 +52,8 @@ export class AnalyticsService {
   static async getUsageEvents(
     token: string,
     teamId: number = 0,
-    startDate: string,
-    endDate: string,
+    startDate: string | number,
+    endDate: string | number,
     page: number = 1,
     pageSize: number = 100
   ): Promise<AnalyticsApiResponse<FilteredUsageEventsData>> {

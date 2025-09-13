@@ -1057,6 +1057,7 @@ async fn open_cancel_subscription_page(
     }
 
     // 创建新的 WebView 窗口（默认隐藏）
+    let app_handle = app.clone();
     let webview_window = tauri::WebviewWindowBuilder::new(
         &app,
         "cancel_subscription",
@@ -1129,6 +1130,27 @@ async fn open_cancel_subscription_page(
 
     match webview_window {
         Ok(window) => {
+            // 添加窗口关闭事件监听器
+            let app_handle_clone = app_handle.clone();
+            window.on_window_event(move |event| {
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        log_info!("🔄 Cancel subscription window close requested by user");
+                        // 用户手动关闭窗口时，调用失败处理
+                        let app_handle_clone = app_handle_clone.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = cancel_subscription_failed(app_handle_clone).await {
+                                log_error!("❌ Failed to handle window close: {}", e);
+                            }
+                        });
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        log_info!("🔄 Cancel subscription window destroyed");
+                    }
+                    _ => {}
+                }
+            });
+            
             log_info!("✅ Successfully opened WebView window");
             Ok(serde_json::json!({
                 "success": true,
@@ -1202,6 +1224,7 @@ async fn open_manual_bind_card_page(
     }
 
     // 创建新的 WebView 窗口（默认隐藏）
+    let app_handle = app.clone();
     let webview_window = tauri::WebviewWindowBuilder::new(
         &app,
         "manual_bind_card",
@@ -1298,6 +1321,27 @@ async fn open_manual_bind_card_page(
 
     match webview_window {
         Ok(window) => {
+            // 添加窗口关闭事件监听器
+            let app_handle_clone = app_handle.clone();
+            window.on_window_event(move |event| {
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        log_info!("🔄 Manual bind card window close requested by user");
+                        // 用户手动关闭窗口时，调用失败处理
+                        let app_handle_clone = app_handle_clone.clone();
+                        tauri::async_runtime::spawn(async move {
+                            if let Err(e) = manual_bind_card_failed(app_handle_clone).await {
+                                log_error!("❌ Failed to handle window close: {}", e);
+                            }
+                        });
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        log_info!("🔄 Manual bind card window destroyed");
+                    }
+                    _ => {}
+                }
+            });
+            
             log_info!("✅ Successfully opened WebView window");
             Ok(serde_json::json!({
                 "success": true,
@@ -2935,104 +2979,6 @@ async fn get_email_config() -> Result<EmailConfig, String> {
     }
 }
 
-#[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_dialog::init())
-        .setup(|app| {
-            // 初始化日志系统
-            if let Err(e) = logger::Logger::init() {
-                eprintln!("Failed to initialize logger: {}", e);
-            } else {
-                log_info!("Application starting up...");
-            }
-
-            // 只在生产环境下复制 pyBuild 文件夹并且是macos，开发模式下跳过
-            if !cfg!(debug_assertions) && cfg!(target_os = "macos") {
-                if let Err(e) = copy_pybuild_to_app_dir(app.handle()) {
-                    log_error!("Failed to copy pyBuild directory on startup: {}", e);
-                    // 不阻断应用启动，只记录错误
-                }
-            } else {
-                if cfg!(debug_assertions) {
-                    log_info!("Development mode detected, skipping pyBuild directory copy");
-                } else {
-                    log_info!("Non-macOS platform detected, skipping pyBuild directory copy");
-                }
-            }
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            greet,
-            get_available_backups,
-            extract_backup_ids,
-            delete_backup,
-            restore_machine_ids,
-            get_cursor_paths,
-            check_cursor_installation,
-            reset_machine_ids,
-            complete_cursor_reset,
-            get_log_file_path,
-            get_log_config,
-            test_logging,
-            debug_windows_cursor_paths,
-            set_custom_cursor_path,
-            get_custom_cursor_path,
-            clear_custom_cursor_path,
-            open_log_file,
-            open_log_directory,
-            get_current_machine_ids,
-            get_machine_id_file_content,
-            get_backup_directory_info,
-            check_user_authorization,
-            get_token_auto,
-            debug_cursor_paths,
-            get_account_list,
-            add_account,
-            edit_account,
-            switch_account,
-            switch_account_with_token,
-            remove_account,
-            logout_current_account,
-            export_accounts,
-            import_accounts,
-            open_cancel_subscription_page,
-            show_cancel_subscription_window,
-            cancel_subscription_failed,
-            open_manual_bind_card_page,
-            show_manual_bind_card_window,
-            manual_bind_card_failed,
-            delete_cursor_account,
-            trigger_authorization_login,
-            trigger_authorization_login_poll,
-            get_usage_for_period,
-            get_user_analytics,
-            get_usage_events,
-            register_cursor_account,
-            create_temp_email,
-            register_with_email,
-            register_with_cloudflare_temp_email,
-            register_with_outlook,
-            submit_verification_code,
-            cancel_registration,
-            get_saved_accounts,
-            read_bank_card_config,
-            save_bank_card_config,
-            read_email_config,
-            save_email_config,
-            get_app_version,
-            open_update_url,
-            copy_pybuild_resources,
-            auto_login_and_get_cookie,
-            check_login_cookies,
-            auto_login_success,
-            auto_login_failed
-        ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
-}
 
 #[tauri::command]
 async fn auto_login_and_get_cookie(
@@ -3370,4 +3316,198 @@ async fn auto_login_failed(app: tauri::AppHandle, error: String) -> Result<(), S
     }
     
     Ok(())
+}
+
+#[tauri::command]
+async fn open_cursor_dashboard(
+    app: tauri::AppHandle,
+    workos_cursor_session_token: String,
+) -> Result<serde_json::Value, String> {
+    log_info!("🔄 Opening Cursor dashboard with WorkOS token...");
+
+    let url = "https://cursor.com/dashboard";
+
+    // 先尝试关闭已存在的窗口
+    if let Some(existing_window) = app.get_webview_window("cursor_dashboard") {
+        log_info!("🔄 Closing existing cursor dashboard window...");
+        if let Err(e) = existing_window.close() {
+            log_error!("❌ Failed to close existing window: {}", e);
+        } else {
+            log_info!("✅ Existing window closed successfully");
+        }
+        // 等待一小段时间确保窗口完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    // 创建新的 WebView 窗口
+    let app_handle = app.clone();
+    let webview_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "cursor_dashboard",
+        tauri::WebviewUrl::External(url.parse().unwrap()),
+    )
+    .title("Cursor - 主页")
+    .inner_size(1200.0, 800.0)
+    .resizable(true)
+    .initialization_script(&format!(
+        r#"
+        // 在页面加载前设置 Cookie
+        document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
+        console.log('Cookie injected for dashboard view');
+        console.log('Current cookies:', document.cookie);
+        "#,
+        workos_cursor_session_token
+    ))
+    .visible(true)
+    .build();
+
+    match webview_window {
+        Ok(window) => {
+            // 添加窗口关闭事件监听器
+            let app_handle_clone = app_handle.clone();
+            window.on_window_event(move |event| {
+                match event {
+                    tauri::WindowEvent::CloseRequested { .. } => {
+                        log_info!("🔄 Cursor dashboard window close requested by user");
+                    }
+                    tauri::WindowEvent::Destroyed => {
+                        log_info!("🔄 Cursor dashboard window destroyed");
+                    }
+                    _ => {}
+                }
+            });
+            
+            log_info!("✅ Successfully opened Cursor dashboard window");
+            Ok(serde_json::json!({
+                "success": true,
+                "message": "已打开Cursor主页"
+            }))
+        }
+        Err(e) => {
+            log_error!("❌ Failed to create Cursor dashboard window: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("无法打开Cursor主页: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn show_auto_login_window(app: tauri::AppHandle) -> Result<(), String> {
+    log_info!("🔍 Attempting to show auto login window");
+
+    if let Some(window) = app.get_webview_window("auto_login") {
+        window
+            .show()
+            .map_err(|e| format!("Failed to show auto login window: {}", e))?;
+        log_info!("✅ Auto login window shown successfully");
+    } else {
+        log_error!("❌ Auto login window not found");
+        return Err("Auto login window not found".to_string());
+    }
+
+    Ok(())
+}
+
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            // 初始化日志系统
+            if let Err(e) = logger::Logger::init() {
+                eprintln!("Failed to initialize logger: {}", e);
+            } else {
+                log_info!("Application starting up...");
+            }
+
+            // 只在生产环境下复制 pyBuild 文件夹并且是macos，开发模式下跳过
+            if !cfg!(debug_assertions) && cfg!(target_os = "macos") {
+                if let Err(e) = copy_pybuild_to_app_dir(app.handle()) {
+                    log_error!("Failed to copy pyBuild directory on startup: {}", e);
+                    // 不阻断应用启动，只记录错误
+                }
+            } else {
+                if cfg!(debug_assertions) {
+                    log_info!("Development mode detected, skipping pyBuild directory copy");
+                } else {
+                    log_info!("Non-macOS platform detected, skipping pyBuild directory copy");
+                }
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            get_available_backups,
+            extract_backup_ids,
+            delete_backup,
+            restore_machine_ids,
+            get_cursor_paths,
+            check_cursor_installation,
+            reset_machine_ids,
+            complete_cursor_reset,
+            get_log_file_path,
+            get_log_config,
+            test_logging,
+            debug_windows_cursor_paths,
+            set_custom_cursor_path,
+            get_custom_cursor_path,
+            clear_custom_cursor_path,
+            open_log_file,
+            open_log_directory,
+            get_current_machine_ids,
+            get_machine_id_file_content,
+            get_backup_directory_info,
+            check_user_authorization,
+            get_token_auto,
+            debug_cursor_paths,
+            get_account_list,
+            add_account,
+            edit_account,
+            switch_account,
+            switch_account_with_token,
+            remove_account,
+            logout_current_account,
+            export_accounts,
+            import_accounts,
+            open_cancel_subscription_page,
+            show_cancel_subscription_window,
+            cancel_subscription_failed,
+            open_manual_bind_card_page,
+            show_manual_bind_card_window,
+            manual_bind_card_failed,
+            delete_cursor_account,
+            trigger_authorization_login,
+            trigger_authorization_login_poll,
+            get_usage_for_period,
+            get_user_analytics,
+            get_usage_events,
+            register_cursor_account,
+            create_temp_email,
+            register_with_email,
+            register_with_cloudflare_temp_email,
+            register_with_outlook,
+            submit_verification_code,
+            cancel_registration,
+            get_saved_accounts,
+            read_bank_card_config,
+            save_bank_card_config,
+            read_email_config,
+            save_email_config,
+            get_app_version,
+            open_update_url,
+            copy_pybuild_resources,
+            auto_login_and_get_cookie,
+            check_login_cookies,
+            auto_login_success,
+            auto_login_failed,
+            show_auto_login_window,
+            open_cursor_dashboard
+        ])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
 }

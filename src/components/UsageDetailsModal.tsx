@@ -28,14 +28,16 @@ export const UsageDetailsModal: React.FC<UsageDetailsModalProps> = ({
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 20;
 
-  // 获取最近7天的时间范围
+  // 获取最近30天的时间范围
   const getDateRange = () => {
     const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - 7);
+    const startDate = new Date().getTime() - 30 * 24 * 60 * 60 * 1000;
+    // startDate.setDate(startDate.getDate() - 7);
+    console.log("startDate", startDate);
+    console.log("endDate", endDate);
 
     return {
-      startDate: AnalyticsService.dateToTimestamp(startDate),
+      startDate: AnalyticsService.dateToTimestamp(new Date(startDate)),
       endDate: AnalyticsService.dateToTimestamp(endDate),
     };
   };
@@ -150,7 +152,7 @@ export const UsageDetailsModal: React.FC<UsageDetailsModalProps> = ({
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-medium text-gray-900">
-              📊 使用详情 (最近7天)
+              📊 使用详情 (最近30天)
             </h3>
             <button
               onClick={onClose}

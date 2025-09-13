@@ -58,7 +58,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       </nav>
 
       {/* Main Content */}
-      <main className="flex-1 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
+      <main className="flex-1 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8 min-w-[85vw]">
         <div className="px-4 py-6 sm:px-0">{children}</div>
       </main>
 
