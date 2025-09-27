@@ -615,7 +615,7 @@ export const TokenManagePage: React.FC = () => {
         loading: true,
       });
 
-      const teamId = 1; // 默认team_id
+      const teamId = -1; // 默认team_id
 
       const result = await invoke("get_usage_for_period", {
         token: account.token,

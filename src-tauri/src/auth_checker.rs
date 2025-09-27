@@ -868,6 +868,7 @@ impl AuthChecker {
         details: &mut Vec<String>,
     ) -> Result<Option<AggregatedUsageData>> {
         let client = reqwest::Client::new();
+        log_info!("当前webtoken: {}", workos_session_token);
 
         details.push("Attempting to get aggregated usage data...".to_string());
         log_debug!("🔍 正在获取聚合用量数据...");
