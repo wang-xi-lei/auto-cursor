@@ -4,7 +4,7 @@ import { UpdateResponse, UpdateInfo } from '../types/update';
 console.log('import.meta.env:', import.meta.env);
 console.log('VITE_UPDATE_API_URL:', import.meta.env.VITE_UPDATE_API_URL);
 
-const UPDATE_API_URL = import.meta.env.VITE_UPDATE_API_URL
+const UPDATE_API_URL = import.meta.env.VITE_UPDATE_API_URL || 'https://startapi.anify.cn/api/utils-updates/2?populate=*'
 
 /**
  * 检查是否需要更新
