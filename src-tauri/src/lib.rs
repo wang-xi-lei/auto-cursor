@@ -888,6 +888,13 @@ async fn check_user_authorization(token: String) -> Result<AuthCheckResult, Stri
 }
 
 #[tauri::command]
+async fn get_user_info(token: String) -> Result<AuthCheckResult, String> {
+    AuthChecker::get_user_info(&token)
+        .await
+        .map_err(|e| format!("Failed to get user info: {}", e))
+}
+
+#[tauri::command]
 async fn get_token_auto() -> Result<TokenInfo, String> {
     Ok(AuthChecker::get_token_auto())
 }
@@ -1257,7 +1264,7 @@ async fn open_manual_bind_card_page(
                     timeoutId = setTimeout(() => {
                     console.log('在 10 秒内未找到目标 span 元素: Start 14-day trial');
                     clearTimeout(timeoutId);
-                    window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
+                    // window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
                     // callback(null);
                     // observer.disconnect();
                     }, 10000);
@@ -3463,6 +3470,7 @@ pub fn run() {
             get_machine_id_file_content,
             get_backup_directory_info,
             check_user_authorization,
+            get_user_info,
             get_token_auto,
             debug_cursor_paths,
             get_account_list,

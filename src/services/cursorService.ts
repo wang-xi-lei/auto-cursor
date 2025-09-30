@@ -63,6 +63,10 @@ export class CursorService {
     return await invoke<AuthCheckResult>("check_user_authorization", { token });
   }
 
+  static async getUserInfo(token: string): Promise<AuthCheckResult> {
+    return await invoke<AuthCheckResult>("get_user_info", { token });
+  }
+
   // Logging Management
   static async getLogFilePath(): Promise<string> {
     return await invoke<string>("get_log_file_path");

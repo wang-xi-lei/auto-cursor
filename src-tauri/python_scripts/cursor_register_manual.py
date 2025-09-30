@@ -765,8 +765,16 @@ class CursorRegistration:
             
             time.sleep(5)
 
-            # 中国地址才自动提交
-            return self._submit_payment_form(browser_tab)
+            # 中国地址自动提交，但返回特殊状态保持浏览器打开
+            submit_result = self._submit_payment_form(browser_tab)
+            if submit_result:
+                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 表单已提交{Style.RESET_ALL}")
+                print(f"{Fore.YELLOW}{EMOJI['INFO']} 浏览器将保持打开状态，请查看提交结果{Style.RESET_ALL}")
+                # 返回特殊状态，表示需要保持浏览器打开
+                return "non_china_completed"
+            else:
+                print(f"{Fore.RED}{EMOJI['ERROR']} 表单提交失败{Style.RESET_ALL}")
+                return False
 
         except Exception as e:
             print(f"{Fore.RED}{EMOJI['ERROR']} 填写银行卡信息失败: {str(e)}{Style.RESET_ALL}")

@@ -5,6 +5,9 @@ export interface AccountInfo {
   workos_cursor_session_token?: string;
   is_current: boolean;
   created_at: string;
+  subscription_type?: string;
+  subscription_status?: string;
+  trial_days_remaining?: number;
 }
 
 export interface AccountListResult {

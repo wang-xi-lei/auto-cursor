@@ -350,6 +350,35 @@ export const TokenManagePage: React.FC = () => {
     try {
       setLoading(true);
       const result = await AccountService.getAccountList();
+
+      // 为每个账户获取详细信息（订阅类型、试用天数等）
+      if (result.success && result.accounts) {
+        const accountsWithDetails = await Promise.all(
+          result.accounts.map(async (account) => {
+            try {
+              // 使用 getUserInfo 获取订阅信息（订阅类型和剩余天数）
+              const authResult = await CursorService.getUserInfo(account.token);
+              if (authResult.success && authResult.user_info?.account_info) {
+                return {
+                  ...account,
+                  subscription_type:
+                    authResult.user_info.account_info.subscription_type,
+                  subscription_status:
+                    authResult.user_info.account_info.subscription_status,
+                  trial_days_remaining:
+                    authResult.user_info.account_info.trial_days_remaining,
+                };
+              }
+            } catch (error) {
+              console.error(`Failed to get info for ${account.email}:`, error);
+            }
+            return account;
+          })
+        );
+
+        result.accounts = accountsWithDetails;
+      }
+
       setAccountData(result);
     } catch (error) {
       console.error("Failed to load accounts:", error);
@@ -1142,9 +1171,24 @@ export const TokenManagePage: React.FC = () => {
     }
   };
 
-  const getRemainingDays = (_account: AccountInfo) => {
-    // This would need to be implemented based on your token validation logic
-    // For now, return a placeholder
+  const getRemainingDays = (account: AccountInfo) => {
+    if (
+      account.trial_days_remaining !== undefined &&
+      account.trial_days_remaining !== null
+    ) {
+      return `${account.trial_days_remaining} 天`;
+    }
+    if (account.subscription_type) {
+      if (
+        account.subscription_type.toLowerCase().includes("pro") ||
+        account.subscription_type.toLowerCase().includes("business")
+      ) {
+        return "付费订阅";
+      }
+      if (account.subscription_type.toLowerCase().includes("trial")) {
+        return "试用中";
+      }
+    }
     return "未知";
   };
 
@@ -1547,11 +1591,58 @@ export const TokenManagePage: React.FC = () => {
                                 当前账户
                               </span>
                             )}
+                          {/* 订阅类型标签 */}
+                          {account.subscription_type && (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                account.subscription_type
+                                  .toLowerCase()
+                                  .includes("pro") ||
+                                account.subscription_type
+                                  .toLowerCase()
+                                  .includes("business")
+                                  ? "bg-purple-100 text-purple-800"
+                                  : account.subscription_type
+                                      .toLowerCase()
+                                      .includes("trial")
+                                  ? "bg-yellow-100 text-yellow-800"
+                                  : "bg-gray-100 text-gray-800"
+                              }`}
+                            >
+                              {account.subscription_type}
+                            </span>
+                          )}
+                          {/* 试用剩余天数 */}
+                          {account.trial_days_remaining !== undefined &&
+                            account.trial_days_remaining !== null && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                                ⏰ 剩余 {account.trial_days_remaining} 天
+                              </span>
+                            )}
                         </div>
                         <p className="mt-1 text-xs text-gray-500">
                           添加时间: {formatDate(account.created_at)}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        {/* 订阅状态 */}
+                        {account.subscription_status && (
+                          <p className="text-xs text-gray-500">
+                            订阅状态:{" "}
+                            <span
+                              className={
+                                account.subscription_status.toLowerCase() ===
+                                "active"
+                                  ? "text-green-600 font-medium"
+                                  : account.subscription_status.toLowerCase() ===
+                                    "trialing"
+                                  ? "text-yellow-600 font-medium"
+                                  : "text-gray-600"
+                              }
+                            >
+                              {account.subscription_status}
+                            </span>
+                          </p>
+                        )}
+                        {/* <p className="text-xs text-gray-500">
                           Token: {account.token.substring(0, 20)}...
                         </p>
                         {account.refresh_token && (
@@ -1569,7 +1660,7 @@ export const TokenManagePage: React.FC = () => {
                             )}
                             ...
                           </p>
-                        )}
+                        )} */}
                       </div>
                       <div className="flex items-center justify-between">
                         {/* 左侧：当前账户状态标识 */}

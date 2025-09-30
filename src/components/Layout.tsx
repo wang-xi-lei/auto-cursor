@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import logoSvg from "../assets/logo.svg";
+import { getCurrentVersion } from "../services/updateService";
+import { CursorService } from "../services/cursorService";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -8,6 +10,20 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
+  const [version, setVersion] = useState<string>("");
+
+  useEffect(() => {
+    // 获取当前版本号
+    getCurrentVersion().then(setVersion);
+  }, []);
+
+  const handleOpenLogDirectory = async () => {
+    try {
+      await CursorService.openLogDirectory();
+    } catch (error) {
+      console.error("打开日志目录失败:", error);
+    }
+  };
 
   const navItems = [
     { path: "/", label: "首页", icon: "🏠" },
@@ -84,8 +100,20 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 >
                   wuqi_y@163.com
                 </a>
+                <span className="mx-2">|</span>
+                <button
+                  onClick={handleOpenLogDirectory}
+                  className="text-blue-600 hover:text-blue-800 hover:underline"
+                >
+                  📂 打开日志目录
+                </button>
               </p>
-              <p className="mt-1">© 2025 Cursor Manager. 仅供学习研究使用。</p>
+              <p className="mt-1">
+                © 2025 Cursor Manager. 仅供学习研究使用。
+                {version && (
+                  <span className="ml-2 text-gray-400">v{version}</span>
+                )}
+              </p>
             </div>
           </div>
         </div>

@@ -1736,6 +1736,167 @@ impl AuthChecker {
         }
     }
 
+    /// Get basic user info without account details (lightweight check)
+    pub async fn get_user_info(token: &str) -> Result<AuthCheckResult> {
+        let mut details = Vec::new();
+        details.push("Starting user info check...".to_string());
+
+        // Clean and validate token
+        let clean_token = match Self::clean_token(token) {
+            Ok(token) => {
+                details.push(format!(
+                    "Token cleaned successfully, length: {} characters",
+                    token.len()
+                ));
+                token
+            }
+            Err(e) => {
+                return Ok(AuthCheckResult {
+                    success: false,
+                    user_info: None,
+                    message: "Invalid token format".to_string(),
+                    details: vec![format!("Token validation failed: {}", e)],
+                });
+            }
+        };
+
+        // Generate checksum
+        let checksum = match Self::generate_cursor_checksum(&clean_token) {
+            Ok(checksum) => {
+                details.push("Checksum generated successfully".to_string());
+                checksum
+            }
+            Err(e) => {
+                details.push(format!("Failed to generate checksum: {}", e));
+                return Ok(AuthCheckResult {
+                    success: false,
+                    user_info: None,
+                    message: "Failed to generate checksum".to_string(),
+                    details,
+                });
+            }
+        };
+
+        // Create HTTP client
+        let client = reqwest::Client::new();
+
+        // Create request headers
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert("accept-encoding", "gzip".parse()?);
+        headers.insert("authorization", format!("Bearer {}", clean_token).parse()?);
+        headers.insert("connect-protocol-version", "1".parse()?);
+        headers.insert("content-type", "application/proto".parse()?);
+        headers.insert("user-agent", "connect-es/1.6.1".parse()?);
+        headers.insert("x-cursor-checksum", checksum.parse()?);
+        headers.insert("x-cursor-client-version", "0.48.7".parse()?);
+        headers.insert("x-cursor-timezone", "Asia/Shanghai".parse()?);
+        headers.insert("x-ghost-mode", "false".parse()?);
+        headers.insert("Host", "api2.cursor.sh".parse()?);
+
+        details.push("Making API request to check usage information...".to_string());
+
+        // Make the API request
+        let response = client
+            .post(
+                "https://api2.cursor.sh/aiserver.v1.DashboardService/GetUsageBasedPremiumRequests",
+            )
+            .headers(headers)
+            .body(vec![]) // Empty body
+            .timeout(std::time::Duration::from_secs(40))
+            .send()
+            .await;
+
+        let user_info = match response {
+            Ok(resp) => {
+                let status_code = resp.status().as_u16();
+                details.push(format!("API response status: {}", status_code));
+
+                let is_authorized = match status_code {
+                    200 => {
+                        details.push("User is authorized (200 OK)".to_string());
+                        true
+                    }
+                    401 | 403 => {
+                        details.push("User is unauthorized (401/403)".to_string());
+                        false
+                    }
+                    _ => {
+                        details.push(format!("Unexpected status code: {}", status_code));
+                        // If token looks like JWT, consider it potentially valid
+                        if Self::is_jwt_like(&clean_token) {
+                            details.push("Token appears to be in JWT format, considering it potentially valid".to_string());
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                };
+
+                // Get account info to fetch subscription type and trial days
+                let account_info = if is_authorized {
+                    details.push("Fetching subscription info...".to_string());
+                    match Self::get_account_info(&clean_token, &checksum, &mut details).await {
+                        Ok(info) => {
+                            details.push("Subscription info retrieved successfully".to_string());
+                            info
+                        }
+                        Err(e) => {
+                            details.push(format!("Failed to get subscription info: {}", e));
+                            None
+                        }
+                    }
+                } else {
+                    None
+                };
+
+                UserAuthInfo {
+                    is_authorized,
+                    token_length: clean_token.len(),
+                    token_valid: Self::is_jwt_like(&clean_token),
+                    api_status: Some(status_code),
+                    error_message: None,
+                    checksum: Some(checksum),
+                    account_info,
+                }
+            }
+            Err(e) => {
+                details.push(format!("API request failed: {}", e));
+
+                // If token looks like JWT, consider it potentially valid even if API fails
+                let is_authorized = if Self::is_jwt_like(&clean_token) {
+                    details.push("Token appears to be in JWT format, considering it potentially valid despite API failure".to_string());
+                    true
+                } else {
+                    false
+                };
+
+                UserAuthInfo {
+                    is_authorized,
+                    token_length: clean_token.len(),
+                    token_valid: Self::is_jwt_like(&clean_token),
+                    api_status: None,
+                    error_message: Some(e.to_string()),
+                    checksum: Some(checksum),
+                    account_info: None,
+                }
+            }
+        };
+
+        let success = user_info.is_authorized;
+        let message = if success {
+            "User info check completed successfully".to_string()
+        } else {
+            "User info check failed".to_string()
+        };
+
+        Ok(AuthCheckResult {
+            success,
+            user_info: Some(user_info),
+            message,
+            details,
+        })
+    }
+
     /// Check user authorization with the given token
     pub async fn check_user_authorized(token: &str) -> Result<AuthCheckResult> {
         let mut details = Vec::new();

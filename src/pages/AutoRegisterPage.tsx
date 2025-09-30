@@ -161,7 +161,7 @@ export const AutoRegisterPage: React.FC = () => {
             // 提示用户手动输入绑卡地址，完成后关闭浏览器会自动保存账号
             try {
               const confirmed = await confirm(
-                "程序将保持运行状态，请手动输入绑卡地址，完成后关闭浏览器会自动保存账号",
+                "程序将保持运行状态，请手动处理页面信息，完成后关闭浏览器会自动保存账号",
                 {
                   title: "程序将保持运行状态",
                   kind: "info",
