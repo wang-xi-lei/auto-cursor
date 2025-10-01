@@ -124,6 +124,26 @@ jobs:
             Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle" -Recurse -Include "*.msi" | Copy-Item -Destination "artifacts/"
           }
 
+      - name: Prepare artifacts (Linux)
+        if: matrix.os == 'linux'
+        run: |
+          mkdir -p artifacts
+          # 复制 .deb 和 .AppImage 文件
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.deb" -exec cp {} artifacts/ \;
+          find src-tauri/target/${{ matrix.target }}/release/bundle -name "*.AppImage" -exec cp {} artifacts/ \;
+          # 重命名文件以包含架构信息
+          cd artifacts
+          for file in *.deb; do
+            if [ -f "$file" ]; then
+              mv "$file" "${file%.deb}_${{ matrix.arch }}.deb"
+            fi
+          done
+          for file in *.AppImage; do
+            if [ -f "$file" ]; then
+              mv "$file" "${file%.AppImage}_${{ matrix.arch }}.AppImage"
+            fi
+          done
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
