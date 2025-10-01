@@ -914,10 +914,37 @@ impl AccountManager {
 
         #[cfg(target_os = "linux")]
         {
-            let output = Command::new("pgrep").args(&["-f", "cursor"]).output();
+            // 更精确地匹配 Cursor IDE 进程，排除 auto-cursor
+            // 方法1: 尝试匹配 cursor 可执行文件（通常在 .cursor-server 或 AppImage 中）
+            let output = Command::new("pgrep")
+                .args(&["-f", "cursor.*--"])
+                .output();
 
             if let Ok(output) = output {
-                return !output.stdout.is_empty();
+                if !output.stdout.is_empty() {
+                    return true;
+                }
+            }
+
+            // 方法2: 尝试匹配包含 .cursor 配置目录的进程
+            let output2 = Command::new("pgrep")
+                .args(&["-f", "\\.cursor"])
+                .output();
+
+            if let Ok(output2) = output2 {
+                if !output2.stdout.is_empty() {
+                    // 需要排除 auto-cursor 进程
+                    let pids = String::from_utf8_lossy(&output2.stdout);
+                    let current_pid = std::process::id();
+                    
+                    for pid in pids.lines() {
+                        if let Ok(pid_num) = pid.trim().parse::<u32>() {
+                            if pid_num != current_pid {
+                                return true;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -964,16 +991,45 @@ impl AccountManager {
 
         #[cfg(target_os = "linux")]
         {
-            let output = Command::new("pkill").args(&["-f", "cursor"]).output();
+            // 更精确地终止 Cursor IDE 进程，避免误杀 auto-cursor
+            // 方法1: 尝试终止匹配 cursor.*-- 的进程（Cursor IDE 的特征）
+            let output1 = Command::new("pkill")
+                .args(&["-f", "cursor.*--"])
+                .output();
 
-            match output {
-                Ok(_) => {
+            // 方法2: 获取所有包含 .cursor 的进程，排除当前进程后终止
+            let current_pid = std::process::id();
+            let pgrep_output = Command::new("pgrep")
+                .args(&["-f", "\\.cursor"])
+                .output();
+
+            if let Ok(pgrep_result) = pgrep_output {
+                let pids = String::from_utf8_lossy(&pgrep_result.stdout);
+                for pid in pids.lines() {
+                    if let Ok(pid_num) = pid.trim().parse::<u32>() {
+                        if pid_num != current_pid {
+                            // 终止该进程
+                            let _ = Command::new("kill")
+                                .args(&["-9", &pid.trim()])
+                                .output();
+                        }
+                    }
+                }
+            }
+
+            // 检查是否有 Cursor AppImage 进程
+            let appimage_output = Command::new("pkill")
+                .args(&["-f", "cursor.*AppImage"])
+                .output();
+
+            match (output1, appimage_output) {
+                (Ok(_), Ok(_)) => {
                     log_info!("✅ [DEBUG] Linux: Cursor processes terminated");
                     Ok(())
                 }
-                Err(e) => {
-                    log_error!("❌ [DEBUG] Linux: Failed to terminate Cursor: {}", e);
-                    Err(anyhow!("Failed to terminate Cursor on Linux: {}", e))
+                _ => {
+                    log_info!("✅ [DEBUG] Linux: Attempted to terminate Cursor processes");
+                    Ok(())
                 }
             }
         }
