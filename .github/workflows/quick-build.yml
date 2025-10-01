@@ -10,8 +10,8 @@ on:
         type: choice
         options:
           - current
-          - macos-intel
-          - macos-m1
+          # - macos-intel
+          # - macos-m1
           - linux
           - windows
 jobs:

@@ -17,16 +17,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: "macos-latest" # macOS Intel
-            args: "--target x86_64-apple-darwin"
-            target: x86_64-apple-darwin
-            arch: x86_64
-            os: macos
-          - platform: "macos-latest" # macOS M1
-            args: "--target aarch64-apple-darwin"
-            target: aarch64-apple-darwin
-            arch: aarch64
-            os: macos
+          # - platform: "macos-latest" # macOS Intel
+          #   args: "--target x86_64-apple-darwin"
+          #   target: x86_64-apple-darwin
+          #   arch: x86_64
+          #   os: macos
+          # - platform: "macos-latest" # macOS M1
+          #   args: "--target aarch64-apple-darwin"
+          #   target: aarch64-apple-darwin
+          #   arch: aarch64
+          #   os: macos
           - platform: "ubuntu-22.04" # Linux x64
             args: "--target x86_64-unknown-linux-gnu"
             target: x86_64-unknown-linux-gnu
