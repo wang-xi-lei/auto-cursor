@@ -2212,6 +2212,39 @@ async fn register_with_email(
     log_info!("📧 邮箱: {}", email);
     log_info!("👤 姓名: {} {}", first_name, last_name);
 
+    // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
+    if enable_bank_card_binding.unwrap_or(true) {
+        log_info!("💳 准备设置银行卡配置...");
+        
+        // 读取银行卡配置
+        let bank_card_config = read_bank_card_config().await?;
+        let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
+            .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
+        
+        // 获取第一张卡的配置
+        let first_card = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+            // 新格式：从 cards 数组中取第一张
+            if cards_array.is_empty() {
+                return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
+            }
+            cards_array[0].clone()
+        } else {
+            // 旧格式：整个配置就是一张卡
+            bank_card_data
+        };
+        
+        // 将第一张卡的配置写入文件（旧格式，供 Python 脚本读取）
+        let config_str = serde_json::to_string_pretty(&first_card)
+            .unwrap_or_else(|_| "{}".to_string());
+        
+        if let Err(e) = save_bank_card_config(config_str).await {
+            log_error!("❌ 设置银行卡配置失败: {}", e);
+            return Err(format!("设置银行卡配置失败: {}", e));
+        } else {
+            log_info!("✅ 已设置银行卡配置为第一张卡");
+        }
+    }
+
     // 获取可执行文件路径
     let executable_path = get_python_executable_path()?;
 
@@ -2465,6 +2498,39 @@ async fn register_with_cloudflare_temp_email(
         "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
         use_incognito
     );
+
+    // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
+    if enable_bank_card_binding.unwrap_or(true) {
+        log_info!("💳 准备设置银行卡配置...");
+        
+        // 读取银行卡配置
+        let bank_card_config = read_bank_card_config().await?;
+        let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
+            .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
+        
+        // 获取第一张卡的配置
+        let first_card = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+            // 新格式：从 cards 数组中取第一张
+            if cards_array.is_empty() {
+                return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
+            }
+            cards_array[0].clone()
+        } else {
+            // 旧格式：整个配置就是一张卡
+            bank_card_data
+        };
+        
+        // 将第一张卡的配置写入文件（旧格式，供 Python 脚本读取）
+        let config_str = serde_json::to_string_pretty(&first_card)
+            .unwrap_or_else(|_| "{}".to_string());
+        
+        if let Err(e) = save_bank_card_config(config_str).await {
+            log_error!("❌ 设置银行卡配置失败: {}", e);
+            return Err(format!("设置银行卡配置失败: {}", e));
+        } else {
+            log_info!("✅ 已设置银行卡配置为第一张卡");
+        }
+    }
 
     // 1. 创建临时邮箱
     let (jwt, email) = create_cloudflare_temp_email().await?;
@@ -2737,6 +2803,39 @@ async fn register_with_outlook(
         "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
         use_incognito
     );
+
+    // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
+    if enable_bank_card_binding.unwrap_or(true) {
+        log_info!("💳 准备设置银行卡配置...");
+        
+        // 读取银行卡配置
+        let bank_card_config = read_bank_card_config().await?;
+        let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
+            .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
+        
+        // 获取第一张卡的配置
+        let first_card = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+            // 新格式：从 cards 数组中取第一张
+            if cards_array.is_empty() {
+                return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
+            }
+            cards_array[0].clone()
+        } else {
+            // 旧格式：整个配置就是一张卡
+            bank_card_data
+        };
+        
+        // 将第一张卡的配置写入文件（旧格式，供 Python 脚本读取）
+        let config_str = serde_json::to_string_pretty(&first_card)
+            .unwrap_or_else(|_| "{}".to_string());
+        
+        if let Err(e) = save_bank_card_config(config_str).await {
+            log_error!("❌ 设置银行卡配置失败: {}", e);
+            return Err(format!("设置银行卡配置失败: {}", e));
+        } else {
+            log_info!("✅ 已设置银行卡配置为第一张卡");
+        }
+    }
 
     // 获取可执行文件路径
     let executable_path = get_python_executable_path()?;
