@@ -2024,6 +2024,180 @@ async fn create_temp_email() -> Result<serde_json::Value, String> {
     Ok(result)
 }
 
+/// 批量注册账户（串行执行，一个接一个注册，更稳定）
+#[tauri::command]
+async fn batch_register_with_email(
+    app: tauri::AppHandle,
+    emails: Vec<String>,
+    first_names: Vec<String>,
+    last_names: Vec<String>,
+    email_type: Option<String>,
+    _outlook_mode: Option<String>, // 保留用于未来扩展
+    use_incognito: Option<bool>,
+    enable_bank_card_binding: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    let email_type_str = email_type.as_deref().unwrap_or("custom");
+    log_info!("🔄 批量注册 {} 个 Cursor 账户（串行模式，邮箱类型：{}）...", emails.len(), email_type_str);
+    
+    if emails.len() != first_names.len() || emails.len() != last_names.len() {
+        return Err("邮箱、姓名数量不一致".to_string());
+    }
+
+    // 读取银行卡配置
+    let bank_card_config = read_bank_card_config().await?;
+    let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
+        .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
+    
+    let cards = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+        cards_array.clone()
+    } else {
+        // 如果是旧格式（单张卡），转换为数组
+        vec![bank_card_data]
+    };
+
+    if enable_bank_card_binding.unwrap_or(true) && cards.len() < emails.len() {
+        return Err(format!(
+            "银行卡配置数量({})少于注册账户数量({})，请先配置足够的银行卡",
+            cards.len(),
+            emails.len()
+        ));
+    }
+
+    log_info!("📋 准备使用 {} 张银行卡进行批量注册", cards.len());
+
+    // 保存原始配置，以便注册完成后恢复
+    let original_config = bank_card_config.clone();
+
+    // 串行执行注册，一个接一个
+    let mut results = Vec::new();
+    let mut errors = Vec::new();
+    
+    for i in 0..emails.len() {
+        let email = emails[i].clone();
+        let first_name = first_names[i].clone();
+        let last_name = last_names[i].clone();
+        
+        let email_display = if email.is_empty() { "自动生成" } else { &email };
+        log_info!("🎯 [任务 {}/{}] 开始注册: {}", i + 1, emails.len(), email_display);
+        
+        // 为当前注册任务设置对应的银行卡配置
+        if enable_bank_card_binding.unwrap_or(true) && i < cards.len() {
+            let card_config = cards[i].clone();
+            let temp_config = serde_json::json!(card_config);
+            let config_str = serde_json::to_string_pretty(&temp_config)
+                .unwrap_or_else(|_| "{}".to_string());
+            
+            if let Err(e) = save_bank_card_config(config_str).await {
+                log_error!("❌ [任务 {}/{}] 设置银行卡配置失败: {}", i + 1, emails.len(), e);
+            } else {
+                log_info!("✅ [任务 {}/{}] 已设置银行卡配置", i + 1, emails.len());
+            }
+        }
+        
+        // 根据邮箱类型调用不同的注册函数
+        let result = match email_type_str {
+            "cloudflare_temp" => {
+                log_info!("📧 [任务 {}/{}] 使用 Cloudflare 临时邮箱注册", i + 1, emails.len());
+                register_with_cloudflare_temp_email(
+                    app.clone(),
+                    first_name.clone(),
+                    last_name.clone(),
+                    use_incognito,
+                    enable_bank_card_binding,
+                )
+                .await
+            }
+            "outlook" => {
+                log_info!("📧 [任务 {}/{}] 使用 Outlook 邮箱注册: {}", i + 1, emails.len(), email);
+                register_with_outlook(
+                    app.clone(),
+                    email.clone(),
+                    first_name.clone(),
+                    last_name.clone(),
+                    use_incognito,
+                    enable_bank_card_binding,
+                )
+                .await
+            }
+            _ => {
+                // custom 或其他：使用指定邮箱
+                log_info!("📧 [任务 {}/{}] 使用自定义邮箱注册: {}", i + 1, emails.len(), email);
+                register_with_email(
+                    app.clone(),
+                    email.clone(),
+                    first_name.clone(),
+                    last_name.clone(),
+                    use_incognito,
+                    enable_bank_card_binding,
+                )
+                .await
+            }
+        };
+        
+        // 获取实际使用的邮箱（从结果中提取）
+        let actual_email = match &result {
+            Ok(result_data) => {
+                result_data
+                    .get("accountInfo")
+                    .and_then(|info| info.get("email"))
+                    .and_then(|e| e.as_str())
+                    .unwrap_or(&email)
+                    .to_string()
+            }
+            Err(_) => email.clone(),
+        };
+        
+        match result {
+            Ok(result) => {
+                log_info!("✅ [任务 {}/{}] 注册成功: {}", i + 1, emails.len(), actual_email);
+                results.push(serde_json::json!({
+                    "index": i,
+                    "email": actual_email,
+                    "success": true,
+                    "result": result
+                }));
+            }
+            Err(e) => {
+                log_error!("❌ [任务 {}/{}] 注册失败: {} - {}", i + 1, emails.len(), actual_email, e);
+                errors.push(serde_json::json!({
+                    "index": i,
+                    "email": actual_email,
+                    "success": false,
+                    "error": e
+                }));
+            }
+        }
+        
+        // 添加短暂延迟，让系统有时间清理资源
+        if i < emails.len() - 1 {
+            log_info!("⏱️  等待 2 秒后开始下一个注册任务...");
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        }
+    }
+
+    // 恢复原始银行卡配置
+    if let Err(e) = save_bank_card_config(original_config).await {
+        log_warn!("⚠️ 恢复原始银行卡配置失败: {}", e);
+    } else {
+        log_info!("✅ 已恢复原始银行卡配置");
+    }
+
+    log_info!(
+        "🎉 批量注册完成: {} 成功, {} 失败",
+        results.len(),
+        errors.len()
+    );
+
+    Ok(serde_json::json!({
+        "success": true,
+        "total": emails.len(),
+        "succeeded": results.len(),
+        "failed": errors.len(),
+        "results": results,
+        "errors": errors
+    }))
+}
+
 #[tauri::command]
 async fn register_with_email(
     app: tauri::AppHandle,
@@ -3697,7 +3871,6 @@ async fn open_cursor_dashboard(
     match webview_window {
         Ok(window) => {
             // 添加窗口关闭事件监听器
-            let app_handle_clone = app_handle.clone();
             window.on_window_event(move |event| {
                 match event {
                     tauri::WindowEvent::CloseRequested { .. } => {
@@ -3823,6 +3996,7 @@ pub fn run() {
             register_cursor_account,
             create_temp_email,
             register_with_email,
+            batch_register_with_email,
             register_with_cloudflare_temp_email,
             register_with_outlook,
             submit_verification_code,

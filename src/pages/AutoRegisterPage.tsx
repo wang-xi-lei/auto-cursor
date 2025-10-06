@@ -75,6 +75,10 @@ export const AutoRegisterPage: React.FC = () => {
   const [showEmailConfig, setShowEmailConfig] = useState(false);
   const [emailConfig, setEmailConfig] = useState<EmailConfig | null>(null);
 
+  // 批量注册相关状态
+  const [batchCount, setBatchCount] = useState(1);
+  const [batchEmails, setBatchEmails] = useState<string[]>([""]);
+
   // 同步ref和state
   useEffect(() => {
     isRegisteringRef.current = isRegistering;
@@ -480,6 +484,166 @@ export const AutoRegisterPage: React.FC = () => {
   const handleGenerateRandom = () => {
     generateRandomInfo();
     setToast({ message: "已生成随机账户信息", type: "info" });
+  };
+
+  // 当批量数量变化时，更新邮箱数组
+  useEffect(() => {
+    if (emailType === "custom") {
+      const newEmails = Array(batchCount)
+        .fill("")
+        .map((_, i) => batchEmails[i] || "");
+      setBatchEmails(newEmails);
+    }
+  }, [batchCount, emailType]);
+
+  // 批量注册处理函数
+  const handleBatchRegister = async () => {
+    if (batchCount < 1) {
+      setToast({ message: "请输入有效的注册数量", type: "error" });
+      return;
+    }
+
+    // 验证自定义邮箱是否都已填写
+    if (emailType === "custom") {
+      const emptyEmails = batchEmails.filter(
+        (email) => !email || !email.includes("@")
+      );
+      if (emptyEmails.length > 0) {
+        setToast({
+          message: "请填写所有邮箱地址",
+          type: "error",
+        });
+        return;
+      }
+    }
+
+    // 验证银行卡配置
+    if (enableBankCardBinding) {
+      try {
+        const configList = await BankCardConfigService.getBankCardConfigList();
+        if (configList.cards.length < batchCount) {
+          setToast({
+            message: `银行卡配置数量(${configList.cards.length})少于注册数量(${batchCount})，请先配置足够的银行卡`,
+            type: "error",
+          });
+          return;
+        }
+      } catch (error) {
+        setToast({ message: `读取银行卡配置失败: ${error}`, type: "error" });
+        return;
+      }
+    }
+
+    // 准备批量注册数据
+    const emails: string[] = [];
+    const firstNames: string[] = [];
+    const lastNames: string[] = [];
+
+    for (let i = 0; i < batchCount; i++) {
+      if (emailType === "custom") {
+        // 自定义邮箱：使用用户输入的邮箱列表
+        emails.push(batchEmails[i] || "");
+      } else if (emailType === "outlook") {
+        // Outlook邮箱：使用配置的Outlook邮箱
+        emails.push(outlookEmail || "");
+      } else {
+        // Cloudflare临时邮箱：传空字符串，后端会自动生成
+        emails.push("");
+      }
+
+      // 使用输入的姓名或随机生成
+      if (useRandomInfo || !form.firstName || !form.lastName) {
+        const randomInfo = generateBatchRandomInfo();
+        firstNames.push(randomInfo.firstName);
+        lastNames.push(randomInfo.lastName);
+      } else {
+        firstNames.push(form.firstName);
+        lastNames.push(form.lastName);
+      }
+    }
+
+    setIsLoading(true);
+    setIsRegistering(true);
+    setRegistrationResult(null);
+    realtimeOutputRef.current = [];
+    setRealtimeOutput([]);
+    setToast({ message: `开始批量注册 ${batchCount} 个账户...`, type: "info" });
+
+    try {
+      const result = await invoke<any>("batch_register_with_email", {
+        emails,
+        firstNames,
+        lastNames,
+        emailType,
+        outlookMode: emailType === "outlook" ? outlookMode : undefined,
+        useIncognito,
+        enableBankCardBinding,
+      });
+
+      console.log("批量注册结果:", result);
+
+      if (result.success) {
+        setToast({
+          message: `批量注册完成！成功: ${result.succeeded}, 失败: ${result.failed}`,
+          type: result.failed > 0 ? "info" : "success",
+        });
+
+        // 显示详细结果
+        setRegistrationResult({
+          success: true,
+          message: `批量注册完成：${result.succeeded}/${result.total} 成功`,
+          details: [
+            ...result.results.map(
+              (r: any) => `✅ [${r.index + 1}] ${r.email}: 成功`
+            ),
+            ...result.errors.map(
+              (e: any) => `❌ [${e.index + 1}] ${e.email}: ${e.error}`
+            ),
+          ],
+        });
+      } else {
+        setToast({ message: result.message || "批量注册失败", type: "error" });
+      }
+    } catch (error) {
+      console.error("批量注册错误:", error);
+      setToast({ message: `批量注册失败: ${error}`, type: "error" });
+    } finally {
+      setIsLoading(false);
+      setIsRegistering(false);
+    }
+  };
+
+  // 生成随机姓名
+  const generateBatchRandomInfo = () => {
+    const firstNames = [
+      "Alex",
+      "Jordan",
+      "Taylor",
+      "Casey",
+      "Morgan",
+      "Riley",
+      "Avery",
+      "Quinn",
+      "Skyler",
+      "Cameron",
+    ];
+    const lastNames = [
+      "Smith",
+      "Johnson",
+      "Williams",
+      "Brown",
+      "Jones",
+      "Garcia",
+      "Miller",
+      "Davis",
+      "Rodriguez",
+      "Martinez",
+    ];
+
+    return {
+      firstName: firstNames[Math.floor(Math.random() * firstNames.length)],
+      lastName: lastNames[Math.floor(Math.random() * lastNames.length)],
+    };
   };
 
   // 加载银行卡配置
@@ -995,6 +1159,95 @@ export const AutoRegisterPage: React.FC = () => {
                   "🚀 开始注册"
                 )}
               </Button>
+            </div>
+
+            {/* 批量注册 */}
+            <div className="p-4 mt-6 border-t-2 border-blue-200">
+              <h4 className="mb-3 text-sm font-medium text-gray-700">
+                📦 批量注册（实验性功能）
+              </h4>
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="flex-1">
+                    <label className="block mb-1 text-sm text-gray-600">
+                      注册数量
+                    </label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={batchCount}
+                      onChange={(e) =>
+                        setBatchCount(parseInt(e.target.value) || 1)
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="输入注册数量 (1-10)"
+                      disabled={isLoading}
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      ⚠️ 需要配置相同数量的银行卡
+                      {emailType === "custom" && " 和邮箱"}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 pt-6">
+                    <Button
+                      onClick={handleBatchRegister}
+                      disabled={isLoading || batchCount < 1}
+                      className="flex items-center"
+                    >
+                      {isLoading ? (
+                        <>
+                          <LoadingSpinner size="sm" />
+                          批量注册中...
+                        </>
+                      ) : (
+                        `🚀 批量注册 (${batchCount})`
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* 自定义邮箱时显示邮箱输入列表 */}
+                {emailType === "custom" && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      📧 邮箱列表
+                    </label>
+                    <div className="grid grid-cols-1 gap-2 p-3 overflow-y-auto rounded-md bg-gray-50 max-h-60">
+                      {Array.from({ length: batchCount }).map((_, index) => (
+                        <div key={index} className="flex items-center gap-2">
+                          <span className="flex-shrink-0 w-8 text-xs font-medium text-gray-500">
+                            #{index + 1}
+                          </span>
+                          <input
+                            type="email"
+                            value={batchEmails[index] || ""}
+                            onChange={(e) => {
+                              const newEmails = [...batchEmails];
+                              newEmails[index] = e.target.value;
+                              setBatchEmails(newEmails);
+                            }}
+                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            placeholder={`请输入第 ${index + 1} 个邮箱`}
+                            disabled={isLoading}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Cloudflare 和 Outlook 提示 */}
+                {emailType !== "custom" && (
+                  <div className="p-3 rounded-md bg-blue-50">
+                    <p className="text-sm text-blue-700">
+                      {emailType === "cloudflare_temp"
+                        ? "💡 将自动为每个账号生成独立的临时邮箱"
+                        : "💡 将使用配置的 Outlook 邮箱进行批量注册"}
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 注册结果 */}

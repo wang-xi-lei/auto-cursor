@@ -280,7 +280,10 @@ export const AuthCheckPage: React.FC = () => {
               </h3>
               <div className="space-y-2">
                 {authResult.details.map((detail, index) => (
-                  <div key={index} className="p-3 text-sm bg-gray-100 rounded">
+                  <div
+                    key={index}
+                    className="p-3 overflow-auto text-sm bg-gray-100 rounded"
+                  >
                     {detail}
                   </div>
                 ))}

@@ -13,6 +13,11 @@ export interface BankCardConfig {
   billingAddressLine1: string; // 详细地址
 }
 
+// 批量注册时的银行卡配置数组
+export interface BankCardConfigList {
+  cards: BankCardConfig[];
+}
+
 // 中国省份选项
 export interface ProvinceOption {
   value: string;

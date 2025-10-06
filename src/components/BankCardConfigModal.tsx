@@ -3,6 +3,7 @@ import { Button } from "./Button";
 import { Toast } from "./Toast";
 import {
   BankCardConfig,
+  BankCardConfigList,
   CHINA_PROVINCES,
   DEFAULT_BANK_CARD_CONFIG,
 } from "../types/bankCardConfig";
@@ -20,6 +21,10 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
   onClose,
   onSave,
 }) => {
+  const [configList, setConfigList] = useState<BankCardConfigList>({
+    cards: [DEFAULT_BANK_CARD_CONFIG],
+  });
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
   const [config, setConfig] = useState<BankCardConfig>(
     DEFAULT_BANK_CARD_CONFIG
   );
@@ -36,10 +41,22 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
     }
   }, [isOpen]);
 
+  // 当选择的卡片索引变化时，更新当前配置
+  useEffect(() => {
+    if (configList.cards[currentCardIndex]) {
+      setConfig(configList.cards[currentCardIndex]);
+    }
+  }, [currentCardIndex, configList]);
+
   const loadConfig = async () => {
     try {
-      const loadedConfig = await BankCardConfigService.getBankCardConfig();
-      setConfig(loadedConfig);
+      const loadedConfigList =
+        await BankCardConfigService.getBankCardConfigList();
+      setConfigList(loadedConfigList);
+      if (loadedConfigList.cards.length > 0) {
+        setConfig(loadedConfigList.cards[0]);
+        setCurrentCardIndex(0);
+      }
     } catch (error) {
       console.error("加载银行卡配置失败:", error);
       setToast({ message: "加载配置失败", type: "error" });
@@ -48,10 +65,72 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
 
   const handleInputChange = (field: keyof BankCardConfig, value: string) => {
     setConfig((prev) => ({ ...prev, [field]: value }));
+    // 同时更新configList中的当前卡片
+    setConfigList((prev) => {
+      const newCards = [...prev.cards];
+      newCards[currentCardIndex] = {
+        ...newCards[currentCardIndex],
+        [field]: value,
+      };
+      return { cards: newCards };
+    });
+  };
+
+  const handleAddCard = () => {
+    // 使用第一张卡的账单地址信息，但银行卡信息使用默认值
+    const firstCard = configList.cards[0];
+    const newCard = {
+      ...DEFAULT_BANK_CARD_CONFIG,
+      // 复制第一张卡的账单地址信息
+      billingCountry: firstCard.billingCountry,
+      billingPostalCode: firstCard.billingPostalCode,
+      billingAdministrativeArea: firstCard.billingAdministrativeArea,
+      billingLocality: firstCard.billingLocality,
+      billingDependentLocality: firstCard.billingDependentLocality,
+      billingAddressLine1: firstCard.billingAddressLine1,
+    };
+    setConfigList((prev) => ({
+      cards: [...prev.cards, newCard],
+    }));
+    setCurrentCardIndex(configList.cards.length);
+    setConfig(newCard);
+    setToast({
+      message: "已添加新银行卡（已复制第一张卡的账单地址）",
+      type: "info",
+    });
+  };
+
+  const handleRemoveCard = async (index: number) => {
+    if (configList.cards.length === 1) {
+      setToast({ message: "至少需要保留一张银行卡", type: "error" });
+      return;
+    }
+
+    try {
+      const confirmed = await confirm(`确认删除第 ${index + 1} 张银行卡吗？`, {
+        title: "删除银行卡",
+        kind: "warning",
+      });
+
+      if (!confirmed) return;
+
+      setConfigList((prev) => ({
+        cards: prev.cards.filter((_, i) => i !== index),
+      }));
+
+      // 调整当前选中的卡片索引
+      if (currentCardIndex >= index && currentCardIndex > 0) {
+        setCurrentCardIndex(currentCardIndex - 1);
+      }
+
+      setToast({ message: "已删除银行卡", type: "success" });
+    } catch (error) {
+      console.error("删除银行卡失败:", error);
+    }
   };
 
   const handleSave = async () => {
-    // 验证配置
+    // 验证当前配置
     const validation = BankCardConfigService.validateBankCardConfig(config);
     if (!validation.isValid) {
       setToast({
@@ -89,7 +168,9 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
 
     setIsLoading(true);
     try {
-      const result = await BankCardConfigService.saveBankCardConfig(config);
+      const result = await BankCardConfigService.saveBankCardConfigList(
+        configList
+      );
       if (result.success) {
         setToast({ message: result.message, type: "success" });
         onSave?.(config);
@@ -139,7 +220,7 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
       <div className="max-w-2xl max-h-[90vh] overflow-y-auto p-6 mx-4 bg-white rounded-lg">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-medium text-gray-900">💳 银行卡配置</h3>
           <button
             onClick={onClose}
@@ -160,6 +241,52 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
               />
             </svg>
           </button>
+        </div>
+
+        {/* 卡片选择器 */}
+        <div className="p-4 mb-6 rounded-md bg-gray-50">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-medium text-gray-700">
+              银行卡列表 ({configList.cards.length} 张)
+            </label>
+            <Button
+              onClick={handleAddCard}
+              variant="secondary"
+              className="px-2 py-1 text-xs"
+            >
+              ➕ 添加银行卡
+            </Button>
+          </div>
+          <div className="flex gap-2 py-2 overflow-x-auto">
+            {configList.cards.map((card, index) => (
+              <div
+                key={index}
+                className={`relative flex-shrink-0 p-3 border-2 rounded-md cursor-pointer transition-all ${
+                  currentCardIndex === index
+                    ? "border-blue-500 bg-blue-50"
+                    : "border-gray-300 bg-white hover:border-gray-400"
+                }`}
+                onClick={() => setCurrentCardIndex(index)}
+              >
+                <div className="text-sm font-medium">卡片 {index + 1}</div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {card.cardNumber.slice(-4) || "未设置"}
+                </div>
+                {configList.cards.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveCard(index);
+                    }}
+                    className="absolute text-red-500 top-1 right-1 hover:text-red-700"
+                    title="删除"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
         <div className="space-y-6">
@@ -302,7 +429,9 @@ export const BankCardConfigModal: React.FC<BankCardConfigModalProps> = ({
                   className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 >
                   <option value="China">中国地址（需要直连网络）</option>
-                  <option value="Japan">其他地址（除中国任意地区需要手动填写地址信息，到最终绑卡页面会自动填写卡片信息，填完不会关闭浏览器）</option>
+                  <option value="Japan">
+                    其他地址（除中国任意地区需要手动填写地址信息，到最终绑卡页面会自动填写卡片信息，填完不会关闭浏览器）
+                  </option>
                 </select>
               </div>
 
