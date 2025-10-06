@@ -80,6 +80,19 @@ export const AutoRegisterPage: React.FC = () => {
     isRegisteringRef.current = isRegistering;
   }, [isRegistering]);
 
+  useEffect(() => {
+    if (showVerificationModal) {
+      // 弹窗提示
+      confirm(
+        "请手动输入验证码并请确认页面已经在输入验证码页面否则输入无效！",
+        {
+          title: "提示！",
+          kind: "info",
+        }
+      );
+    }
+  }, [showVerificationModal]);
+
   // 根据webToken获取客户端assToken
   const getClientAccessToken = (workos_cursor_session_token: string) => {
     return new Promise(async (resolve, _reject) => {
@@ -200,6 +213,20 @@ export const AutoRegisterPage: React.FC = () => {
         }
       );
 
+      // 监听验证码获取超时
+      const unlistenVerificationTimeout = await listen(
+        "verification-code-timeout",
+        (event: any) => {
+          const message = event.payload;
+          console.log("🔍 验证码获取超时:", message);
+          setShowVerificationModal(true);
+          setToast({
+            message: "自动获取验证码超时，请手动输入验证码",
+            type: "info",
+          });
+        }
+      );
+
       // 监听自动获取的验证码
       const unlistenAutoCode = await listen(
         "verification-code-auto-filled",
@@ -243,6 +270,7 @@ export const AutoRegisterPage: React.FC = () => {
         unlistenAutoCode();
         unlistenCodeFailed();
         unlistenManualInput();
+        unlistenVerificationTimeout();
       };
     };
 
@@ -1093,7 +1121,7 @@ export const AutoRegisterPage: React.FC = () => {
               输入验证码
             </h3>
             <p className="mb-4 text-sm text-gray-600">
-              请检查您的邮箱并输入6位验证码
+              请检查您的邮箱并输入6位验证码(请确认页面已经在输入验证码页面否则输入无效！)
             </p>
             <input
               type="text"

@@ -337,16 +337,25 @@ async fn get_verification_code_from_cloudflare(jwt: &str) -> Result<String, Stri
                                 return Ok(verification_code);
                             }
                         }
-                        // 1. 移除颜色代码
+                        // 1. 移除颜色代码（如 #FF5733）
                         let color_code_regex = Regex::new(r"#([0-9a-fA-F]{6})\b").unwrap();
-                        // 移除前面是+号的6位数字
-                        let content_without_plus = raw_content.replace(r"+\d{6}", "");
-                        let content_without_colors_plus =
-                            color_code_regex.replace_all(&content_without_plus, "");
+                        let content_without_colors = color_code_regex.replace_all(&raw_content, "");
+                        
+                        // 2. 移除前面是+号的6位数字（如 +123456）
+                        let plus_regex = Regex::new(r"\+\d{6}").unwrap();
+                        let content_without_plus = plus_regex.replace_all(&content_without_colors, "");
+                        
+                        // 3. 移除前面是@的6位数字（如 @123456）
+                        let at_regex = Regex::new(r"@\d{6}").unwrap();
+                        let content_without_at = at_regex.replace_all(&content_without_plus, "");
+                        
+                        // 4. 移除前面是=的6位数字（如 =123456）
+                        let equal_regex = Regex::new(r"=\d{6}").unwrap();
+                        let content_cleaned = equal_regex.replace_all(&content_without_at, "");
 
                         // 尝试第三种匹配方式：直接匹配连续的6位数字
                         let re3 = Regex::new(r"\b(\d{6})\b").unwrap();
-                        if let Some(captures) = re3.captures(&content_without_colors_plus) {
+                        if let Some(captures) = re3.captures(&content_cleaned) {
                             if let Some(code) = captures.get(1) {
                                 let verification_code = code.as_str().to_string();
                                 log_info!(
@@ -927,10 +936,21 @@ async fn add_account(
             "success": true,
             "message": format!("Account {} added successfully", email)
         })),
-        Err(e) => Ok(serde_json::json!({
-            "success": false,
-            "message": format!("Failed to add account: {}", e)
-        })),
+        Err(e) => {
+            let error_msg = e.to_string();
+            // 如果是账号已存在的错误，返回 success: true
+            if error_msg.contains("Account with this email already exists") {
+                Ok(serde_json::json!({
+                    "success": true,
+                    "message": format!("Failed to add account: {}", error_msg)
+                }))
+            } else {
+                Ok(serde_json::json!({
+                    "success": false,
+                    "message": format!("Failed to add account: {}", error_msg)
+                }))
+            }
+        }
     }
 }
 
@@ -2117,6 +2137,15 @@ async fn register_with_email(
                         }),
                     );
                 }
+                
+                // 检查验证码是否超时，需要手动输入
+                if line.contains("verification_timeout") || line.contains("manual_input_required") {
+                    log_info!("⏰ 验证码获取超时，需要用户手动输入");
+                    let _ = app_clone.emit(
+                        "verification-code-timeout",
+                        "自动获取验证码超时，请手动输入验证码",
+                    );
+                }
 
                 if let Ok(mut lines) = output_lines_clone.lock() {
                     lines.push(line);
@@ -2424,7 +2453,16 @@ async fn register_with_cloudflare_temp_email(
                         });
                     }
 
-                    // 发送实时输出到前端
+                         // 检查验证码是否超时，需要手动输入
+                    if line_content.contains("verification_timeout") || line_content.contains("manual_input_required") {
+                        log_info!("⏰ 验证码获取超时，需要用户手动输入");
+                        let _ = app_clone.emit(
+                            "verification-code-timeout",
+                            "自动获取验证码超时，请手动输入验证码",
+                        );
+                    }
+
+                    // 发送实时输出到前端       
                     if let Err(e) = app_clone.emit(
                         "registration-output",
                         serde_json::json!({
@@ -2468,8 +2506,8 @@ async fn register_with_cloudflare_temp_email(
     // 我们可以通过检查临时文件或其他方式来获取最终结果
     // 简化处理：返回一个成功的结果，具体的注册状态通过实时输出已经传递给前端
     let result = serde_json::json!({
-        "success": true,
-        "message": "注册流程已完成",
+        // "success": true,
+        // "message": "注册流程已完成",
         "email": email,
         "email_type": "cloudflare_temp"
     });
@@ -3203,6 +3241,294 @@ async fn auto_login_and_get_cookie(
 }
 
 #[tauri::command]
+async fn verification_code_login(
+    app: tauri::AppHandle,
+    email: String,
+    verification_code: String,
+    show_window: Option<bool>,
+) -> Result<serde_json::Value, String> {
+    log_info!("🚀 开始验证码登录: {}", email);
+
+    // 检查是否已经有同名窗口，如果有则关闭
+    if let Some(existing_window) = app.get_webview_window("verification_code_login") {
+        log_info!("🔄 关闭现有的验证码登录窗口");
+        if let Err(e) = existing_window.close() {
+            log_error!("❌ Failed to close existing verification code login window: {}", e);
+        } else {
+            log_info!("✅ Existing verification code login window closed successfully");
+        }
+        // 等待一小段时间确保窗口完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+
+    // 根据参数决定是否显示窗口
+    let should_show_window = show_window.unwrap_or(false);
+    log_info!("🖥️ 窗口显示设置: {}", if should_show_window { "显示" } else { "隐藏" });
+    
+    // 创建新的 WebView 窗口（根据配置显示/隐藏，启用无痕模式）
+    let webview_window = tauri::WebviewWindowBuilder::new(
+        &app,
+        "verification_code_login",
+        tauri::WebviewUrl::External("https://authenticator.cursor.sh/".parse().unwrap()),
+    )
+    .title("Cursor - 验证码登录")
+    .inner_size(1200.0, 800.0)
+    .resizable(true)
+    .visible(should_show_window) // 根据参数决定是否显示
+    .incognito(true) // 启用无痕模式
+    .on_page_load(move |window, _payload| {
+        let email_clone = email.clone();
+        let code_clone = verification_code.clone();
+        
+        // 创建验证码登录脚本（先用自动登录的脚本，你后面修改）
+        let login_script = format!(
+            r#"
+            (function() {{
+                console.log('验证码登录脚本已注入');
+                
+                function performLogin() {{
+                    console.log('开始执行验证码登录流程');
+                    console.log('Current page URL:', window.location.href);
+                    console.log('Page title:', document.title);
+                    
+                    // 检查是否已经登录成功（在dashboard页面）
+                    if (window.location.href.includes('/dashboard')) {{
+                        console.log('检测到已经在dashboard页面，直接获取cookie');
+                        window.__TAURI_INTERNALS__.invoke('check_verification_login_cookies');
+                        return;
+                    }}
+                    
+                    // 等待页面完全加载
+                    if (document.readyState !== 'complete') {{
+                        console.log('页面未完全加载，等待中...');
+                        return;
+                    }}
+                    
+                    // TODO: 你需要修改这里的脚本来实现验证码登录
+                    // 步骤1: 填写邮箱
+                    setTimeout(() => {{
+                        console.log('步骤1: 填写邮箱');
+                        const emailInput = document.querySelector('.rt-reset .rt-TextFieldInput');
+                        if (emailInput) {{
+                            emailInput.value = '{}';
+                            console.log('邮箱已填写:', emailInput.value);
+                            
+                            // 触发input事件以确保值被正确设置
+                            emailInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                            emailInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                        }} else {{
+                            console.error('未找到邮箱输入框');
+                        }}
+                    }}, 1000);
+                    
+                    // 步骤2: 点击第一个按钮（继续）
+                    setTimeout(() => {{
+                        console.log('步骤2: 点击继续按钮');
+                        const firstButton = document.querySelector('.BrandedButton');
+                        if (firstButton) {{
+                            firstButton.click();
+                            console.log('继续按钮已点击');
+                        }} else {{
+                            console.error('未找到继续按钮');
+                        }}
+                    }}, 2000);
+                            
+                     // 点击验证码登录
+                     setTimeout(() => {{
+                        console.log('步骤2: 点击继续按钮');
+                        const firstButton2 = document.querySelector('.rt-Button.ak-AuthButton');
+
+                        if (firstButton2) {{
+                            firstButton2.click();
+                            console.log('继续按钮已点击');
+                        }} else {{
+                            console.error('未找到继续按钮');
+                        }}
+                    }}, 6000);
+                    
+                    // // 步骤3: 填写验证码（这里需要修改）
+                    // setTimeout(() => {{
+                    //     console.log('步骤3: 填写验证码');
+                    //     // TODO: 修改为验证码输入框的选择器
+                    //     const codeInput = document.querySelector('[name="verification_code"]');
+                    //     if (codeInput) {{
+                    //         codeInput.value = '{}';
+                    //         console.log('验证码已填写');
+                            
+                    //         // 触发input事件以确保值被正确设置
+                    //         codeInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                    //         codeInput.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                    //     }} else {{
+                    //         console.error('未找到验证码输入框');
+                    //     }}
+                    // }}, 6000);
+                    
+                    // // 步骤4: 点击登录按钮
+                    // setTimeout(() => {{
+                    //     console.log('步骤4: 点击登录按钮');
+                    //     const loginButton = document.querySelector('.BrandedButton');
+                    //     if (loginButton) {{
+                    //         loginButton.click();
+                    //         console.log('登录按钮已点击');
+                            
+                    //         // 等待登录完成后检查cookie
+                    //         setTimeout(() => {{
+                    //             console.log('检查登录状态和cookie');
+                    //             checkLoginSuccess();
+                    //         }}, 3000);
+                    //     }} else {{
+                    //         console.error('未找到登录按钮');
+                    //     }}
+                    // }}, 9000);
+                }}
+                
+                function checkLoginSuccess() {{
+                    console.log('检查登录是否成功');
+                    console.log('当前URL:', window.location.href);
+                    
+                    // 检查是否登录成功（通过URL变化或页面元素判断）
+                    if (window.location.href.includes('/dashboard')) {{
+                        console.log('登录成功，通知Rust获取cookie');
+                        // 通知Rust后端登录成功，让Rust获取httpOnly cookie
+                        // window.__TAURI_INTERNALS__.invoke('check_verification_login_cookies');
+                    }} else {{
+                        console.log('登录可能未完成，继续检查...');
+                        // 再次检查
+                        setTimeout(() => {{
+                            checkLoginSuccess();
+                        }}, 2000);
+                    }}
+                }}
+                
+                // 监听URL变化（用于检测重定向）
+                let lastUrl = location.href;
+                new MutationObserver(() => {{
+                    const url = location.href;
+                    if (url !== lastUrl) {{
+                        lastUrl = url;
+                        console.log('检测到URL变化:', url);
+                        // 如果重定向到dashboard，直接获取cookie
+                        if (url.includes('dashboard') || url.includes('app')) {{
+                            console.log('重定向到dashboard，获取cookie');
+                            setTimeout(() => {{
+                                // window.__TAURI_INTERNALS__.invoke('check_verification_login_cookies');
+                            }}, 1000);
+                        }}
+                    }}
+                }}).observe(document, {{ subtree: true, childList: true }});
+
+                // 检查页面加载状态
+                if (document.readyState === 'complete') {{
+                    console.log('页面已经加载完成，开始登录流程');
+                    setTimeout(() => {{
+                        performLogin();
+                    }}, 1000);
+                }} else {{
+                    // 监听页面加载完成事件
+                    window.addEventListener('load', function() {{
+                        console.log('window load 事件触发，开始登录流程');
+                        setTimeout(() => {{
+                            performLogin();
+                        }}, 1000);
+                    }});
+                }}
+            }})();
+            "#,
+            email_clone, code_clone
+        );
+
+        if let Err(e) = window.eval(&login_script) {
+            log_error!("❌ Failed to inject verification code login script: {}", e);
+        } else {
+            log_info!("✅ Verification code login script injected successfully");
+        }
+    })
+    .build();
+
+    match webview_window {
+        Ok(_window) => {
+            let message = if should_show_window {
+                "验证码登录窗口已打开，正在执行登录流程..."
+            } else {
+                "正在后台执行验证码登录流程..."
+            };
+            log_info!("✅ Successfully created verification code login WebView window ({})", if should_show_window { "visible" } else { "hidden" });
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "message": message
+            }))
+        }
+        Err(e) => {
+            log_error!("❌ Failed to create verification code login WebView window: {}", e);
+            Ok(serde_json::json!({
+                "success": false,
+                "message": format!("无法打开验证码登录窗口: {}", e)
+            }))
+        }
+    }
+}
+
+#[tauri::command]
+async fn check_verification_login_cookies(app: tauri::AppHandle) -> Result<(), String> {
+    log_info!("🔍 开始检查验证码登录Cookie");
+    
+    if let Some(window) = app.get_webview_window("verification_code_login") {
+        // 尝试多个可能的URL来获取cookie
+        let urls_to_try = vec![
+            "https://authenticator.cursor.sh/",
+            "https://cursor.com/",
+            "https://app.cursor.com/",
+            "https://www.cursor.com/",
+        ];
+        
+        for url_str in urls_to_try {
+            log_info!("🔍 尝试从 {} 获取cookie", url_str);
+            let url = url_str.parse().map_err(|e| format!("Invalid URL {}: {}", url_str, e))?;
+        
+            match window.cookies_for_url(url) {
+                Ok(cookies) => {
+                    log_info!("📋 从 {} 找到 {} 个cookie", url_str, cookies.len());
+                    
+                    // 查找 WorkosCursorSessionToken
+                    for cookie in cookies {
+                        log_info!("🍪 Cookie: {} = {}...", cookie.name(), &cookie.value()[..cookie.value().len().min(20)]);
+                        
+                        if cookie.name() == "WorkosCursorSessionToken" {
+                            let token = cookie.value().to_string();
+                            log_info!("✅ 找到 WorkosCursorSessionToken: {}...", &token[..token.len().min(50)]);
+                            
+                            // 发送事件到前端
+                            let _ = app.emit("verification-login-cookie-found", serde_json::json!({
+                                "WorkosCursorSessionToken": token
+                            }));
+                            
+                            // 关闭窗口
+                            if let Err(e) = window.close() {
+                                log_error!("❌ 关闭验证码登录窗口失败: {}", e);
+                            } else {
+                                log_info!("✅ 验证码登录窗口已关闭");
+                            }
+                            
+                            return Ok(());
+                        }
+                    }
+                }
+                Err(e) => {
+                    log_error!("❌ 从 {} 获取cookie失败: {}", url_str, e);
+                }
+            }
+        }
+        
+        log_error!("❌ 未找到 WorkosCursorSessionToken");
+        Err("未找到登录Token".to_string())
+    } else {
+        log_error!("❌ 未找到验证码登录窗口");
+        Err("验证码登录窗口不存在".to_string())
+    }
+}
+
+#[tauri::command]
 async fn check_login_cookies(app: tauri::AppHandle) -> Result<(), String> {
     log_info!("🔍 开始检查登录Cookie");
     
@@ -3514,7 +3840,9 @@ pub fn run() {
             auto_login_success,
             auto_login_failed,
             show_auto_login_window,
-            open_cursor_dashboard
+            open_cursor_dashboard,
+            verification_code_login,
+            check_verification_login_cookies
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

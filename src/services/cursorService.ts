@@ -99,4 +99,22 @@ export class CursorService {
   static async clearCustomCursorPath(): Promise<string> {
     return await invoke<string>("clear_custom_cursor_path");
   }
+
+  // 验证码登录
+  static async verificationCodeLogin(
+    email: string,
+    verificationCode: string,
+    showWindow?: boolean
+  ): Promise<{ success: boolean; message: string }> {
+    return await invoke("verification_code_login", {
+      email,
+      verificationCode,
+      showWindow,
+    });
+  }
+
+  // 检查验证码登录的 Cookie
+  static async checkVerificationLoginCookies(): Promise<void> {
+    return await invoke("check_verification_login_cookies");
+  }
 }

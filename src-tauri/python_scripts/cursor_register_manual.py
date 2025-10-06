@@ -199,11 +199,14 @@ class CursorRegistration:
                     except Exception as e:
                         print(f"{Fore.RED}{EMOJI['ERROR']} 清理文件失败 {file_path}: {e}{Style.RESET_ALL}")
 
-            # 等待文件出现，最多等待60秒（减少等待时间）
-            max_wait = 60
+            # 第一阶段：自动获取验证码，等待30秒
+            initial_wait = 30
             wait_time = 0
 
-            while wait_time < max_wait:
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试自动获取验证码 (最多等待 {initial_wait} 秒)...{Style.RESET_ALL}")
+
+            # 30秒内尝试自动获取
+            while wait_time < initial_wait:
                 # 检查是否有取消请求
                 if os.path.exists(cancel_file):
                     print(f"{Fore.YELLOW}{EMOJI['INFO']} 收到取消请求，停止等待验证码{Style.RESET_ALL}")
@@ -226,29 +229,84 @@ class CursorRegistration:
 
                         # 验证验证码格式
                         if code.isdigit() and len(code) == 6:
-                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 收到验证码: {code}{Style.RESET_ALL}")
+                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 自动获取验证码成功: {code}{Style.RESET_ALL}")
+                            return code
+                        elif code.lower() == 'cancel':
+                            print(f"{Fore.YELLOW}{EMOJI['INFO']} 用户取消验证码输入{Style.RESET_ALL}")
+                            return None
+
+                    except Exception as e:
+                        print(f"{Fore.RED}{EMOJI['ERROR']} 读取验证码文件失败: {str(e)}{Style.RESET_ALL}")
+
+                # 每10秒显示一次等待状态
+                if wait_time % 10 == 0 and wait_time > 0:
+                    remaining = initial_wait - wait_time
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 等待自动获取验证码... (剩余 {remaining} 秒){Style.RESET_ALL}")
+
+                time.sleep(1)
+                wait_time += 1
+
+            # 30秒超时后，通知前端弹出手动输入框
+            print(f"{Fore.YELLOW}{EMOJI['WARNING']} 自动获取验证码超时 ({initial_wait}秒){Style.RESET_ALL}")
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 等待用户手动输入验证码...{Style.RESET_ALL}")
+            
+            # 输出JSON格式通知前端超时，需要弹出手动输入框
+            print(json.dumps({
+                "action": "verification_timeout",
+                "message": "自动获取验证码超时，请手动输入验证码",
+                "status": "manual_input_required"
+            }, ensure_ascii=False))
+            
+            # 第二阶段：无限等待用户手动输入
+            print(f"{Fore.YELLOW}{EMOJI['INFO']} 程序将等待用户手动输入验证码...{Style.RESET_ALL}")
+            manual_wait_time = 0
+            
+            while True:
+                # 检查是否有取消请求
+                if os.path.exists(cancel_file):
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 收到取消请求，停止等待验证码{Style.RESET_ALL}")
+                    try:
+                        os.remove(cancel_file)
+                    except:
+                        pass
+                    return None
+
+                if os.path.exists(code_file):
+                    try:
+                        with open(code_file, 'r') as f:
+                            code = f.read().strip()
+
+                        # 删除临时文件
+                        try:
+                            os.remove(code_file)
+                        except:
+                            pass
+
+                        # 验证验证码格式
+                        if code.isdigit() and len(code) == 6:
+                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 收到手动输入的验证码: {code}{Style.RESET_ALL}")
                             return code
                         elif code.lower() == 'cancel':
                             print(f"{Fore.YELLOW}{EMOJI['INFO']} 用户取消验证码输入{Style.RESET_ALL}")
                             return None
                         else:
-                            print(f"{Fore.RED}{EMOJI['ERROR']} 无效的验证码格式: {code}{Style.RESET_ALL}")
-                            return None
+                            print(f"{Fore.RED}{EMOJI['ERROR']} 无效的验证码格式: {code}，请重新输入{Style.RESET_ALL}")
+                            # 清理错误的文件
+                            if os.path.exists(code_file):
+                                try:
+                                    os.remove(code_file)
+                                except:
+                                    pass
 
                     except Exception as e:
                         print(f"{Fore.RED}{EMOJI['ERROR']} 读取验证码文件失败: {str(e)}{Style.RESET_ALL}")
-                        return None
 
-                # 每10秒显示一次等待状态
-                if wait_time % 10 == 0 and wait_time > 0:
-                    remaining = max_wait - wait_time
-                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 仍在等待验证码... (剩余 {remaining} 秒){Style.RESET_ALL}")
+                # 每30秒提示一次还在等待
+                if manual_wait_time % 30 == 0 and manual_wait_time > 0:
+                    print(f"{Fore.CYAN}{EMOJI['INFO']} 仍在等待手动输入验证码... (已等待 {manual_wait_time} 秒){Style.RESET_ALL}")
 
                 time.sleep(1)
-                wait_time += 1
-
-            print(f"{Fore.RED}{EMOJI['ERROR']} 等待验证码超时 ({max_wait}秒){Style.RESET_ALL}")
-            return None
+                manual_wait_time += 1
 
         except Exception as e:
             print(f"{Fore.RED}{EMOJI['ERROR']} {self.translator.get('register.code_input_failed', error=str(e)) if self.translator else f'验证码输入失败: {str(e)}'}{Style.RESET_ALL}")

@@ -27,9 +27,9 @@ export const TokenManagePage: React.FC = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showQuickSwitchForm, setShowQuickSwitchForm] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [addAccountType, setAddAccountType] = useState<"token" | "email">(
-    "token"
-  ); // 新增：添加账户类型选择
+  const [addAccountType, setAddAccountType] = useState<
+    "token" | "email" | "verification_code"
+  >("token"); // 新增：添加账户类型选择
   const [newEmail, setNewEmail] = useState("");
   const [newToken, setNewToken] = useState("");
   const [newPassword, setNewPassword] = useState(""); // 新增：密码字段
@@ -37,6 +37,7 @@ export const TokenManagePage: React.FC = () => {
   const [newWorkosSessionToken, setNewWorkosSessionToken] = useState("");
   const [autoLoginLoading, setAutoLoginLoading] = useState(false); // 新增：自动登录loading状态
   const [showLoginWindow, setShowLoginWindow] = useState(false); // 新增：是否显示登录窗口
+  const [fetchingAccessToken, setFetchingAccessToken] = useState(false); // 获取AccessToken加载状态
   const [_autoLoginTimeout, setAutoLoginTimeout] = useState(false); // 新增：30秒超时状态
   const [showCancelLoginButton, setShowCancelLoginButton] = useState(false); // 新增：是否显示取消登录按钮
   const [openMenuEmail, setOpenMenuEmail] = useState<string | null>(null); // 新增：控制哪个账户的操作菜单打开
@@ -265,6 +266,125 @@ export const TokenManagePage: React.FC = () => {
         }
       );
 
+      // 验证码登录事件监听器
+      const verificationLoginSuccessUnlisten = await listen(
+        "verification-login-cookie-found",
+        async (event: any) => {
+          console.log(
+            "Verification login success event received",
+            event.payload
+          );
+
+          // 清除超时计时器
+          if (autoLoginTimerRef.current) {
+            window.clearTimeout(autoLoginTimerRef.current);
+          }
+
+          const webToken = event.payload?.WorkosCursorSessionToken;
+          if (webToken) {
+            // 显示获取AccessToken的提示
+            setToast({
+              message:
+                "验证码登录成功！WebToken获取成功！正在获取AccessToken...",
+              type: "success",
+            });
+
+            try {
+              // 获取AccessToken
+              const accessTokenData = await getClientAccessToken(webToken);
+              console.log("AccessToken data:", accessTokenData);
+
+              if (accessTokenData && (accessTokenData as any).accessToken) {
+                const accessToken = (accessTokenData as any).accessToken;
+                const refreshToken =
+                  (accessTokenData as any).refreshToken || accessToken;
+
+                // 显示保存账户的提示
+                setToast({
+                  message: "AccessToken获取成功！正在保存账户信息...",
+                  type: "success",
+                });
+
+                // 自动保存账户 - 使用ref中的邮箱
+                const currentEmail = currentEmailRef.current; // 从ref获取当前邮箱
+                console.log(currentEmail, "currentEmail");
+                const result = await AccountService.addAccount(
+                  currentEmail,
+                  accessToken,
+                  refreshToken,
+                  webToken
+                );
+
+                if (result.success) {
+                  setToast({
+                    message: "账户添加成功！所有Token已自动获取并保存",
+                    type: "success",
+                  });
+
+                  await confirm(
+                    "账户添加成功：\n\n" +
+                      `${currentEmail}账户所有Token已自动获取并保存\n`,
+                    {
+                      title: "账户添加成功",
+                      kind: "info",
+                    }
+                  );
+
+                  // 清空表单并关闭
+                  setNewEmail("");
+                  setNewPassword("");
+                  setNewToken("");
+                  setNewRefreshToken("");
+                  setNewWorkosSessionToken("");
+                  currentEmailRef.current = ""; // 也清空ref
+                  setShowAddForm(false);
+                  setAutoLoginLoading(false);
+                  setAutoLoginTimeout(false);
+                  setShowCancelLoginButton(false);
+                  setShowLoginWindow(false);
+
+                  // 刷新账户列表
+                  await loadAccounts();
+                } else {
+                  setToast({
+                    message: `保存账户失败: ${result.message}`,
+                    type: "error",
+                  });
+                  setAutoLoginLoading(false);
+                  setAutoLoginTimeout(false);
+                  setShowCancelLoginButton(false);
+                }
+              } else {
+                // 如果获取AccessToken失败，至少保存WebToken
+                setNewWorkosSessionToken(webToken);
+                setToast({
+                  message: "获取AccessToken失败，但WebToken已填充，请手动添加",
+                  type: "error",
+                });
+                setAutoLoginLoading(false);
+                setAutoLoginTimeout(false);
+                setShowCancelLoginButton(false);
+              }
+            } catch (error) {
+              console.error("获取AccessToken失败:", error);
+              // 如果获取AccessToken失败，至少保存WebToken
+              setNewWorkosSessionToken(webToken);
+              setToast({
+                message: "获取AccessToken失败，但WebToken已填充，请手动添加",
+                type: "error",
+              });
+              setAutoLoginLoading(false);
+              setAutoLoginTimeout(false);
+              setShowCancelLoginButton(false);
+            }
+          } else {
+            setAutoLoginLoading(false);
+            setAutoLoginTimeout(false);
+            setShowCancelLoginButton(false);
+          }
+        }
+      );
+
       cleanupListeners = () => {
         successUnlisten();
         failedUnlisten();
@@ -272,6 +392,7 @@ export const TokenManagePage: React.FC = () => {
         bindCardFailedUnlisten();
         autoLoginSuccessUnlisten();
         autoLoginFailedUnlisten();
+        verificationLoginSuccessUnlisten();
       };
     };
 
@@ -346,40 +467,93 @@ export const TokenManagePage: React.FC = () => {
     });
   };
 
+  // 处理获取AccessToken按钮点击
+  const handleFetchAccessToken = async () => {
+    if (!newWorkosSessionToken.trim()) {
+      setToast({
+        message: "请先输入 WorkOS Session Token",
+        type: "error",
+      });
+      return;
+    }
+
+    setFetchingAccessToken(true);
+    try {
+      const result: any = await getClientAccessToken(
+        newWorkosSessionToken.trim()
+      );
+      if (result && result.accessToken) {
+        // 回显 AccessToken 和 RefreshToken
+        setNewToken(result.accessToken);
+        if (result.refreshToken) {
+          setNewRefreshToken(result.refreshToken);
+        }
+        setToast({
+          message: "AccessToken 获取成功！",
+          type: "success",
+        });
+      } else {
+        setToast({
+          message:
+            "获取 AccessToken 失败，请检查 WorkOS Session Token 是否正确",
+          type: "error",
+        });
+      }
+    } catch (error) {
+      console.error("获取 AccessToken 失败:", error);
+      setToast({
+        message: "获取 AccessToken 时发生错误",
+        type: "error",
+      });
+    } finally {
+      setFetchingAccessToken(false);
+    }
+  };
+
   const loadAccounts = async () => {
     try {
       setLoading(true);
       const result = await AccountService.getAccountList();
 
-      // 为每个账户获取详细信息（订阅类型、试用天数等）
+      // 先显示基本账户列表
       if (result.success && result.accounts) {
-        const accountsWithDetails = await Promise.all(
-          result.accounts.map(async (account) => {
-            try {
-              // 使用 getUserInfo 获取订阅信息（订阅类型和剩余天数）
-              const authResult = await CursorService.getUserInfo(account.token);
-              if (authResult.success && authResult.user_info?.account_info) {
-                return {
-                  ...account,
+        setAccountData(result);
+        setLoading(false); // 立即取消loading状态，显示账户列表
+
+        // 然后异步并发获取每个账户的详细信息（订阅类型、试用天数等）
+        result.accounts.forEach(async (account, index) => {
+          try {
+            // 使用 getUserInfo 获取订阅信息（订阅类型和剩余天数）
+            const authResult = await CursorService.getUserInfo(account.token);
+            if (authResult.success && authResult.user_info?.account_info) {
+              // 更新单个账户的信息
+              setAccountData((prevData: any) => {
+                if (!prevData.accounts) return prevData;
+
+                const updatedAccounts = [...prevData.accounts];
+                updatedAccounts[index] = {
+                  ...updatedAccounts[index],
                   subscription_type:
-                    authResult.user_info.account_info.subscription_type,
+                    authResult.user_info?.account_info?.subscription_type,
                   subscription_status:
-                    authResult.user_info.account_info.subscription_status,
+                    authResult.user_info?.account_info?.subscription_status,
                   trial_days_remaining:
-                    authResult.user_info.account_info.trial_days_remaining,
+                    authResult.user_info?.account_info?.trial_days_remaining,
                 };
-              }
-            } catch (error) {
-              console.error(`Failed to get info for ${account.email}:`, error);
+
+                return {
+                  ...prevData,
+                  accounts: updatedAccounts,
+                };
+              });
             }
-            return account;
-          })
-        );
-
-        result.accounts = accountsWithDetails;
+          } catch (error) {
+            console.error(`Failed to get info for ${account.email}:`, error);
+          }
+        });
+      } else {
+        setAccountData(result);
       }
-
-      setAccountData(result);
     } catch (error) {
       console.error("Failed to load accounts:", error);
       setToast({ message: "加载账户列表失败", type: "error" });
@@ -413,6 +587,10 @@ export const TokenManagePage: React.FC = () => {
       // 执行自动登录获取token
       await handleAutoLogin();
       return; // 自动登录完成后会自动填充token，用户可以再次点击添加
+    } else if (addAccountType === "verification_code") {
+      // 执行验证码登录获取token（会打开窗口让用户手动输入验证码）
+      await handleVerificationCodeLogin();
+      return; // 验证码登录完成后会自动填充token并保存账户
     }
 
     try {
@@ -496,6 +674,68 @@ export const TokenManagePage: React.FC = () => {
       setShowCancelLoginButton(false);
       setToast({
         message: "启动自动登录失败",
+        type: "error",
+      });
+    }
+  };
+
+  // 新增：验证码登录函数
+  const handleVerificationCodeLogin = async () => {
+    if (!newEmail) {
+      setToast({ message: "请填写邮箱", type: "error" });
+      return;
+    }
+
+    try {
+      setAutoLoginLoading(true);
+      setAutoLoginTimeout(false);
+      setShowCancelLoginButton(false);
+      setToast({
+        message: "正在打开登录窗口，请在窗口中输入邮箱收到的验证码...",
+        type: "success",
+      });
+
+      // 启动60秒超时计时器（给用户更多时间输入验证码）
+      if (autoLoginTimerRef.current) {
+        window.clearTimeout(autoLoginTimerRef.current);
+      }
+
+      autoLoginTimerRef.current = window.setTimeout(() => {
+        console.log("验证码登录60秒超时");
+        setAutoLoginTimeout(true);
+        setShowCancelLoginButton(true);
+        setToast({
+          message: "验证码登录超时（60秒），如需要可以点击取消登录",
+          type: "error",
+        });
+        confirm(
+          "验证码登录超时（60秒），请检查邮箱并输入验证码，如需要可以点击取消登录或者显示窗口查看登录状态",
+          {
+            title: "验证码登录超时",
+            kind: "error",
+          }
+        );
+      }, 60000); // 60秒
+
+      // 调用Rust后端的验证码登录函数（验证码传空字符串，由JS脚本处理）
+      const result = await CursorService.verificationCodeLogin(
+        newEmail,
+        "", // 验证码为空，由用户在窗口中手动输入或脚本自动获取
+        true // 验证码登录必须显示窗口
+      );
+
+      console.log("Verification code login result:", result);
+    } catch (error) {
+      console.error("Failed to start verification code login:", error);
+      // 清除计时器
+      if (autoLoginTimerRef.current) {
+        window.clearTimeout(autoLoginTimerRef.current);
+      }
+      setAutoLoginLoading(false);
+      setAutoLoginTimeout(false);
+      setShowCancelLoginButton(false);
+      setToast({
+        message: "启动验证码登录失败",
         type: "error",
       });
     }
@@ -1289,7 +1529,7 @@ export const TokenManagePage: React.FC = () => {
                 <label className="block mb-2 text-sm font-medium text-gray-700">
                   添加方式
                 </label>
-                <div className="flex space-x-4">
+                <div className="flex flex-col space-y-2">
                   <label className="flex items-center">
                     <input
                       type="radio"
@@ -1297,7 +1537,12 @@ export const TokenManagePage: React.FC = () => {
                       value="token"
                       checked={addAccountType === "token"}
                       onChange={(e) =>
-                        setAddAccountType(e.target.value as "token" | "email")
+                        setAddAccountType(
+                          e.target.value as
+                            | "token"
+                            | "email"
+                            | "verification_code"
+                        )
                       }
                       className="mr-2"
                     />
@@ -1310,7 +1555,12 @@ export const TokenManagePage: React.FC = () => {
                       value="email"
                       checked={addAccountType === "email"}
                       onChange={(e) =>
-                        setAddAccountType(e.target.value as "token" | "email")
+                        setAddAccountType(
+                          e.target.value as
+                            | "token"
+                            | "email"
+                            | "verification_code"
+                        )
                       }
                       className="mr-2"
                     />
@@ -1318,6 +1568,29 @@ export const TokenManagePage: React.FC = () => {
                       📧 使用邮箱密码{" "}
                       <span className="text-xs text-gray-500">
                         （ip需要纯净最好是直连或者干净的代理不然容易失败）
+                      </span>
+                    </span>
+                  </label>
+                  <label className="flex items-center">
+                    <input
+                      type="radio"
+                      name="addAccountType"
+                      value="verification_code"
+                      checked={addAccountType === "verification_code"}
+                      onChange={(e) =>
+                        setAddAccountType(
+                          e.target.value as
+                            | "token"
+                            | "email"
+                            | "verification_code"
+                        )
+                      }
+                      className="mr-2"
+                    />
+                    <span className="text-sm text-gray-700">
+                      📱 使用验证码{" "}
+                      <span className="text-xs text-gray-500">
+                        （需要手动从邮箱获取验证码）
                       </span>
                     </span>
                   </label>
@@ -1354,7 +1627,7 @@ export const TokenManagePage: React.FC = () => {
                       placeholder="请输入Token"
                     />
                   </div>
-                ) : (
+                ) : addAccountType === "email" ? (
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       密码
@@ -1391,6 +1664,24 @@ export const TokenManagePage: React.FC = () => {
                       </label>
                     </div>
                   </div>
+                ) : (
+                  <div>
+                    <div className="p-3 mb-3 border border-blue-200 rounded-md bg-blue-50">
+                      <p className="text-sm text-blue-800">
+                        <strong>📱 验证码登录流程：</strong>
+                        <br />
+                        1. 点击"验证码登录并添加"按钮
+                        <br />
+                        2. 系统会打开登录窗口并自动填写邮箱
+                        <br />
+                        3. Cursor会发送验证码到您的邮箱
+                        <br />
+                        4. 在打开的窗口中输入邮箱收到的验证码
+                        <br />
+                        5. 登录成功后自动获取所有Token并保存账户
+                      </p>
+                    </div>
+                  </div>
                 )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
@@ -1405,16 +1696,46 @@ export const TokenManagePage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    WorkOS Session Token (可选)
-                  </label>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      WorkOS Session Token (可选)
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleFetchAccessToken}
+                      disabled={
+                        !newWorkosSessionToken.trim() ||
+                        fetchingAccessToken ||
+                        addAccountType !== "token"
+                      }
+                      className={`inline-flex items-center px-3 py-1.5 text-xs font-medium leading-4 text-white border border-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                        !newWorkosSessionToken.trim() ||
+                        fetchingAccessToken ||
+                        addAccountType !== "token"
+                          ? "bg-gray-400 cursor-not-allowed"
+                          : "bg-blue-600 hover:bg-blue-700 focus:ring-blue-500"
+                      }`}
+                    >
+                      {fetchingAccessToken ? (
+                        <>🔄 获取中...</>
+                      ) : (
+                        <>🔑 获取 AccessToken</>
+                      )}
+                    </button>
+                  </div>
                   <textarea
                     value={newWorkosSessionToken}
                     onChange={(e) => setNewWorkosSessionToken(e.target.value)}
                     rows={3}
                     className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="请输入WorkOS Session Token (可选，用于注销账户)"
+                    placeholder="请输入WorkOS Session Token (可选，用于获取账号用量)"
                   />
+                  {addAccountType === "token" &&
+                    newWorkosSessionToken.trim() && (
+                      <p className="mt-1 text-xs text-blue-600">
+                        💡 点击右上角按钮可自动获取 AccessToken 和 RefreshToken
+                      </p>
+                    )}
                 </div>
                 <div className="flex space-x-3">
                   <button
@@ -1432,35 +1753,43 @@ export const TokenManagePage: React.FC = () => {
                         🔄{" "}
                         {addAccountType === "email"
                           ? "自动登录获取中..."
+                          : addAccountType === "verification_code"
+                          ? "验证码登录中..."
                           : "处理中..."}
                       </>
                     ) : (
                       <>
                         ✅{" "}
-                        {addAccountType === "email" ? "自动登录并添加" : "添加"}
+                        {addAccountType === "email"
+                          ? "自动登录并添加"
+                          : addAccountType === "verification_code"
+                          ? "验证码登录并添加"
+                          : "添加"}
                       </>
                     )}
                   </button>
 
                   {/* 超时后显示的取消登录按钮 */}
-                  {showCancelLoginButton && addAccountType === "email" && (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleCancelAutoLogin}
-                        className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-                      >
-                        🛑 取消登录
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleShowAutoLoginWindow}
-                        className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        👁️ 显示窗口
-                      </button>
-                    </>
-                  )}
+                  {showCancelLoginButton &&
+                    (addAccountType === "email" ||
+                      addAccountType === "verification_code") && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleCancelAutoLogin}
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                        >
+                          🛑 取消登录
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleShowAutoLoginWindow}
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                        >
+                          👁️ 显示窗口
+                        </button>
+                      </>
+                    )}
 
                   <button
                     type="button"
@@ -1592,7 +1921,32 @@ export const TokenManagePage: React.FC = () => {
                               </span>
                             )}
                           {/* 订阅类型标签 */}
-                          {account.subscription_type && (
+                          {account.subscription_type === undefined ? (
+                            // Loading 状态
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                              <svg
+                                className="animate-spin -ml-0.5 mr-1.5 h-3 w-3 text-gray-500"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                              加载中...
+                            </span>
+                          ) : account.subscription_type ? (
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 account.subscription_type
@@ -1611,20 +1965,72 @@ export const TokenManagePage: React.FC = () => {
                             >
                               {account.subscription_type}
                             </span>
-                          )}
+                          ) : null}
                           {/* 试用剩余天数 */}
-                          {account.trial_days_remaining !== undefined &&
-                            account.trial_days_remaining !== null && (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
-                                ⏰ 剩余 {account.trial_days_remaining} 天
-                              </span>
-                            )}
+                          {account.subscription_type === undefined ? (
+                            // Loading 状态
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                              <svg
+                                className="animate-spin -ml-0.5 mr-1.5 h-3 w-3 text-gray-500"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                              加载中...
+                            </span>
+                          ) : account.trial_days_remaining !== undefined &&
+                            account.trial_days_remaining !== null ? (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                              ⏰ 剩余 {account.trial_days_remaining} 天
+                            </span>
+                          ) : null}
                         </div>
                         <p className="mt-1 text-xs text-gray-500">
                           添加时间: {formatDate(account.created_at)}
                         </p>
                         {/* 订阅状态 */}
-                        {account.subscription_status && (
+                        {account.subscription_type === undefined ? (
+                          <p className="text-xs text-gray-500">
+                            订阅状态:{" "}
+                            <span className="inline-flex items-center text-gray-400">
+                              <svg
+                                className="animate-spin -ml-0.5 mr-1 h-3 w-3"
+                                xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                              >
+                                <circle
+                                  className="opacity-25"
+                                  cx="12"
+                                  cy="12"
+                                  r="10"
+                                  stroke="currentColor"
+                                  strokeWidth="4"
+                                ></circle>
+                                <path
+                                  className="opacity-75"
+                                  fill="currentColor"
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                                ></path>
+                              </svg>
+                              加载中...
+                            </span>
+                          </p>
+                        ) : account.subscription_status ? (
                           <p className="text-xs text-gray-500">
                             订阅状态:{" "}
                             <span
@@ -1641,7 +2047,7 @@ export const TokenManagePage: React.FC = () => {
                               {account.subscription_status}
                             </span>
                           </p>
-                        )}
+                        ) : null}
                         {/* <p className="text-xs text-gray-500">
                           Token: {account.token.substring(0, 20)}...
                         </p>
