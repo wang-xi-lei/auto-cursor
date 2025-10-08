@@ -702,11 +702,12 @@ def handle_sign_in(browser_tab, email, password, translator=None):
         print(f"{Fore.RED}Login process error: {str(e)}{Style.RESET_ALL}")
         return False
 
-def main(email=None, password=None, first_name=None, last_name=None, email_tab=None, controller=None, translator=None, use_incognito=True):
+def main(email=None, password=None, first_name=None, last_name=None, email_tab=None, controller=None, translator=None, use_incognito=True, skip_phone_verification=False):
     # 调试日志
     print(f"🔍 [DEBUG] new_signup.main 调用:")
     print(f"  - use_incognito 参数: {use_incognito}")
     print(f"  - use_incognito 类型: {type(use_incognito)}")
+    print(f"  - skip_phone_verification: {skip_phone_verification}")
     """Main function, can receive account information, email tab, and translator"""
     global _translator
     global _chrome_process_ids
@@ -723,8 +724,12 @@ def main(email=None, password=None, first_name=None, last_name=None, email_tab=N
         if translator:
             print(f"{Fore.CYAN}🚀 {translator.get('register.browser_started')}{Style.RESET_ALL}")
         
-        # Visit registration page
-        url = "https://authenticator.cursor.sh/sign-up"
+        # Visit registration page - change URL if skip_phone_verification is enabled
+        if skip_phone_verification:
+            url = "https://authenticator.cursor.sh/"
+            print(f"{Fore.CYAN}🔄 使用跳过手机号验证模式，访问: {url}{Style.RESET_ALL}")
+        else:
+            url = "https://authenticator.cursor.sh/sign-up"
         
         # Visit page
         simulate_human_input(page, url, config, translator)
@@ -746,6 +751,253 @@ def main(email=None, password=None, first_name=None, last_name=None, email_tab=N
                 f.write(f"Password: {password}\n")
                 f.write(f"{'='*50}\n")
         
+        # 跳过手机号验证流程
+        if skip_phone_verification:
+            print(f"{Fore.CYAN}🔄 开始跳过手机号验证流程{Style.RESET_ALL}")
+            
+            # Step 1: 输入邮箱
+            print(f"{Fore.CYAN}📧 输入邮箱: {email}{Style.RESET_ALL}")
+            email_input = page.ele("@name=email")
+            if email_input:
+                email_input.input(email)
+                time.sleep(get_random_wait_time(config, 'input_wait'))
+            else:
+                print(f"{Fore.RED}❌ 未找到邮箱输入框{Style.RESET_ALL}")
+                return False, page
+            
+            # Step 2: 点击Continue按钮
+            print(f"{Fore.CYAN}🔄 点击Continue按钮{Style.RESET_ALL}")
+            continue_button = page.ele("@type=submit")
+            if continue_button:
+                continue_button.click()
+                time.sleep(get_random_wait_time(config, 'submit_wait'))
+            else:
+                print(f"{Fore.RED}❌ 未找到Continue按钮{Style.RESET_ALL}")
+                return False, page
+            
+            # Step 3: 等待并点击"用验证码登录"按钮
+            print(f"{Fore.CYAN}🔄 等待验证码登录按钮加载...{Style.RESET_ALL}")
+            
+            # 等待验证码登录按钮出现（最多等待15秒）
+            verification_btn = None
+            max_wait = 60
+            wait_interval = 0.5
+            elapsed = 0
+            
+            while elapsed < max_wait and not verification_btn:
+                try:
+                    # 方法1: 通过value属性查找
+                    verification_btn = page.ele("@value=magic-code", timeout=0.5)
+                    if verification_btn:
+                        print(f"{Fore.GREEN}✅ 通过value属性找到验证码登录按钮{Style.RESET_ALL}")
+                        break
+                except:
+                    pass
+                
+                # 方法2: 通过data-method属性查找
+                if not verification_btn:
+                    try:
+                        verification_btn = page.ele("@data-method=email", timeout=0.5)
+                        if verification_btn:
+                            print(f"{Fore.GREEN}✅ 通过data-method属性找到验证码登录按钮{Style.RESET_ALL}")
+                            break
+                    except:
+                        pass
+                
+                # 方法3: 通过文本内容查找
+                if not verification_btn:
+                    try:
+                        buttons = page.eles("tag:button", timeout=0.5)
+                        for btn in buttons:
+                            btn_text = btn.text.lower() if btn.text else ""
+                            if "email sign-in code" in btn_text or "sign-in code" in btn_text:
+                                verification_btn = btn
+                                print(f"{Fore.GREEN}✅ 通过文本找到验证码登录按钮: {btn.text}{Style.RESET_ALL}")
+                                break
+                    except:
+                        pass
+                
+                if not verification_btn:
+                    time.sleep(wait_interval)
+                    elapsed += wait_interval
+                    if elapsed % 3 == 0:  # 每3秒打印一次
+                        print(f"{Fore.CYAN}⏳ 继续等待验证码登录按钮... ({elapsed}秒/{max_wait}秒){Style.RESET_ALL}")
+            
+            if not verification_btn:
+                print(f"{Fore.RED}❌ 等待{max_wait}秒后仍未找到验证码登录按钮{Style.RESET_ALL}")
+                return False, page
+            
+            if verification_btn:
+                verification_btn.click()
+                print(f"{Fore.GREEN}✅ 点击验证码登录按钮{Style.RESET_ALL}")
+                
+                # 等待一下让页面有反应时间
+                time.sleep(8)
+                
+                # 检查是否有Cloudflare验证
+                print(f"{Fore.CYAN}🔄 检查是否有Cloudflare验证...{Style.RESET_ALL}")
+                if handle_turnstile(page, config, translator):
+                    print(f"{Fore.GREEN}✅ Cloudflare验证通过{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.CYAN}ℹ️ 未检测到Cloudflare验证或已自动通过{Style.RESET_ALL}")
+                
+                # 等待验证码页面真正加载出来（URL包含magic-code）
+                print(f"{Fore.CYAN}⏳ 等待验证码页面加载（检测URL包含magic-code）...{Style.RESET_ALL}")
+                magic_code_page_loaded = False
+                max_wait_magic = 60
+                elapsed_magic = 0
+                wait_interval_magic = 0.5
+                
+                while elapsed_magic < max_wait_magic and not magic_code_page_loaded:
+                    try:
+                        current_url = page.url
+                        if "magic-code" in current_url.lower():
+                            magic_code_page_loaded = True
+                            print(f"{Fore.GREEN}✅ 验证码页面已加载: {current_url}{Style.RESET_ALL}")
+                            break
+                    except:
+                        pass
+                    
+                    if not magic_code_page_loaded:
+                        time.sleep(wait_interval_magic)
+                        elapsed_magic += wait_interval_magic
+                        if elapsed_magic % 3 == 0:
+                            print(f"{Fore.CYAN}⏳ 等待验证码页面加载... ({elapsed_magic}秒/{max_wait_magic}秒){Style.RESET_ALL}")
+                
+                if not magic_code_page_loaded:
+                    print(f"{Fore.YELLOW}⚠️ 等待{max_wait_magic}秒后未检测到magic-code页面，继续尝试...{Style.RESET_ALL}")
+                else:
+                    # 页面加载完成后，额外等待一下确保稳定
+                    print(f"{Fore.CYAN}⏳ 页面已加载，等待0.5秒确保稳定...{Style.RESET_ALL}")
+                    time.sleep(0.5)
+                
+                # Step 4: 返回上一页
+                print(f"{Fore.CYAN}🔄 返回上一页{Style.RESET_ALL}")
+                page.back()
+                
+                # 等待返回上一页后页面加载完成
+                print(f"{Fore.CYAN}⏳ 等待返回后页面加载...{Style.RESET_ALL}")
+                time.sleep(1.5)
+                
+                # Step 5: 等待并再次点击验证码登录按钮进入验证码页面
+                print(f"{Fore.CYAN}🔄 等待页面加载，准备再次点击验证码登录按钮...{Style.RESET_ALL}")
+                verification_btn = None
+                max_wait_2 = 60
+                wait_interval_2 = 0.5
+                elapsed_2 = 0
+                
+                while elapsed_2 < max_wait_2 and not verification_btn:
+                    try:
+                        verification_btn = page.ele("@value=magic-code", timeout=0.5)
+                        if verification_btn:
+                            print(f"{Fore.GREEN}✅ 再次通过value属性找到验证码登录按钮{Style.RESET_ALL}")
+                            break
+                    except:
+                        pass
+                    
+                    if not verification_btn:
+                        try:
+                            verification_btn = page.ele("@data-method=email", timeout=0.5)
+                            if verification_btn:
+                                print(f"{Fore.GREEN}✅ 再次通过data-method属性找到验证码登录按钮{Style.RESET_ALL}")
+                                break
+                        except:
+                            pass
+                    
+                    if not verification_btn:
+                        try:
+                            buttons = page.eles("tag:button", timeout=0.5)
+                            for btn in buttons:
+                                btn_text = btn.text.lower() if btn.text else ""
+                                if "email sign-in code" in btn_text or "sign-in code" in btn_text:
+                                    verification_btn = btn
+                                    print(f"{Fore.GREEN}✅ 再次通过文本找到验证码登录按钮{Style.RESET_ALL}")
+                                    break
+                        except:
+                            pass
+                    
+                    if not verification_btn:
+                        time.sleep(wait_interval_2)
+                        elapsed_2 += wait_interval_2
+                        if elapsed_2 % 3 == 0:
+                            print(f"{Fore.CYAN}⏳ 继续等待验证码登录按钮... ({elapsed_2}秒/{max_wait_2}秒){Style.RESET_ALL}")
+                
+                if not verification_btn:
+                    print(f"{Fore.RED}❌ 返回后等待{max_wait_2}秒仍未找到验证码登录按钮{Style.RESET_ALL}")
+                    return False, page
+                
+                if verification_btn:
+                    verification_btn.click()
+                    print(f"{Fore.GREEN}✅ 再次点击验证码登录按钮{Style.RESET_ALL}")
+                    
+                    # 等待一下让页面有反应时间
+                    time.sleep(8)
+                    
+                    # 检查是否有Cloudflare验证
+                    print(f"{Fore.CYAN}🔄 检查是否有Cloudflare验证...{Style.RESET_ALL}")
+                    if handle_turnstile(page, config, translator):
+                        print(f"{Fore.GREEN}✅ Cloudflare验证通过{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.CYAN}ℹ️ 未检测到Cloudflare验证或已自动通过{Style.RESET_ALL}")
+                    
+                    # 等待验证码输入页面加载（检查验证码输入框是否出现）
+                    print(f"{Fore.CYAN}⏳ 等待验证码输入页面加载...{Style.RESET_ALL}")
+                    code_input_loaded = False
+                    max_wait_code_page = 60
+                    elapsed_code_page = 0
+                    wait_interval_code = 0.5
+                    
+                    while elapsed_code_page < max_wait_code_page and not code_input_loaded:
+                        try:
+                            # 尝试查找验证码输入框（通常是6位数字的输入框）
+                            code_inputs = page.eles("tag:input")
+                            for inp in code_inputs:
+                                input_type = inp.attr("type") or ""
+                                input_name = inp.attr("name") or ""
+                                # 查找可能的验证码输入框
+                                if "code" in input_name.lower() or "otp" in input_name.lower() or input_type == "tel":
+                                    code_input_loaded = True
+                                    print(f"{Fore.GREEN}✅ 验证码输入页面已加载{Style.RESET_ALL}")
+                                    break
+                            
+                            if not code_input_loaded:
+                                # 也可能是URL变化了
+                                current_url = page.url
+                                if "code" in current_url.lower() or "verify" in current_url.lower():
+                                    code_input_loaded = True
+                                    print(f"{Fore.GREEN}✅ 已跳转到验证码页面: {current_url}{Style.RESET_ALL}")
+                                    break
+                        except:
+                            pass
+                        
+                        if not code_input_loaded:
+                            time.sleep(wait_interval_code)
+                            elapsed_code_page += wait_interval_code
+                            if elapsed_code_page % 5 == 0:
+                                print(f"{Fore.CYAN}⏳ 等待验证码页面加载... ({elapsed_code_page}秒/{max_wait_code_page}秒){Style.RESET_ALL}")
+                    
+                    if not code_input_loaded:
+                        print(f"{Fore.YELLOW}⚠️ 未检测到验证码输入页面，继续尝试处理...{Style.RESET_ALL}")
+                    
+                    # 额外等待一下确保页面稳定
+                    time.sleep(1)
+                    
+                    # Step 6: 获取验证码并输入
+                    print(f"{Fore.CYAN}📱 开始处理验证码...{Style.RESET_ALL}")
+                    if handle_verification_code(page, email_tab, controller, config, translator):
+                        success = True
+                        return True, page
+                    else:
+                        print(f"{Fore.RED}❌ 验证码处理失败{Style.RESET_ALL}")
+                        return False, page
+                else:
+                    print(f"{Fore.RED}❌ 再次未找到验证码登录按钮{Style.RESET_ALL}")
+                    return False, page
+            else:
+                print(f"{Fore.RED}❌ 未找到验证码登录按钮{Style.RESET_ALL}")
+                return False, page
+        
+        # 正常注册流程
         # Fill form
         if fill_signup_form(page, first_name, last_name, email, config, translator):
             if translator:

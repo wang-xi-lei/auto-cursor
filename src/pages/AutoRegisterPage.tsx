@@ -53,6 +53,7 @@ export const AutoRegisterPage: React.FC = () => {
   const [outlookEmail, setOutlookEmail] = useState("");
   const [useIncognito, setUseIncognito] = useState(true);
   const [enableBankCardBinding, setEnableBankCardBinding] = useState(true);
+  const [skipPhoneVerification, setSkipPhoneVerification] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -419,6 +420,7 @@ export const AutoRegisterPage: React.FC = () => {
             lastName: form.lastName,
             useIncognito: useIncognito,
             enableBankCardBinding: enableBankCardBinding,
+            skipPhoneVerification: skipPhoneVerification,
           }
         );
       } else if (emailType === "outlook" && outlookMode === "default") {
@@ -429,6 +431,7 @@ export const AutoRegisterPage: React.FC = () => {
           lastName: form.lastName,
           useIncognito: useIncognito,
           enableBankCardBinding: enableBankCardBinding,
+          skipPhoneVerification: skipPhoneVerification,
         });
       } else {
         // 使用自定义邮箱注册
@@ -438,6 +441,7 @@ export const AutoRegisterPage: React.FC = () => {
           lastName: form.lastName,
           useIncognito: useIncognito,
           enableBankCardBinding: enableBankCardBinding,
+          skipPhoneVerification: skipPhoneVerification,
         });
       }
 
@@ -578,6 +582,7 @@ export const AutoRegisterPage: React.FC = () => {
         outlookMode: emailType === "outlook" ? outlookMode : undefined,
         useIncognito,
         enableBankCardBinding,
+        skipPhoneVerification,
       });
 
       console.log("批量注册结果:", result);
@@ -1010,6 +1015,27 @@ export const AutoRegisterPage: React.FC = () => {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
                   勾选后将自动执行银行卡绑定流程，取消勾选则跳过银行卡绑定
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="flex items-center">
+                  <input
+                    id="skip-phone-verification"
+                    type="checkbox"
+                    checked={skipPhoneVerification}
+                    onChange={(e) => setSkipPhoneVerification(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="skip-phone-verification"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    跳过手机号验证（实验性功能）
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  启用后将使用验证码登录方式跳过手机号验证，适用于无法接收短信的情况
                 </p>
               </div>
 

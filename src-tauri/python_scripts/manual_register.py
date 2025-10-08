@@ -114,11 +114,30 @@ def main():
     email = sys.argv[1]
     app_dir = None
     
-    # 解析参数：email first_name last_name [use_incognito] [app_dir] [enable_bank_card_binding]
+    # 解析参数：email first_name last_name [use_incognito] [app_dir] [enable_bank_card_binding] [skip_phone_verification]
     enable_bank_card_binding = True  # 默认值
+    skip_phone_verification = False  # 默认值
     
-    if len(sys.argv) >= 7:
-        # 有7个或更多参数：包含银行卡绑定参数
+    if len(sys.argv) >= 8:
+        # 有8个或更多参数：包含银行卡绑定参数和跳过手机号验证参数
+        first_name = sys.argv[2]
+        last_name = sys.argv[3]
+        use_incognito = sys.argv[4]
+        app_dir_base64 = sys.argv[5]
+        enable_bank_card_binding_str = sys.argv[6]
+        skip_phone_verification_str = sys.argv[7]
+        enable_bank_card_binding = enable_bank_card_binding_str.lower() == "true"
+        skip_phone_verification = skip_phone_verification_str == "1"
+        
+        # 解码 Base64 编码的应用目录
+        try:
+            app_dir = base64.b64decode(app_dir_base64).decode('utf-8')
+            print(f"🔍 [DEBUG] Base64解码成功: {app_dir_base64} -> {app_dir}")
+        except Exception as e:
+            print(f"🔍 [DEBUG] Base64解码失败: {str(e)}, 直接使用原始值")
+            app_dir = app_dir_base64
+    elif len(sys.argv) >= 7:
+        # 有7个参数：包含银行卡绑定参数（向后兼容，没有跳过手机号验证）
         first_name = sys.argv[2]
         last_name = sys.argv[3]
         use_incognito = sys.argv[4]
@@ -179,6 +198,7 @@ def main():
     print(f"  - 无痕模式布尔值: {use_incognito_bool}")
     print(f"  - 应用目录: {app_dir}")
     print(f"  - 银行卡绑定: {enable_bank_card_binding}")
+    print(f"  - 跳过手机号验证: {skip_phone_verification}")
     print(f"  - 总参数数量: {len(sys.argv)}")
     print(f"  - 所有参数: {sys.argv}")
     print(f"🔍 [DEBUG] 详细参数解析:")
@@ -198,7 +218,7 @@ def main():
         translator = SimpleTranslator()
         
         # 创建注册实例
-        registration = CursorRegistration(translator=translator, use_incognito=use_incognito_bool, app_dir=app_dir, enable_bank_card_binding=enable_bank_card_binding)
+        registration = CursorRegistration(translator=translator, use_incognito=use_incognito_bool, app_dir=app_dir, enable_bank_card_binding=enable_bank_card_binding, skip_phone_verification=skip_phone_verification)
 
         # 设置用户信息
         registration.email_address = email

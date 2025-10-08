@@ -2035,6 +2035,7 @@ async fn batch_register_with_email(
     _outlook_mode: Option<String>, // 保留用于未来扩展
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
+    skip_phone_verification: Option<bool>,
 ) -> Result<serde_json::Value, String> {
     let email_type_str = email_type.as_deref().unwrap_or("custom");
     log_info!("🔄 批量注册 {} 个 Cursor 账户（串行模式，邮箱类型：{}）...", emails.len(), email_type_str);
@@ -2104,6 +2105,7 @@ async fn batch_register_with_email(
                     last_name.clone(),
                     use_incognito,
                     enable_bank_card_binding,
+                    skip_phone_verification,
                 )
                 .await
             }
@@ -2116,6 +2118,7 @@ async fn batch_register_with_email(
                     last_name.clone(),
                     use_incognito,
                     enable_bank_card_binding,
+                    skip_phone_verification,
                 )
                 .await
             }
@@ -2129,6 +2132,7 @@ async fn batch_register_with_email(
                     last_name.clone(),
                     use_incognito,
                     enable_bank_card_binding,
+                    skip_phone_verification,
                 )
                 .await
             }
@@ -2206,11 +2210,13 @@ async fn register_with_email(
     last_name: String,
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
+    skip_phone_verification: Option<bool>,
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 [DEBUG] register_with_email 函数被调用");
     log_info!("🔄 使用指定邮箱注册 Cursor 账户...");
     log_info!("📧 邮箱: {}", email);
     log_info!("👤 姓名: {} {}", first_name, last_name);
+    log_info!("🔍 跳过手机号验证: {:?}", skip_phone_verification);
 
     // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
     if enable_bank_card_binding.unwrap_or(true) {
@@ -2265,6 +2271,12 @@ async fn register_with_email(
         "false"
     };
 
+    let skip_phone_flag = if skip_phone_verification.unwrap_or(false) {
+        "1"
+    } else {
+        "0"
+    };
+
     // 获取应用目录
     let app_dir = get_app_dir()?;
     let app_dir_str = app_dir.to_string_lossy().to_string();
@@ -2281,7 +2293,8 @@ async fn register_with_email(
     log_info!("  - 参数5 (app_dir_str): {}", app_dir_str);
     log_info!("  - 参数5 (app_dir_base64): {}", app_dir_base64);
     log_info!("  - 参数6 (bank_card_flag): {}", bank_card_flag);
-    log_info!("  - 预期参数总数: 7 (包括脚本名)");
+    log_info!("  - 参数7 (skip_phone_flag): {}", skip_phone_flag);
+    log_info!("  - 预期参数总数: 8 (包括脚本名)");
 
     let mut child = create_hidden_command(&executable_path.to_string_lossy())
         .arg(&email)
@@ -2290,6 +2303,7 @@ async fn register_with_email(
         .arg(incognito_flag)
         .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .arg(bank_card_flag) // 银行卡绑定标志
+        .arg(skip_phone_flag) // 跳过手机号验证标志
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -2491,6 +2505,7 @@ async fn register_with_cloudflare_temp_email(
     last_name: String,
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
+    skip_phone_verification: Option<bool>,
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 使用Cloudflare临时邮箱注册 Cursor 账户...");
     log_info!("👤 姓名: {} {}", first_name, last_name);
@@ -2498,6 +2513,7 @@ async fn register_with_cloudflare_temp_email(
         "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
         use_incognito
     );
+    log_info!("🔍 跳过手机号验证: {:?}", skip_phone_verification);
 
     // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
     if enable_bank_card_binding.unwrap_or(true) {
@@ -2556,6 +2572,12 @@ async fn register_with_cloudflare_temp_email(
         "false"
     };
 
+    let skip_phone_flag = if skip_phone_verification.unwrap_or(false) {
+        "1"
+    } else {
+        "0"
+    };
+
     // 获取应用目录
     let app_dir = get_app_dir()?;
     let app_dir_str = app_dir.to_string_lossy().to_string();
@@ -2571,16 +2593,18 @@ async fn register_with_cloudflare_temp_email(
     log_info!("  - use_incognito 原始值: {:?}", use_incognito);
     log_info!("  - incognito_flag: {}", incognito_flag);
     log_info!("  - bank_card_flag: {}", bank_card_flag);
+    log_info!("  - skip_phone_flag: {}", skip_phone_flag);
     log_info!("  - app_dir: {}", app_dir_str);
     log_info!("  - app_dir_base64: {}", app_dir_base64);
     log_info!(
-        "  - 传递的参数: [{}, {}, {}, {}, {}, {}]",
+        "  - 传递的参数: [{}, {}, {}, {}, {}, {}, {}]",
         email,
         first_name,
         last_name,
         incognito_flag,
         app_dir_base64,
-        bank_card_flag
+        bank_card_flag,
+        skip_phone_flag
     );
 
     let mut child = create_hidden_command(&executable_path.to_string_lossy())
@@ -2590,6 +2614,7 @@ async fn register_with_cloudflare_temp_email(
         .arg(incognito_flag)
         .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .arg(bank_card_flag) // 银行卡绑定标志
+        .arg(skip_phone_flag) // 跳过手机号验证标志
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -2795,10 +2820,12 @@ async fn register_with_outlook(
     last_name: String,
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
+    skip_phone_verification: Option<bool>,
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 使用Outlook邮箱注册 Cursor 账户...");
     log_info!("📧 邮箱: {}", email);
     log_info!("👤 姓名: {} {}", first_name, last_name);
+    log_info!("🔍 跳过手机号验证: {:?}", skip_phone_verification);
     log_info!(
         "🔍 [DEBUG] 前端传递的 use_incognito 参数: {:?}",
         use_incognito
@@ -2857,6 +2884,12 @@ async fn register_with_outlook(
         "false"
     };
 
+    let skip_phone_flag = if skip_phone_verification.unwrap_or(false) {
+        "1"
+    } else {
+        "0"
+    };
+
     // 获取应用目录
     let app_dir = get_app_dir()?;
     let app_dir_str = app_dir.to_string_lossy().to_string();
@@ -2868,6 +2901,7 @@ async fn register_with_outlook(
     log_info!("    姓名: {} {}", first_name, last_name);
     log_info!("    隐身模式: {}", incognito_flag);
     log_info!("    银行卡绑定: {}", bank_card_flag);
+    log_info!("    跳过手机号验证: {}", skip_phone_flag);
 
     let mut cmd = create_hidden_command(&executable_path.to_string_lossy());
     cmd.arg(&email)
@@ -2876,6 +2910,7 @@ async fn register_with_outlook(
         .arg(incognito_flag)
         .arg(&app_dir_base64)
         .arg(bank_card_flag)
+        .arg(skip_phone_flag)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 

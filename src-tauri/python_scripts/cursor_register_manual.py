@@ -83,7 +83,7 @@ def get_random_wait_time(config, timing_type='page_load_wait'):
         return random.uniform(0.1, 0.8)  # Return default value when error
 
 class CursorRegistration:
-    def __init__(self, translator=None, use_incognito=True, app_dir=None, enable_bank_card_binding=True):
+    def __init__(self, translator=None, use_incognito=True, app_dir=None, enable_bank_card_binding=True, skip_phone_verification=False):
         self.translator = translator
         # Set to display mode
         os.environ['BROWSER_HEADLESS'] = 'False'
@@ -98,6 +98,7 @@ class CursorRegistration:
         self.app_dir = app_dir  # 应用目录路径
         self.keep_browser_open = False  # 标记是否保持浏览器打开
         self.enable_bank_card_binding = enable_bank_card_binding  # 是否启用银行卡绑定
+        self.skip_phone_verification = skip_phone_verification  # 是否跳过手机号验证
 
         # 获取配置
         self.config = get_config(translator)
@@ -107,6 +108,7 @@ class CursorRegistration:
         print(f"  - 无痕模式设置: {self.use_incognito}")
         print(f"  - 应用目录: {self.app_dir}")
         print(f"  - 银行卡绑定设置: {self.enable_bank_card_binding}")
+        print(f"  - 跳过手机号验证: {self.skip_phone_verification}")
 
         # initialize Faker instance
         self.faker = Faker()
@@ -343,7 +345,8 @@ class CursorRegistration:
                 email_tab=email_tab,  # Pass email_tab if tempmail_plus is enabled
                 controller=self,  # Pass self instead of self.controller
                 translator=self.translator,
-                use_incognito=self.use_incognito  # Pass incognito mode setting
+                use_incognito=self.use_incognito,  # Pass incognito mode setting
+                skip_phone_verification=self.skip_phone_verification  # Pass skip phone verification setting
                 # app_dir is not passed to new_signup_main, it's only used in this class
             )
             
