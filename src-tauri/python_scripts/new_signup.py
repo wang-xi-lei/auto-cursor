@@ -443,6 +443,59 @@ def fill_password(page, password: str, config, translator=None):
 
         return False
 
+def wait_for_phone_verification(browser_tab, translator=None):
+    """Check if phone verification page appears and wait for user to complete it"""
+    try:
+        print(f"{Fore.CYAN}📱 等待并检查是否出现手机号验证页面...{Style.RESET_ALL}")
+        
+        # Wait a bit to let Cursor decide if phone verification is needed
+        # If on dashboard and phone verification is required, Cursor will redirect
+        time.sleep(5)
+        
+        # Check current URL after waiting
+        current_url = browser_tab.url
+        print(f"{Fore.CYAN}📍 当前URL: {current_url}{Style.RESET_ALL}")
+        
+        if "radar-challenge/" in current_url:
+            print(f"\n{Fore.YELLOW}{'='*60}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}⚠️  检测到手机号验证页面！{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}📱 当前URL: {current_url}{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}⏳ 请在浏览器中完成手机号验证...{Style.RESET_ALL}")
+            print(f"{Fore.YELLOW}{'='*60}{Style.RESET_ALL}\n")
+            
+            # Wait for user to complete phone verification
+            wait_count = 0
+            while True:
+                time.sleep(5)  # Check every 5 seconds
+                wait_count += 1
+                
+                try:
+                    current_url = browser_tab.url
+                    
+                    # If URL no longer contains radar-challenge/, verification is complete
+                    if "radar-challenge/" not in current_url:
+                        print(f"{Fore.GREEN}✅ 手机号验证已完成！{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}📍 当前URL: {current_url}{Style.RESET_ALL}")
+                        return True
+                    
+                    # Print waiting status every 30 seconds
+                    if wait_count % 6 == 0:
+                        elapsed_time = wait_count * 5
+                        print(f"{Fore.CYAN}⏳ 等待手机号验证中... (已等待 {elapsed_time} 秒){Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}📍 当前URL: {current_url}{Style.RESET_ALL}")
+                        
+                except Exception as e:
+                    print(f"{Fore.RED}❌ 检查URL时出错: {str(e)}{Style.RESET_ALL}")
+                    # If error occurs, assume browser might be closed or other issues
+                    return False
+        else:
+            print(f"{Fore.GREEN}✅ 未检测到手机号验证页面，继续后续流程{Style.RESET_ALL}")
+            return True
+            
+    except Exception as e:
+        print(f"{Fore.RED}❌ 检查手机号验证页面时出错: {str(e)}{Style.RESET_ALL}")
+        return True  # If error occurs, continue with normal flow
+
 def handle_verification_code(browser_tab, email_tab, controller, config, translator=None):
     """Handle verification code"""
     try:
@@ -466,6 +519,11 @@ def handle_verification_code(browser_tab, email_tab, controller, config, transla
                     if translator:
                         print(f"{Fore.GREEN}✅ {translator.get('register.verification_success')}{Style.RESET_ALL}")
                     time.sleep(get_random_wait_time(config, 'verification_retry_wait'))
+                    
+                    # Check for phone verification page before visiting settings
+                    if not wait_for_phone_verification(browser_tab, translator):
+                        print(f"{Fore.RED}❌ 手机号验证检查失败{Style.RESET_ALL}")
+                        return False, None
                     
                     # Visit settings page
                     print(f"{Fore.CYAN}🔑 {translator.get('register.visiting_url')}: https://www.cursor.com/settings{Style.RESET_ALL}")
@@ -502,6 +560,11 @@ def handle_verification_code(browser_tab, email_tab, controller, config, transla
                         if translator:
                             print(f"{Fore.GREEN}✅ {translator.get('register.verification_success')}{Style.RESET_ALL}")
                         time.sleep(get_random_wait_time(config, 'verification_retry_wait'))
+                        
+                        # Check for phone verification page before visiting settings
+                        if not wait_for_phone_verification(browser_tab, translator):
+                            print(f"{Fore.RED}❌ 手机号验证检查失败{Style.RESET_ALL}")
+                            return False, None
                         
                         # Visit settings page
                         if translator:
@@ -563,6 +626,11 @@ def handle_verification_code(browser_tab, email_tab, controller, config, transla
                     if translator:
                         print(f"{Fore.GREEN}✅ {translator.get('register.verification_success')}{Style.RESET_ALL}")
                     time.sleep(get_random_wait_time(config, 'verification_retry_wait'))
+                    
+                    # Check for phone verification page before visiting settings
+                    if not wait_for_phone_verification(browser_tab, translator):
+                        print(f"{Fore.RED}❌ 手机号验证检查失败{Style.RESET_ALL}")
+                        return False, None
                     
                     # Visit settings page
                     if translator:

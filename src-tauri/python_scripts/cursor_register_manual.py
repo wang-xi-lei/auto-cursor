@@ -14,6 +14,7 @@ from reset_machine_manual import MachineIDResetter
 from get_user_token import get_token_from_cookie
 from config import get_config
 from account_manager import AccountManager
+from new_signup import wait_for_phone_verification
 
 os.environ["PYTHONVERBOSE"] = "0"
 os.environ["PYINSTALLER_VERBOSE"] = "0"
@@ -413,6 +414,12 @@ class CursorRegistration:
     def _get_account_info(self):
         """Get Account Information and Token"""
         try:
+            # 在跳转到 settings 之前，先检测是否需要手机号验证
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 准备跳转到 settings，先检测手机号验证...{Style.RESET_ALL}")
+            if not wait_for_phone_verification(self.signup_tab, self.translator):
+                print(f"{Fore.RED}{EMOJI['ERROR']} 手机号验证检查失败{Style.RESET_ALL}")
+                return False
+            
             self.signup_tab.get(self.settings_url)
             time.sleep(2)
             
@@ -566,6 +573,12 @@ class CursorRegistration:
             # 跳转到 dashboard 页面
             browser_tab.get("https://cursor.com/cn/dashboard")
             time.sleep(get_random_wait_time(self.config, 'page_load_wait'))
+            
+            # 检查是否出现手机号验证页面，调用 new_signup.py 中的函数
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 检查 dashboard 页面是否需要手机号验证...{Style.RESET_ALL}")
+            if not wait_for_phone_verification(browser_tab, self.translator):
+                print(f"{Fore.RED}{EMOJI['ERROR']} 手机号验证检查失败{Style.RESET_ALL}")
+                return False
 
             # 查找并点击 "Start 14-day trial" 按钮
             print(f"{Fore.CYAN}{EMOJI['INFO']} 查找 Start 14-day trial 按钮...{Style.RESET_ALL}")
