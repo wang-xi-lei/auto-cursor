@@ -6,6 +6,7 @@ import { MachineIdPage } from "./pages/MachineIdPage";
 import { AuthCheckPage } from "./pages/AuthCheckPage";
 import { TokenManagePage } from "./pages/TokenManagePage";
 import { AutoRegisterPage } from "./pages/AutoRegisterPage";
+import { VirtualCardGeneratorPage } from "./pages/VirtualCardGeneratorPage";
 import { UsageProvider } from "./context/UsageContext";
 import { UpdateModal } from "./components/UpdateModal";
 import { checkForUpdates } from "./services/updateService";
@@ -102,6 +103,10 @@ function App() {
             <Route path="/auth-check" element={<AuthCheckPage />} />
             <Route path="/token-manage" element={<TokenManagePage />} />
             <Route path="/auto-register" element={<AutoRegisterPage />} />
+            <Route
+              path="/virtual-card"
+              element={<VirtualCardGeneratorPage />}
+            />
           </Routes>
         </Layout>
       </Router>

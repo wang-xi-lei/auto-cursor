@@ -31,6 +31,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: "/auth-check", label: "授权检查", icon: "🔐" },
     { path: "/token-manage", label: "Token 管理", icon: "🎫" },
     { path: "/auto-register", label: "自动注册", icon: "📝" },
+    { path: "/virtual-card", label: "生成虚拟卡", icon: "💳" },
   ];
 
   return (

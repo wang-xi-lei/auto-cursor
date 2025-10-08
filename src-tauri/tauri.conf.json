@@ -13,8 +13,8 @@
     "windows": [
       {
         "title": "Cursor Machine ID Restorer",
-        "width": 1000,
-        "height": 700,
+        "width": 1028,
+        "height": 720,
         "resizable": true,
         "minimizable": true,
         "maximizable": true
