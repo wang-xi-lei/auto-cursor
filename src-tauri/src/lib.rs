@@ -2036,6 +2036,7 @@ async fn batch_register_with_email(
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
+    btn_index: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     let email_type_str = email_type.as_deref().unwrap_or("custom");
     log_info!("🔄 批量注册 {} 个 Cursor 账户（串行模式，邮箱类型：{}）...", emails.len(), email_type_str);
@@ -2106,6 +2107,7 @@ async fn batch_register_with_email(
                     use_incognito,
                     enable_bank_card_binding,
                     skip_phone_verification,
+                    btn_index,
                 )
                 .await
             }
@@ -2119,6 +2121,7 @@ async fn batch_register_with_email(
                     use_incognito,
                     enable_bank_card_binding,
                     skip_phone_verification,
+                    btn_index,
                 )
                 .await
             }
@@ -2133,6 +2136,7 @@ async fn batch_register_with_email(
                     use_incognito,
                     enable_bank_card_binding,
                     skip_phone_verification,
+                    btn_index,
                 )
                 .await
             }
@@ -2211,6 +2215,7 @@ async fn register_with_email(
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
+    btn_index: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 [DEBUG] register_with_email 函数被调用");
     log_info!("🔄 使用指定邮箱注册 Cursor 账户...");
@@ -2284,6 +2289,13 @@ async fn register_with_email(
     // 使用 Base64 编码应用目录路径，避免特殊字符问题
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
+    // 构建配置JSON
+    let config_json = serde_json::json!({
+        "btnIndex": btn_index.unwrap_or(1)
+    });
+    let config_json_str = serde_json::to_string(&config_json)
+        .unwrap_or_else(|_| "{}".to_string());
+
     // 调试：显示将要传递的所有参数
     log_debug!("🔍 [DEBUG] register_with_email 准备传递的参数:");
     log_info!("  - 参数1 (email): {}", email);
@@ -2294,7 +2306,8 @@ async fn register_with_email(
     log_info!("  - 参数5 (app_dir_base64): {}", app_dir_base64);
     log_info!("  - 参数6 (bank_card_flag): {}", bank_card_flag);
     log_info!("  - 参数7 (skip_phone_flag): {}", skip_phone_flag);
-    log_info!("  - 预期参数总数: 8 (包括脚本名)");
+    log_info!("  - 参数8 (config_json): {}", config_json_str);
+    log_info!("  - 预期参数总数: 9 (包括脚本名)");
 
     let mut child = create_hidden_command(&executable_path.to_string_lossy())
         .arg(&email)
@@ -2304,6 +2317,7 @@ async fn register_with_email(
         .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .arg(bank_card_flag) // 银行卡绑定标志
         .arg(skip_phone_flag) // 跳过手机号验证标志
+        .arg(&config_json_str) // 配置JSON字符串
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -2506,6 +2520,7 @@ async fn register_with_cloudflare_temp_email(
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
+    btn_index: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 使用Cloudflare临时邮箱注册 Cursor 账户...");
     log_info!("👤 姓名: {} {}", first_name, last_name);
@@ -2585,6 +2600,13 @@ async fn register_with_cloudflare_temp_email(
     // 使用 Base64 编码应用目录路径，避免特殊字符问题
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
+    // 构建配置JSON
+    let config_json = serde_json::json!({
+        "btnIndex": btn_index.unwrap_or(1)
+    });
+    let config_json_str = serde_json::to_string(&config_json)
+        .unwrap_or_else(|_| "{}".to_string());
+
     // 调试日志
     log_debug!("🔍 [DEBUG] Rust 启动Python脚本:");
     log_info!("  - 可执行文件: {:?}", executable_path);
@@ -2594,17 +2616,19 @@ async fn register_with_cloudflare_temp_email(
     log_info!("  - incognito_flag: {}", incognito_flag);
     log_info!("  - bank_card_flag: {}", bank_card_flag);
     log_info!("  - skip_phone_flag: {}", skip_phone_flag);
+    log_info!("  - config_json: {}", config_json_str);
     log_info!("  - app_dir: {}", app_dir_str);
     log_info!("  - app_dir_base64: {}", app_dir_base64);
     log_info!(
-        "  - 传递的参数: [{}, {}, {}, {}, {}, {}, {}]",
+        "  - 传递的参数: [{}, {}, {}, {}, {}, {}, {}, {}]",
         email,
         first_name,
         last_name,
         incognito_flag,
         app_dir_base64,
         bank_card_flag,
-        skip_phone_flag
+        skip_phone_flag,
+        config_json_str
     );
 
     let mut child = create_hidden_command(&executable_path.to_string_lossy())
@@ -2615,6 +2639,7 @@ async fn register_with_cloudflare_temp_email(
         .arg(&app_dir_base64) // 使用 Base64 编码的应用目录参数
         .arg(bank_card_flag) // 银行卡绑定标志
         .arg(skip_phone_flag) // 跳过手机号验证标志
+        .arg(&config_json_str) // 配置JSON字符串
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -2821,6 +2846,7 @@ async fn register_with_outlook(
     use_incognito: Option<bool>,
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
+    btn_index: Option<u32>,
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 使用Outlook邮箱注册 Cursor 账户...");
     log_info!("📧 邮箱: {}", email);
@@ -2895,6 +2921,13 @@ async fn register_with_outlook(
     let app_dir_str = app_dir.to_string_lossy().to_string();
     let app_dir_base64 = general_purpose::STANDARD.encode(&app_dir_str);
 
+    // 构建配置JSON
+    let config_json = serde_json::json!({
+        "btnIndex": btn_index.unwrap_or(1)
+    });
+    let config_json_str = serde_json::to_string(&config_json)
+        .unwrap_or_else(|_| "{}".to_string());
+
     log_debug!("🔍 [DEBUG] 准备启动注册进程");
     log_info!("    可执行文件: {:?}", executable_path);
     log_info!("    邮箱: {}", email);
@@ -2902,6 +2935,7 @@ async fn register_with_outlook(
     log_info!("    隐身模式: {}", incognito_flag);
     log_info!("    银行卡绑定: {}", bank_card_flag);
     log_info!("    跳过手机号验证: {}", skip_phone_flag);
+    log_info!("    配置JSON: {}", config_json_str);
 
     let mut cmd = create_hidden_command(&executable_path.to_string_lossy());
     cmd.arg(&email)
@@ -2911,6 +2945,7 @@ async fn register_with_outlook(
         .arg(&app_dir_base64)
         .arg(bank_card_flag)
         .arg(skip_phone_flag)
+        .arg(&config_json_str)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 

@@ -83,7 +83,7 @@ def get_random_wait_time(config, timing_type='page_load_wait'):
         return random.uniform(0.1, 0.8)  # Return default value when error
 
 class CursorRegistration:
-    def __init__(self, translator=None, use_incognito=True, app_dir=None, enable_bank_card_binding=True, skip_phone_verification=False):
+    def __init__(self, translator=None, use_incognito=True, app_dir=None, enable_bank_card_binding=True, skip_phone_verification=False, config=None):
         self.translator = translator
         # Set to display mode
         os.environ['BROWSER_HEADLESS'] = 'False'
@@ -98,9 +98,10 @@ class CursorRegistration:
         self.app_dir = app_dir  # 应用目录路径
         self.keep_browser_open = False  # 标记是否保持浏览器打开
         self.enable_bank_card_binding = enable_bank_card_binding  # 是否启用银行卡绑定
+        self.custom_config = config or {}  # 自定义配置参数（JSON字典）
         self.skip_phone_verification = skip_phone_verification  # 是否跳过手机号验证
 
-        # 获取配置
+        # 获取默认配置
         self.config = get_config(translator)
 
         # 调试日志
@@ -361,36 +362,33 @@ class CursorRegistration:
                     if self.enable_bank_card_binding:
                         print(f"{Fore.CYAN}{EMOJI['INFO']} 开始银行卡绑定流程...{Style.RESET_ALL}")
                         card_success = self._setup_payment_method(browser_tab)
-                        if card_success == "non_china_completed":
-                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成，浏览器保持打开状态{Style.RESET_ALL}")
-                            print(f"{Fore.YELLOW}{EMOJI['INFO']} 请手动完成剩余的地址信息填写和表单提交{Style.RESET_ALL}")
-                            print(f"{Fore.CYAN}{EMOJI['INFO']} Python进程将保持运行，浏览器不会自动关闭{Style.RESET_ALL}")
-                            print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
-                            # 设置标记，不关闭浏览器，并保持进程运行
-                            self.keep_browser_open = True
-                            self._wait_for_user_completion(browser_tab)
-                            return True
-                        elif card_success:
-                            print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡绑定成功{Style.RESET_ALL}")
-                            # 银行卡绑定成功后等待25秒
-                            print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定完成，等待25秒后关闭浏览器...{Style.RESET_ALL}")
-                            time.sleep(25)
-                        else:
-                            print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡绑定失败，但注册已完成{Style.RESET_ALL}")
-                            # 银行卡绑定失败也等待一段时间
-                            print(f"{Fore.CYAN}{EMOJI['INFO']} 等待15秒后关闭浏览器...{Style.RESET_ALL}")
-                            time.sleep(15)
+                        # 不管银行卡绑定成功或失败，都保持浏览器打开
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡绑定流程已完成{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 浏览器将保持打开状态，请查看结果{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}{EMOJI['INFO']} 如果有剩余表单或验证未通过，请手动完成剩余的地址信息填写和表单提交{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
+                        # 设置标记，不关闭浏览器，并保持进程运行
+                        self.keep_browser_open = True
+                        self._wait_for_user_completion(browser_tab)
+                        return True
                     else:
                         print(f"{Fore.CYAN}{EMOJI['INFO']} 跳过银行卡绑定流程（已禁用）{Style.RESET_ALL}")
                         print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 注册完成，无需银行卡绑定{Style.RESET_ALL}")
-                        # 等待5秒后关闭浏览器
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 等待5秒后关闭浏览器...{Style.RESET_ALL}")
-                        time.sleep(5)
-                        print(f"{Fore.CYAN}{EMOJI['INFO']} 准备返回注册成功状态...{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 浏览器将保持打开状态，请查看结果{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}{EMOJI['INFO']} 如果有剩余操作，请手动完成{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
+                        # 设置标记，不关闭浏览器
+                        self.keep_browser_open = True
+                        self._wait_for_user_completion(browser_tab)
+                        return True
                 else:
-                    # 注册失败，等待5秒后关闭
-                    print(f"{Fore.CYAN}{EMOJI['INFO']} 注册失败，等待5秒后关闭浏览器...{Style.RESET_ALL}")
-                    time.sleep(5)
+                    # 注册失败，也保持浏览器打开以便查看问题
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 注册过程未完全成功，浏览器将保持打开状态以便查看{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 请检查浏览器并手动完成剩余的操作{Style.RESET_ALL}")
+                    print(f"{Fore.CYAN}{EMOJI['INFO']} 完成后请手动关闭浏览器或终止程序{Style.RESET_ALL}")
+                    self.keep_browser_open = True
+                    self._wait_for_user_completion(browser_tab)
+                    return True
 
                 # Close browser after getting information (except for non-China addresses)
                 if browser_tab and not self.keep_browser_open:
@@ -583,30 +581,42 @@ class CursorRegistration:
                 print(f"{Fore.RED}{EMOJI['ERROR']} 手机号验证检查失败{Style.RESET_ALL}")
                 return False
 
-            # 查找并点击 "Start 14-day trial" 按钮
-            print(f"{Fore.CYAN}{EMOJI['INFO']} 查找 Start 14-day trial 按钮...{Style.RESET_ALL}")
+            # 查找并点击试用按钮（支持不同天数：7天、14天等）
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 查找试用按钮...{Style.RESET_ALL}")
 
             # 等待页面加载
             time.sleep(get_random_wait_time(self.config, 'page_load_wait'))
 
-            # 查找包含 "Start 14-day trial" 文本的 span 元素的父 button
+            # 查找包含 "Start X-day trial" 文本的按钮（使用正则匹配任意天数）
             trial_button = None
+            trial_days = None
             try:
-                # 方法1: 直接查找包含文本的按钮
-                trial_button = browser_tab.ele("xpath://button[.//span[contains(text(), 'Start 14-day trial')]]", timeout=10)
+                # 方法1: 使用XPath正则匹配任意天数的试用按钮
+                trial_button = browser_tab.ele("xpath://button[.//span[contains(text(), 'day trial')]]", timeout=10)
+                if trial_button:
+                    # 提取天数信息
+                    button_text = trial_button.text
+                    import re
+                    match = re.search(r'Start (\d+)-day trial', button_text)
+                    trial_days = match.group(1) if match else "未知"
             except:
                 try:
-                    # 方法2: 查找所有按钮，然后检查内容
+                    # 方法2: 查找所有按钮，然后使用正则检查内容
                     buttons = browser_tab.eles("tag:button")
+                    import re
                     for button in buttons:
-                        if button.text and "Start 14-day trial" in button.text:
-                            trial_button = button
-                            break
+                        if button.text:
+                            # 匹配 "Start X-day trial" 模式，X可以是任意数字
+                            match = re.search(r'Start (\d+)-day trial', button.text)
+                            if match:
+                                trial_button = button
+                                trial_days = match.group(1)
+                                break
                 except:
                     pass
 
             if trial_button:
-                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到 Start 14-day trial 按钮，点击...{Style.RESET_ALL}")
+                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到 Start {trial_days}-day trial 按钮，点击...{Style.RESET_ALL}")
                 trial_button.click()
                 time.sleep(get_random_wait_time(self.config, 'submit_wait'))
 
@@ -641,8 +651,16 @@ class CursorRegistration:
                             print(f"{Fore.YELLOW}  按钮 {i+1}: 获取属性失败 - {str(btn_err)}{Style.RESET_ALL}")
 
                     try:
+                        # 从配置中获取按钮索引，默认为1（第二个按钮）
+                        btn_index = self.custom_config.get('btnIndex', 1)
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 使用按钮索引: {btn_index}{Style.RESET_ALL}")
+                        
                         # 查找包含特定属性的按钮
-                        pay_with_card_button = all_buttons[1]
+                        if btn_index < len(all_buttons):
+                            pay_with_card_button = all_buttons[btn_index]
+                        else:
+                            print(f"{Fore.YELLOW}{EMOJI['WARNING']} 按钮索引 {btn_index} 超出范围，使用默认索引 1{Style.RESET_ALL}")
+                            pay_with_card_button = all_buttons[1]
                         if pay_with_card_button:
                             pay_with_card_button.click()
                         print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 执行成功{Style.RESET_ALL}")
@@ -659,30 +677,56 @@ class CursorRegistration:
 
                 # 现在尝试查找银行卡输入框
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找银行卡号输入框...{Style.RESET_ALL}")
-                card_number_input = browser_tab.ele("#cardNumber", timeout=15)
-                if card_number_input:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到银行卡号输入框{Style.RESET_ALL}")
-                    return self._fill_payment_form(browser_tab)
-                else:
-                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡信息页面未正确加载，未找到 #cardNumber 元素{Style.RESET_ALL}")
+                try:
+                    card_number_input = browser_tab.ele("#cardNumber", timeout=15)
+                    if card_number_input:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到银行卡号输入框{Style.RESET_ALL}")
+                        # 尝试填写表单，但不管成功失败都继续
+                        self._fill_payment_form(browser_tab)
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 银行卡信息页面未正确加载，未找到 #cardNumber 元素{Style.RESET_ALL}")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 继续尝试其他方式填写...{Style.RESET_ALL}")
+                        
+                        # 尝试查找其他可能的元素
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试查找其他支付相关元素...{Style.RESET_ALL}")
+                        payment_elements = browser_tab.eles("input[type='text']")
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 找到 {len(payment_elements)} 个文本输入框{Style.RESET_ALL}")
 
-                    # 尝试查找其他可能的元素
-                    print(f"{Fore.CYAN}{EMOJI['INFO']} 尝试查找其他支付相关元素...{Style.RESET_ALL}")
-                    payment_elements = browser_tab.eles("input[type='text']")
-                    print(f"{Fore.CYAN}{EMOJI['INFO']} 找到 {len(payment_elements)} 个文本输入框{Style.RESET_ALL}")
-
-                    # 打印页面源码的一部分用于调试
-                    page_source = browser_tab.html[:2000]  # 只取前2000个字符
-                    print(f"{Fore.CYAN}{EMOJI['INFO']} 页面源码片段: {page_source}...{Style.RESET_ALL}")
-
-                    return False
+                        # 打印页面源码的一部分用于调试
+                        page_source = browser_tab.html[:2000]  # 只取前2000个字符
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 页面源码片段: {page_source}...{Style.RESET_ALL}")
+                        
+                        # 继续尝试填写表单
+                        self._fill_payment_form(browser_tab)
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 查找银行卡输入框时出错: {str(e)}，继续执行...{Style.RESET_ALL}")
+                    # 不管出错与否，都尝试填写表单
+                    try:
+                        self._fill_payment_form(browser_tab)
+                    except Exception as form_error:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写表单出错: {str(form_error)}，继续执行...{Style.RESET_ALL}")
+                
+                # 不管成功失败，都返回True继续后续流程
+                print(f"{Fore.CYAN}{EMOJI['INFO']} 银行卡绑定流程已执行，继续后续步骤...{Style.RESET_ALL}")
+                return True
+                
             else:
-                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到 Start 14-day trial 按钮{Style.RESET_ALL}")
-                return False
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到试用按钮，但继续执行后续步骤...{Style.RESET_ALL}")
+                # 即使没找到按钮，也尝试填写表单
+                try:
+                    self._fill_payment_form(browser_tab)
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 尝试填写表单出错: {str(e)}，继续执行...{Style.RESET_ALL}")
+                return True
 
         except Exception as e:
-            print(f"{Fore.RED}{EMOJI['ERROR']} 设置支付方式失败: {str(e)}{Style.RESET_ALL}")
-            return False
+            print(f"{Fore.YELLOW}{EMOJI['WARNING']} 设置支付方式过程出错: {str(e)}，但继续执行后续步骤...{Style.RESET_ALL}")
+            # 即使出错也不返回False，继续执行
+            try:
+                self._fill_payment_form(browser_tab)
+            except Exception as form_error:
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 尝试填写表单出错: {str(form_error)}，继续执行...{Style.RESET_ALL}")
+            return True
 
     def _fill_payment_form(self, browser_tab):
         """填写银行卡信息表单"""
@@ -713,46 +757,59 @@ class CursorRegistration:
 
             # 填写卡号
             print(f"{Fore.CYAN}{EMOJI['INFO']} 查找卡号输入框 #cardNumber...{Style.RESET_ALL}")
-            card_number_input = browser_tab.ele("#cardNumber")
-            if card_number_input:
-                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到卡号输入框，开始填写...{Style.RESET_ALL}")
-                card_number_input.clear()
-                card_number_input.input(card_info['cardNumber'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-            else:
-                print(f"{Fore.RED}{EMOJI['ERROR']} 未找到卡号输入框 #cardNumber{Style.RESET_ALL}")
-                raise Exception("未找到卡号输入框")
+            try:
+                card_number_input = browser_tab.ele("#cardNumber", timeout=5)
+                if card_number_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到卡号输入框，开始填写...{Style.RESET_ALL}")
+                    card_number_input.clear()
+                    card_number_input.input(card_info['cardNumber'])
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                else:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到卡号输入框 #cardNumber，跳过...{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写卡号失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
             # 填写有效期
             print(f"{Fore.CYAN}{EMOJI['INFO']} 查找有效期输入框 #cardExpiry...{Style.RESET_ALL}")
-            card_expiry_input = browser_tab.ele("#cardExpiry")
-            if card_expiry_input:
-                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到有效期输入框，开始填写...{Style.RESET_ALL}")
-                card_expiry_input.clear()
-                card_expiry_input.input(card_info['cardExpiry'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-            else:
-                print(f"{Fore.RED}{EMOJI['ERROR']} 未找到有效期输入框 #cardExpiry{Style.RESET_ALL}")
-                raise Exception("未找到有效期输入框")
+            try:
+                card_expiry_input = browser_tab.ele("#cardExpiry", timeout=5)
+                if card_expiry_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到有效期输入框，开始填写...{Style.RESET_ALL}")
+                    card_expiry_input.clear()
+                    card_expiry_input.input(card_info['cardExpiry'])
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                else:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到有效期输入框 #cardExpiry，跳过...{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写有效期失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
             # 填写CVC
             print(f"{Fore.CYAN}{EMOJI['INFO']} 查找CVC输入框 #cardCvc...{Style.RESET_ALL}")
-            card_cvc_input = browser_tab.ele("#cardCvc")
-            if card_cvc_input:
-                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到CVC输入框，开始填写...{Style.RESET_ALL}")
-                card_cvc_input.clear()
-                card_cvc_input.input(card_info['cardCvc'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
-            else:
-                print(f"{Fore.RED}{EMOJI['ERROR']} 未找到CVC输入框 #cardCvc{Style.RESET_ALL}")
-                raise Exception("未找到CVC输入框")
+            try:
+                card_cvc_input = browser_tab.ele("#cardCvc", timeout=5)
+                if card_cvc_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到CVC输入框，开始填写...{Style.RESET_ALL}")
+                    card_cvc_input.clear()
+                    card_cvc_input.input(card_info['cardCvc'])
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                else:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到CVC输入框 #cardCvc，跳过...{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写CVC失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
             # 填写持卡人姓名
-            billing_name_input = browser_tab.ele("#billingName")
-            if billing_name_input:
-                billing_name_input.clear()
-                billing_name_input.input(card_info['billingName'])
-                time.sleep(get_random_wait_time(self.config, 'input_wait'))
+            print(f"{Fore.CYAN}{EMOJI['INFO']} 查找持卡人姓名输入框 #billingName...{Style.RESET_ALL}")
+            try:
+                billing_name_input = browser_tab.ele("#billingName", timeout=5)
+                if billing_name_input:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到持卡人姓名输入框，开始填写...{Style.RESET_ALL}")
+                    billing_name_input.clear()
+                    billing_name_input.input(card_info['billingName'])
+                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                else:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到持卡人姓名输入框，跳过...{Style.RESET_ALL}")
+            except Exception as e:
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写持卡人姓名失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
                       # 根据国家决定填写哪些字段
             is_china = card_info['billingCountry'].lower() == 'china'
@@ -762,93 +819,122 @@ class CursorRegistration:
                 # 中国需要填写详细信息
                 # 填写邮政编码
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找邮政编码输入框 #billingPostalCode...{Style.RESET_ALL}")
-                postal_code_input = browser_tab.ele("#billingPostalCode", timeout=10)
-                if postal_code_input:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到邮政编码输入框，开始填写...{Style.RESET_ALL}")
-                    postal_code_input.clear()
-                    postal_code_input.input(card_info['billingPostalCode'])
-                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 邮政编码填写完成{Style.RESET_ALL}")
+                try:
+                    postal_code_input = browser_tab.ele("#billingPostalCode", timeout=5)
+                    if postal_code_input:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到邮政编码输入框，开始填写...{Style.RESET_ALL}")
+                        postal_code_input.clear()
+                        postal_code_input.input(card_info['billingPostalCode'])
+                        time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 邮政编码填写完成{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到邮政编码输入框，跳过...{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写邮政编码失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
                 # 选择省份
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找省份选择框 #billingAdministrativeArea...{Style.RESET_ALL}")
-                province_select = browser_tab.ele("#billingAdministrativeArea", timeout=10)
-                if province_select:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到省份选择框，开始选择...{Style.RESET_ALL}")
-                    try:
+                try:
+                    province_select = browser_tab.ele("#billingAdministrativeArea", timeout=5)
+                    if province_select:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到省份选择框，开始选择...{Style.RESET_ALL}")
                         province_select.select(card_info['billingAdministrativeArea'])
                         time.sleep(get_random_wait_time(self.config, 'input_wait'))
                         print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 省份选择完成{Style.RESET_ALL}")
-                    except Exception as e:
-                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 省份选择失败: {str(e)}{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到省份选择框，跳过...{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 省份选择失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
                 # 填写城市
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找城市输入框 #billingLocality...{Style.RESET_ALL}")
-                city_input = browser_tab.ele("#billingLocality", timeout=10)
-                if city_input:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到城市输入框，开始填写...{Style.RESET_ALL}")
-                    city_input.clear()
-                    city_input.input(card_info['billingLocality'])
-                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 城市填写完成{Style.RESET_ALL}")
+                try:
+                    city_input = browser_tab.ele("#billingLocality", timeout=5)
+                    if city_input:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到城市输入框，开始填写...{Style.RESET_ALL}")
+                        city_input.clear()
+                        city_input.input(card_info['billingLocality'])
+                        time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 城市填写完成{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到城市输入框，跳过...{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写城市失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
                 # 填写区县
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找区县输入框 #billingDependentLocality...{Style.RESET_ALL}")
-                district_input = browser_tab.ele("#billingDependentLocality", timeout=10)
-                if district_input:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到区县输入框，开始填写...{Style.RESET_ALL}")
-                    district_input.clear()
-                    district_input.input(card_info['billingDependentLocality'])
-                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 区县填写完成{Style.RESET_ALL}")
+                try:
+                    district_input = browser_tab.ele("#billingDependentLocality", timeout=5)
+                    if district_input:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到区县输入框，开始填写...{Style.RESET_ALL}")
+                        district_input.clear()
+                        district_input.input(card_info['billingDependentLocality'])
+                        time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 区县填写完成{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到区县输入框，跳过...{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写区县失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
 
                 # 填写地址
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找地址输入框 #billingAddressLine1...{Style.RESET_ALL}")
-                address_input = browser_tab.ele("#billingAddressLine1", timeout=10)
-                if address_input:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
-                    address_input.clear()
-                    address_input.input(card_info['billingAddressLine1'])
-                    time.sleep(get_random_wait_time(self.config, 'input_wait'))
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成{Style.RESET_ALL}")
+                try:
+                    address_input = browser_tab.ele("#billingAddressLine1", timeout=5)
+                    if address_input:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
+                        address_input.clear()
+                        address_input.input(card_info['billingAddressLine1'])
+                        time.sleep(get_random_wait_time(self.config, 'input_wait'))
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成{Style.RESET_ALL}")
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到地址输入框，跳过...{Style.RESET_ALL}")
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写地址失败: {str(e)}，继续下一步...{Style.RESET_ALL}")
             else:
                 # 非中国只需要填写地址，填写完成后不自动提交
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 非中国地址，只填写地址字段...{Style.RESET_ALL}")
                 print(f"{Fore.CYAN}{EMOJI['INFO']} 查找地址输入框 #billingAddressLine1...{Style.RESET_ALL}")
-                address_input = browser_tab.ele("#billingAddressLine1", timeout=10)
-                if address_input:
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
-                    address_input.clear()
-                    address_input.input(card_info['billingAddressLine1'])
-                    time.sleep(3)  # 等待3秒
-                    print(f"{Fore.CYAN}{EMOJI['INFO']} 触发Enter事件...{Style.RESET_ALL}")
-                    address_input.input('\n')  # 触发Enter事件
-                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成并触发Enter事件{Style.RESET_ALL}")
-                    
-                    # 非中国地址填写完成后，等待用户手动填写其他信息
-                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 非中国地址填写完成，请手动填写其他必要的地址信息{Style.RESET_ALL}")
-                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 填写完成后请手动提交表单，浏览器将保持打开状态{Style.RESET_ALL}")
-                    
-                    # 返回特殊状态，表示非中国地址填写完成，需要保持浏览器打开
+                try:
+                    address_input = browser_tab.ele("#billingAddressLine1", timeout=5)
+                    if address_input:
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 找到地址输入框，开始填写...{Style.RESET_ALL}")
+                        address_input.clear()
+                        address_input.input(card_info['billingAddressLine1'])
+                        time.sleep(3)  # 等待3秒
+                        print(f"{Fore.CYAN}{EMOJI['INFO']} 触发Enter事件...{Style.RESET_ALL}")
+                        address_input.input('\n')  # 触发Enter事件
+                        print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 地址填写完成并触发Enter事件{Style.RESET_ALL}")
+                        
+                        # 非中国地址填写完成后，等待用户手动填写其他信息
+                        print(f"{Fore.YELLOW}{EMOJI['INFO']} 非中国地址填写完成，请手动填写其他必要的地址信息{Style.RESET_ALL}")
+                        print(f"{Fore.YELLOW}{EMOJI['INFO']} 填写完成后请手动提交表单，浏览器将保持打开状态{Style.RESET_ALL}")
+                        
+                        # 返回特殊状态，表示非中国地址填写完成，需要保持浏览器打开
+                        return "non_china_completed"
+                    else:
+                        print(f"{Fore.YELLOW}{EMOJI['WARNING']} 未找到地址输入框，浏览器将保持打开状态以便手动操作{Style.RESET_ALL}")
+                        return "non_china_completed"
+                except Exception as e:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 填写地址失败: {str(e)}，浏览器将保持打开状态以便手动操作{Style.RESET_ALL}")
                     return "non_china_completed"
-                else:
-                    print(f"{Fore.RED}{EMOJI['ERROR']} 未找到地址输入框{Style.RESET_ALL}")
-                    return False
 
             print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 银行卡信息填写完成！{Style.RESET_ALL}")
             
             time.sleep(5)
 
             # 中国地址自动提交，但返回特殊状态保持浏览器打开
-            submit_result = self._submit_payment_form(browser_tab)
-            if submit_result:
-                print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 表单已提交{Style.RESET_ALL}")
-                print(f"{Fore.YELLOW}{EMOJI['INFO']} 浏览器将保持打开状态，请查看提交结果{Style.RESET_ALL}")
-                # 返回特殊状态，表示需要保持浏览器打开
-                return "non_china_completed"
-            else:
-                print(f"{Fore.RED}{EMOJI['ERROR']} 表单提交失败{Style.RESET_ALL}")
-                return False
+            try:
+                submit_result = self._submit_payment_form(browser_tab)
+                if submit_result:
+                    print(f"{Fore.GREEN}{EMOJI['SUCCESS']} 表单已提交{Style.RESET_ALL}")
+                    print(f"{Fore.YELLOW}{EMOJI['INFO']} 浏览器将保持打开状态，请查看提交结果{Style.RESET_ALL}")
+                else:
+                    print(f"{Fore.YELLOW}{EMOJI['WARNING']} 表单提交失败，浏览器将保持打开状态以便手动操作{Style.RESET_ALL}")
+            except Exception as submit_error:
+                print(f"{Fore.YELLOW}{EMOJI['WARNING']} 表单提交出错: {str(submit_error)}，浏览器将保持打开状态以便手动操作{Style.RESET_ALL}")
+            
+            # 不管成功失败，都返回特殊状态保持浏览器打开
+            return "non_china_completed"
 
         except Exception as e:
             print(f"{Fore.RED}{EMOJI['ERROR']} 填写银行卡信息失败: {str(e)}{Style.RESET_ALL}")

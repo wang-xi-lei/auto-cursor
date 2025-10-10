@@ -88,7 +88,7 @@ def main():
     if len(sys.argv) < 2:
         print(json.dumps({
             "success": False,
-            "error": "缺少参数，用法: cursor_register <email> [first_name] [last_name] [use_incognito] [app_dir] [enable_bank_card_binding] [skip_phone_verification]"
+            "error": "缺少参数，用法: cursor_register <email> [first_name] [last_name] [use_incognito] [app_dir] [enable_bank_card_binding] [skip_phone_verification] [config_json]"
         }))
         sys.exit(1)
 
@@ -99,6 +99,7 @@ def main():
     app_dir = sys.argv[5] if len(sys.argv) > 5 else None
     enable_bank_card_binding = sys.argv[6] if len(sys.argv) > 6 else "true"
     skip_phone_verification = sys.argv[7] if len(sys.argv) > 7 else "0"
+    config_json = sys.argv[8] if len(sys.argv) > 8 else "{}"
 
     try:
         # 导入manual_register模块并执行
@@ -107,9 +108,9 @@ def main():
         # 临时修改sys.argv来传递参数
         original_argv = sys.argv[:]
         if app_dir is not None:
-            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, app_dir, enable_bank_card_binding, skip_phone_verification]
+            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, app_dir, enable_bank_card_binding, skip_phone_verification, config_json]
         else:
-            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, ".", enable_bank_card_binding, skip_phone_verification]
+            sys.argv = ["manual_register.py", email, first_name, last_name, use_incognito, ".", enable_bank_card_binding, skip_phone_verification, config_json]
 
         try:
             manual_main()
@@ -233,10 +234,13 @@ def create_readme():
 ./cursor_register{ext} test@example.com
 
 # 完整参数用法
-./cursor_register{ext} test@example.com John Smith true . true 0
+./cursor_register{ext} test@example.com John Smith true . true 0 '{{"btnIndex":1}}'
 
 # 启用跳过手机号验证（实验性功能）
-./cursor_register{ext} test@example.com John Smith true . true 1
+./cursor_register{ext} test@example.com John Smith true . true 1 '{{"btnIndex":1}}'
+
+# 注册美国账户（使用按钮索引2）
+./cursor_register{ext} test@example.com John Smith true . true 0 '{{"btnIndex":2}}'
 
 # 参数说明:
 # 参数1: 邮箱地址 (必需)
@@ -246,6 +250,8 @@ def create_readme():
 # 参数5: 应用目录 (可选，默认: .)
 # 参数6: 银行卡绑定 (可选，默认: true)
 # 参数7: 跳过手机号验证 (可选，默认: 0，设置为1启用实验性功能)
+# 参数8: 配置JSON (可选，默认: {{}})
+#        - btnIndex: 按钮索引，1=默认地区，2=美国账户
 ```
 
 ## 📊 响应格式

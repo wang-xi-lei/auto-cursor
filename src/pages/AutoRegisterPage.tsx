@@ -54,6 +54,7 @@ export const AutoRegisterPage: React.FC = () => {
   const [useIncognito, setUseIncognito] = useState(true);
   const [enableBankCardBinding, setEnableBankCardBinding] = useState(true);
   const [skipPhoneVerification, setSkipPhoneVerification] = useState(false);
+  const [isUsAccount, setIsUsAccount] = useState(false); // 美国账户选项
   const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -421,6 +422,7 @@ export const AutoRegisterPage: React.FC = () => {
             useIncognito: useIncognito,
             enableBankCardBinding: enableBankCardBinding,
             skipPhoneVerification: skipPhoneVerification,
+            btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
           }
         );
       } else if (emailType === "outlook" && outlookMode === "default") {
@@ -432,6 +434,7 @@ export const AutoRegisterPage: React.FC = () => {
           useIncognito: useIncognito,
           enableBankCardBinding: enableBankCardBinding,
           skipPhoneVerification: skipPhoneVerification,
+          btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
         });
       } else {
         // 使用自定义邮箱注册
@@ -442,6 +445,7 @@ export const AutoRegisterPage: React.FC = () => {
           useIncognito: useIncognito,
           enableBankCardBinding: enableBankCardBinding,
           skipPhoneVerification: skipPhoneVerification,
+          btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
         });
       }
 
@@ -583,6 +587,7 @@ export const AutoRegisterPage: React.FC = () => {
         useIncognito,
         enableBankCardBinding,
         skipPhoneVerification,
+        btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
       });
 
       console.log("批量注册结果:", result);
@@ -1015,6 +1020,27 @@ export const AutoRegisterPage: React.FC = () => {
                 </div>
                 <p className="mt-1 text-xs text-gray-500">
                   勾选后将自动执行银行卡绑定流程，取消勾选则跳过银行卡绑定
+                </p>
+              </div>
+
+              <div className="sm:col-span-2">
+                <div className="flex items-center">
+                  <input
+                    id="is-us-account"
+                    type="checkbox"
+                    checked={isUsAccount}
+                    onChange={(e) => setIsUsAccount(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="is-us-account"
+                    className="ml-2 text-sm text-gray-700"
+                  >
+                    注册美国账户
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  勾选后将选择美国地区的付款方式（按钮索引2），否则使用默认地区（按钮索引1）
                 </p>
               </div>
 
