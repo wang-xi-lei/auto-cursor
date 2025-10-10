@@ -3,7 +3,7 @@
 ## 📦 打包信息
 - 平台: linux
 - 可执行文件: cursor_register
-- 打包时间: 2025-10-08 17:29:21
+- 打包时间: 2025-10-10 22:37:00
 
 ## 🚀 使用方法
 
@@ -15,10 +15,13 @@
 ./cursor_register test@example.com
 
 # 完整参数用法
-./cursor_register test@example.com John Smith true . true 0
+./cursor_register test@example.com John Smith true . true 0 '{"btnIndex":1}'
 
 # 启用跳过手机号验证（实验性功能）
-./cursor_register test@example.com John Smith true . true 1
+./cursor_register test@example.com John Smith true . true 1 '{"btnIndex":1}'
+
+# 注册美国账户（使用按钮索引2）
+./cursor_register test@example.com John Smith true . true 0 '{"btnIndex":2}'
 
 # 参数说明:
 # 参数1: 邮箱地址 (必需)
@@ -28,6 +31,8 @@
 # 参数5: 应用目录 (可选，默认: .)
 # 参数6: 银行卡绑定 (可选，默认: true)
 # 参数7: 跳过手机号验证 (可选，默认: 0，设置为1启用实验性功能)
+# 参数8: 配置JSON (可选，默认: {})
+#        - btnIndex: 按钮索引，1=默认地区，2=美国账户
 ```
 
 ## 📊 响应格式
