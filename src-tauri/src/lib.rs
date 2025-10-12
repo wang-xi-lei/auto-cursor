@@ -4302,8 +4302,8 @@ pub fn run() {
                 log_info!("Application starting up...");
             }
 
-            // 只在生产环境下复制 pyBuild 文件夹并且是macos，开发模式下跳过
-            if !cfg!(debug_assertions) && cfg!(target_os = "macos") {
+            // 只在生产环境下复制 pyBuild 文件夹（macOS 和 Linux），开发模式下跳过
+            if !cfg!(debug_assertions) && (cfg!(target_os = "macos") || cfg!(target_os = "linux")) {
                 if let Err(e) = copy_pybuild_to_app_dir(app.handle()) {
                     log_error!("Failed to copy pyBuild directory on startup: {}", e);
                     // 不阻断应用启动，只记录错误
@@ -4312,7 +4312,7 @@ pub fn run() {
                 if cfg!(debug_assertions) {
                     log_info!("Development mode detected, skipping pyBuild directory copy");
                 } else {
-                    log_info!("Non-macOS platform detected, skipping pyBuild directory copy");
+                    log_info!("Windows platform detected, skipping pyBuild directory copy");
                 }
             }
             Ok(())
