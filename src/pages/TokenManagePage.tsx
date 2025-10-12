@@ -71,7 +71,9 @@ export const TokenManagePage: React.FC = () => {
     show: boolean;
     title: string;
     message: string;
-    onConfirm: () => void;
+    onConfirm: (checkboxValue?: boolean) => void;
+    checkboxLabel?: string;
+    checkboxDefaultChecked?: boolean;
   }>({ show: false, title: "", message: "", onConfirm: () => {} });
 
   useEffect(() => {
@@ -966,31 +968,43 @@ export const TokenManagePage: React.FC = () => {
     setConfirmDialog({
       show: true,
       title: "切换账户",
-      message: `确定要切换到账户 ${email} 吗？这将先执行完全重置，然后替换当前的登录信息。`,
-      onConfirm: async () => {
+      message: `确定要切换到账户 ${email} 吗？`,
+      checkboxLabel: "同时重置机器码（推荐，确保账户切换成功）",
+      checkboxDefaultChecked: true,
+      onConfirm: async (shouldReset?: boolean) => {
         try {
-          // 第一步：执行完全重置
-          console.log("🔄 开始执行完全重置...");
-          setToast({ message: "正在执行完全重置...", type: "success" });
+          const shouldResetMachineId = shouldReset ?? true;
+          console.log("shouldResetMachineId:", shouldResetMachineId);
+          if (shouldResetMachineId) {
+            // 第一步：执行完全重置
+            console.log("🔄 开始执行完全重置...");
+            setToast({ message: "正在执行完全重置...", type: "success" });
 
-          const resetResult = await CursorService.completeResetMachineIds();
-          if (!resetResult.success) {
-            setToast({
-              message: `重置失败: ${resetResult.message}`,
-              type: "error",
-            });
-            setConfirmDialog({ ...confirmDialog, show: false });
-            return;
+            const resetResult = await CursorService.completeResetMachineIds();
+            if (!resetResult.success) {
+              setToast({
+                message: `重置失败: ${resetResult.message}`,
+                type: "error",
+              });
+              setConfirmDialog({ ...confirmDialog, show: false });
+              return;
+            }
+
+            console.log("✅ 完全重置成功，开始切换账户...");
+            setToast({ message: "重置成功，正在切换账户...", type: "success" });
+          } else {
+            console.log("⏭️ 跳过重置机器码，直接切换账户...");
+            setToast({ message: "正在切换账户...", type: "success" });
           }
-
-          console.log("✅ 完全重置成功，开始切换账户...");
-          setToast({ message: "重置成功，正在切换账户...", type: "success" });
 
           // 第二步：切换账户
           const result = await AccountService.switchAccount(email);
           if (result.success) {
+            const message = shouldResetMachineId
+              ? "账户切换成功！请重启Cursor查看效果。"
+              : "账户切换成功（未重置机器码）！请重启Cursor查看效果。";
             setToast({
-              message: "账户切换成功！请重启Cursor查看效果。",
+              message,
               type: "success",
             });
             await loadAccounts();
@@ -1220,8 +1234,11 @@ export const TokenManagePage: React.FC = () => {
       );
 
       if (result.success) {
-        // 不要关闭 toast，等待 Rust 端的事件响应
-        // setToast 会在事件监听器中处理
+        setManualBindCardLoading(null);
+        setToast({
+          message: "手动绑卡页面已打开",
+          type: "success",
+        });
       } else {
         setManualBindCardLoading(null);
         setToast({
@@ -1234,6 +1251,46 @@ export const TokenManagePage: React.FC = () => {
       setManualBindCardLoading(null);
       setToast({
         message: "打开手动绑卡页面失败",
+        type: "error",
+      });
+    }
+  };
+
+  const handleCopyBindCardUrl = async (account: AccountInfo) => {
+    if (!account.workos_cursor_session_token) {
+      setToast({
+        message: "该账户没有 WorkOS Session Token，无法获取绑卡链接",
+        type: "error",
+      });
+      return;
+    }
+
+    try {
+      setToast({
+        message: "正在获取绑卡链接，请稍候...",
+        type: "success",
+      });
+
+      const result = await AccountService.getBindCardUrl(
+        account.workos_cursor_session_token
+      );
+
+      if (result.success) {
+        // Rust 后端已经复制到剪贴板了
+        setToast({
+          message: result.message || "绑卡链接已复制到剪贴板",
+          type: "success",
+        });
+      } else {
+        setToast({
+          message: result.message,
+          type: "error",
+        });
+      }
+    } catch (error) {
+      console.error("Failed to get bind card URL:", error);
+      setToast({
+        message: "获取绑卡链接失败",
         type: "error",
       });
     }
@@ -2204,6 +2261,19 @@ export const TokenManagePage: React.FC = () => {
                                           : "💳 手动绑卡"}
                                       </button>
 
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          handleCopyBindCardUrl(account);
+                                          setOpenMenuEmail(null);
+                                        }}
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                      >
+                                        📋 复制绑卡链接
+                                      </button>
+
                                       <hr className="my-1" />
 
                                       <button
@@ -2526,6 +2596,8 @@ export const TokenManagePage: React.FC = () => {
           message={confirmDialog.message}
           onConfirm={confirmDialog.onConfirm}
           onCancel={() => setConfirmDialog({ ...confirmDialog, show: false })}
+          checkboxLabel={confirmDialog.checkboxLabel}
+          checkboxDefaultChecked={confirmDialog.checkboxDefaultChecked}
         />
       )}
     </div>

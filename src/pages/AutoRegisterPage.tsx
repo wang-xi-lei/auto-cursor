@@ -81,6 +81,13 @@ export const AutoRegisterPage: React.FC = () => {
   const [batchCount, setBatchCount] = useState(1);
   const [batchEmails, setBatchEmails] = useState<string[]>([""]);
 
+  // 银行卡选择相关状态
+  const [bankCardList, setBankCardList] = useState<BankCardConfig[]>([]);
+  const [selectedCardIndex, setSelectedCardIndex] = useState<number>(0); // 单个注册：默认选中第一张
+  const [selectedBatchCardIndices, setSelectedBatchCardIndices] = useState<
+    number[]
+  >([0]); // 批量注册：默认选中第一张
+
   // 同步ref和state
   useEffect(() => {
     isRegisteringRef.current = isRegistering;
@@ -294,6 +301,24 @@ export const AutoRegisterPage: React.FC = () => {
     };
   }, []); // 确保只运行一次
 
+  // 加载银行卡列表
+  useEffect(() => {
+    const loadBankCardList = async () => {
+      try {
+        const configList = await BankCardConfigService.getBankCardConfigList();
+        setBankCardList(configList.cards);
+        // 默认选中第一张卡
+        if (configList.cards.length > 0) {
+          setSelectedCardIndex(0);
+          setSelectedBatchCardIndices([0]);
+        }
+      } catch (error) {
+        console.error("加载银行卡列表失败:", error);
+      }
+    };
+    loadBankCardList();
+  }, []);
+
   const generateRandomInfo = () => {
     const firstNames = [
       "Alex",
@@ -367,6 +392,27 @@ export const AutoRegisterPage: React.FC = () => {
     }
   };
 
+  // 银行卡选择切换函数（批量注册用，多选）
+  const handleBatchCardSelection = (index: number) => {
+    setSelectedBatchCardIndices((prev) => {
+      if (prev.includes(index)) {
+        // 如果已选中，则取消选中（但至少保留一个）
+        if (prev.length > 1) {
+          return prev.filter((i) => i !== index);
+        }
+        return prev;
+      } else {
+        // 如果未选中，则添加选中
+        return [...prev, index].sort((a, b) => a - b);
+      }
+    });
+  };
+
+  // 银行卡选择函数（单个注册用，单选）
+  const handleSingleCardSelection = (index: number) => {
+    setSelectedCardIndex(index);
+  };
+
   const validateForm = (): boolean => {
     // 自定义邮箱需要验证邮箱地址
     if (emailType === "custom" && (!form.email || !form.email.includes("@"))) {
@@ -423,6 +469,9 @@ export const AutoRegisterPage: React.FC = () => {
             enableBankCardBinding: enableBankCardBinding,
             skipPhoneVerification: skipPhoneVerification,
             btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
+            selectedCardIndex: enableBankCardBinding
+              ? selectedCardIndex
+              : undefined, // 传递选中的银行卡索引
           }
         );
       } else if (emailType === "outlook" && outlookMode === "default") {
@@ -435,6 +484,9 @@ export const AutoRegisterPage: React.FC = () => {
           enableBankCardBinding: enableBankCardBinding,
           skipPhoneVerification: skipPhoneVerification,
           btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
+          selectedCardIndex: enableBankCardBinding
+            ? selectedCardIndex
+            : undefined, // 传递选中的银行卡索引
         });
       } else {
         // 使用自定义邮箱注册
@@ -446,6 +498,9 @@ export const AutoRegisterPage: React.FC = () => {
           enableBankCardBinding: enableBankCardBinding,
           skipPhoneVerification: skipPhoneVerification,
           btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
+          selectedCardIndex: enableBankCardBinding
+            ? selectedCardIndex
+            : undefined, // 传递选中的银行卡索引
         });
       }
 
@@ -527,17 +582,12 @@ export const AutoRegisterPage: React.FC = () => {
 
     // 验证银行卡配置
     if (enableBankCardBinding) {
-      try {
-        const configList = await BankCardConfigService.getBankCardConfigList();
-        if (configList.cards.length < batchCount) {
-          setToast({
-            message: `银行卡配置数量(${configList.cards.length})少于注册数量(${batchCount})，请先配置足够的银行卡`,
-            type: "error",
-          });
-          return;
-        }
-      } catch (error) {
-        setToast({ message: `读取银行卡配置失败: ${error}`, type: "error" });
+      // 检查选中的银行卡数量是否足够
+      if (selectedBatchCardIndices.length < batchCount) {
+        setToast({
+          message: `选中的银行卡数量(${selectedBatchCardIndices.length})少于注册数量(${batchCount})，请选择足够的银行卡`,
+          type: "error",
+        });
         return;
       }
     }
@@ -588,6 +638,9 @@ export const AutoRegisterPage: React.FC = () => {
         enableBankCardBinding,
         skipPhoneVerification,
         btnIndex: isUsAccount ? 2 : 1, // 美国账户使用索引2，否则使用索引1
+        selectedCardIndices: enableBankCardBinding
+          ? selectedBatchCardIndices.slice(0, batchCount)
+          : undefined, // 传递选中的银行卡索引
       });
 
       console.log("批量注册结果:", result);
@@ -1185,6 +1238,50 @@ export const AutoRegisterPage: React.FC = () => {
               </div>
             )}
 
+            {/* 银行卡选择（单个注册用） */}
+            {enableBankCardBinding && bankCardList.length > 0 && (
+              <div className="p-4 border border-blue-200 rounded-md bg-blue-50">
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="text-sm font-medium text-blue-800">
+                    💳 选择银行卡（单个注册）
+                  </h5>
+                  <div className="text-xs text-blue-700">
+                    已选：卡片 {selectedCardIndex + 1}
+                  </div>
+                </div>
+                <div className="flex gap-2 overflow-x-auto">
+                  {bankCardList.map((card, index) => (
+                    <div
+                      key={index}
+                      className={`relative flex-shrink-0 p-3 border-2 rounded-md cursor-pointer transition-all ${
+                        selectedCardIndex === index
+                          ? "border-blue-500 bg-blue-100"
+                          : "border-gray-300 bg-white hover:border-gray-400"
+                      }`}
+                      onClick={() => handleSingleCardSelection(index)}
+                    >
+                      <div className="text-sm font-medium">
+                        卡片 {index + 1}
+                      </div>
+                      <div className="mt-1 text-xs text-gray-600">
+                        {card.cardNumber
+                          ? `****${card.cardNumber.slice(-4)}`
+                          : "未设置"}
+                      </div>
+                      {selectedCardIndex === index && (
+                        <div className="absolute text-blue-600 top-1 right-1">
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-gray-600">
+                  💡 点击卡片选择，单个注册将使用选中的银行卡
+                </p>
+              </div>
+            )}
+
             {/* 操作按钮 */}
             <div className="flex space-x-4">
               {useRandomInfo && (
@@ -1296,6 +1393,51 @@ export const AutoRegisterPage: React.FC = () => {
                       {emailType === "cloudflare_temp"
                         ? "💡 将自动为每个账号生成独立的临时邮箱"
                         : "💡 将使用配置的 Outlook 邮箱进行批量注册"}
+                    </p>
+                  </div>
+                )}
+
+                {/* 银行卡选择（批量注册用） */}
+                {enableBankCardBinding && bankCardList.length > 0 && (
+                  <div className="p-4 border border-green-200 rounded-md bg-green-50">
+                    <div className="flex items-center justify-between mb-3">
+                      <h5 className="text-sm font-medium text-green-800">
+                        💳 选择银行卡（批量注册）
+                      </h5>
+                      <div className="text-xs text-green-700">
+                        已选 {selectedBatchCardIndices.length}/
+                        {bankCardList.length} 张
+                      </div>
+                    </div>
+                    <div className="flex gap-2 overflow-x-auto">
+                      {bankCardList.map((card, index) => (
+                        <div
+                          key={index}
+                          className={`relative flex-shrink-0 p-3 border-2 rounded-md cursor-pointer transition-all ${
+                            selectedBatchCardIndices.includes(index)
+                              ? "border-green-500 bg-green-100"
+                              : "border-gray-300 bg-white hover:border-gray-400"
+                          }`}
+                          onClick={() => handleBatchCardSelection(index)}
+                        >
+                          <div className="text-sm font-medium">
+                            卡片 {index + 1}
+                          </div>
+                          <div className="mt-1 text-xs text-gray-600">
+                            {card.cardNumber
+                              ? `****${card.cardNumber.slice(-4)}`
+                              : "未设置"}
+                          </div>
+                          {selectedBatchCardIndices.includes(index) && (
+                            <div className="absolute text-green-600 top-1 right-1">
+                              ✓
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-xs text-gray-600">
+                      💡 点击卡片选择/取消选择，批量注册将按顺序使用选中的银行卡
                     </p>
                   </div>
                 )}

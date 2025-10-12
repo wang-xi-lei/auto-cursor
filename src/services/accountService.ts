@@ -117,6 +117,32 @@ export class AccountService {
     }
   }
 
+  // Get bind card URL (for copying to clipboard)
+  static async getBindCardUrl(workosSessionToken: string): Promise<{ success: boolean; message: string; url?: string }> {
+    try {
+      console.log('🔄 Getting bind card URL...');
+
+      const result = await invoke<any>("get_bind_card_url", {
+        workosCursorSessionToken: workosSessionToken
+      });
+
+      console.log('📥 Get bind card URL result:', result);
+
+      return {
+        success: result.success || false,
+        message: result.message || '未知响应',
+        url: result.url
+      };
+    } catch (error) {
+      console.error('Failed to get bind card URL:', error);
+
+      return {
+        success: false,
+        message: `❌ 获取链接失败: ${error instanceof Error ? error.message : '未知错误'}`
+      };
+    }
+  }
+
   // Open manual bind card page with WorkOS Session Token
   static async openManualBindCardPage(workosSessionToken: string): Promise<{ success: boolean; message: string }> {
     try {

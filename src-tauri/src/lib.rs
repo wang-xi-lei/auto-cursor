@@ -1229,6 +1229,146 @@ async fn cancel_subscription_failed(app: tauri::AppHandle) -> Result<(), String>
     Ok(())
 }
 
+// 纯函数：获取绑卡链接
+async fn get_bind_card_url_internal(
+    workos_cursor_session_token: String,
+) -> Result<String, String> {
+    use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
+
+    log_info!("🔄 Fetching bind card URL from Cursor API...");
+
+    // 构建请求头
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        COOKIE,
+        HeaderValue::from_str(&format!(
+            "WorkosCursorSessionToken={}",
+            workos_cursor_session_token
+        ))
+        .map_err(|e| format!("Failed to create cookie header: {}", e))?,
+    );
+    headers.insert("Content-Type", HeaderValue::from_static("application/json"));
+
+    // 构建请求体
+    let body = serde_json::json!({
+        "tier": "pro"
+    });
+
+    // 创建 HTTP 客户端
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    // 发送 POST 请求
+    log_info!("📤 Sending POST request to https://cursor.com/api/checkout");
+    let response = client
+        .post("https://cursor.com/api/checkout")
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to send request: {}", e))?;
+
+    // 检查响应状态
+    let status = response.status();
+    log_info!("📥 Received response with status: {}", status);
+
+    if !status.is_success() {
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        log_error!("❌ API request failed: {} - {}", status, error_text);
+        return Err(format!("API request failed: {} - {}", status, error_text));
+    }
+
+    // 获取响应文本（直接就是URL，可能带引号）
+    let mut url = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    // 去除可能存在的引号
+    url = url.trim().trim_matches('"').to_string();
+
+    log_info!("✅ Successfully got bind card URL: {}", url);
+
+    // 检查是否返回的是 dashboard 页面（说明已经绑卡）
+    if url.contains("cursor.com/dashboard") {
+        log_error!("❌ 返回的是 dashboard 页面，该账户可能已经绑卡");
+        return Err("该账户可能已经绑定过银行卡，无法再次绑卡。如需更换银行卡，请先取消订阅后再试。".to_string());
+    }
+
+    // 检查是否是 Stripe checkout URL
+    if !url.contains("checkout.stripe.com") {
+        log_error!("❌ 返回的不是有效的 Stripe checkout URL: {}", url);
+        return Err(format!("返回的不是有效的绑卡链接: {}", url));
+    }
+
+    Ok(url)
+}
+
+#[tauri::command]
+async fn get_bind_card_url(
+    app: tauri::AppHandle,
+    workos_cursor_session_token: String,
+) -> Result<serde_json::Value, String> {
+    match get_bind_card_url_internal(workos_cursor_session_token).await {
+        Ok(url) => {
+            // 复制到剪贴板
+            #[cfg(target_os = "macos")]
+            {
+                use std::process::Command;
+                let _ = Command::new("pbcopy")
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                    .and_then(|mut child| {
+                        use std::io::Write;
+                        if let Some(stdin) = child.stdin.as_mut() {
+                            stdin.write_all(url.as_bytes())?;
+                        }
+                        child.wait()
+                    });
+            }
+            
+            #[cfg(target_os = "windows")]
+            {
+                use std::process::Command;
+                let _ = Command::new("cmd")
+                    .args(&["/C", &format!("echo {} | clip", url)])
+                    .output();
+            }
+            
+            #[cfg(target_os = "linux")]
+            {
+                use std::process::Command;
+                let _ = Command::new("xclip")
+                    .args(&["-selection", "clipboard"])
+                    .stdin(std::process::Stdio::piped())
+                    .spawn()
+                    .and_then(|mut child| {
+                        use std::io::Write;
+                        if let Some(stdin) = child.stdin.as_mut() {
+                            stdin.write_all(url.as_bytes())?;
+                        }
+                        child.wait()
+                    });
+            }
+            
+            Ok(serde_json::json!({
+                "success": true,
+                "url": url,
+                "message": "绑卡链接已复制到剪贴板"
+            }))
+        }
+        Err(e) => Ok(serde_json::json!({
+            "success": false,
+            "message": format!("获取绑卡链接失败: {}", e)
+        })),
+    }
+}
+
 #[tauri::command]
 async fn open_manual_bind_card_page(
     app: tauri::AppHandle,
@@ -1236,7 +1376,17 @@ async fn open_manual_bind_card_page(
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 Opening manual bind card page with WorkOS token...");
 
-    let url = "https://cursor.com/dashboard";
+    // 获取绑卡链接
+    let url = match get_bind_card_url_internal(workos_cursor_session_token).await {
+        Ok(url) => url,
+        Err(e) => {
+            log_error!("❌ Failed to get bind card URL: {}", e);
+            return Ok(serde_json::json!({
+                "success": false,
+                "message": format!("获取绑卡链接失败: {}", e)
+            }));
+        }
+    };
 
     // 先尝试关闭已存在的窗口
     if let Some(existing_window) = app.get_webview_window("manual_bind_card") {
@@ -1250,129 +1400,36 @@ async fn open_manual_bind_card_page(
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
     }
 
-    // 创建新的 WebView 窗口（默认隐藏）
-    let app_handle = app.clone();
+    // 解析 URL
+    let parsed_url = match url.parse() {
+        Ok(u) => u,
+        Err(e) => {
+            log_error!("❌ Failed to parse URL: {}", e);
+            return Ok(serde_json::json!({
+                "success": false,
+                "message": format!("无效的URL格式: {}", e)
+            }));
+        }
+    };
+
+    // 创建新的 WebView 窗口
     let webview_window = tauri::WebviewWindowBuilder::new(
         &app,
         "manual_bind_card",
-        tauri::WebviewUrl::External(url.parse().unwrap()),
+        tauri::WebviewUrl::External(parsed_url),
     )
     .title("Cursor - 手动绑卡")
     .inner_size(1200.0, 800.0)
     .resizable(true)
-    .initialization_script(&format!(
-        r#"
-        // 在页面加载前设置 Cookie
-        document.cookie = 'WorkosCursorSessionToken={}; domain=.cursor.com; path=/; secure; samesite=none';
-        console.log('Cookie injected via initialization script');
-        
-        // 可选：检查 Cookie 是否设置成功
-        console.log('Current cookies:', document.cookie);
-        "#,
-        workos_cursor_session_token
-    ))
-    .visible(true) // 默认隐藏窗口
-    .on_page_load(move |_window, _payload| {
-        // 在页面加载完成时注入 Cookie
-        let cus_script = r#"
-            (function () {
-                console.log('页面加载检测脚本已注入');
-                localStorage.removeItem('isFind')
-                let timeoutId = null
-
-                function observeSpan (targetText, callback) {
-                    timeoutId = setTimeout(() => {
-                    console.log('在 10 秒内未找到目标 span 元素: Start 14-day trial');
-                    clearTimeout(timeoutId);
-                    // window.__TAURI_INTERNALS__.invoke('manual_bind_card_failed');
-                    // callback(null);
-                    // observer.disconnect();
-                    }, 10000);
-
-                    console.log('Initial DOM loaded');
-
-                    const observer = new MutationObserver(function (mutationsList, observer) {
-                    // 当 DOM 发生变化时执行
-                    for (let mutation of mutationsList) {
-                        if (mutation.type === 'childList') {
-                        mutation.addedNodes.forEach(node => {
-                            if (node.classList.contains('ease') && node.classList.contains('container')) {
-                            console.log('目标 div 元素已出现:', node);
-                            // callback(node); // 执行回调函数，并将目标元素传递给它
-                            document.querySelectorAll('span').forEach(span => {
-                                if (span.textContent.trim() === targetText) {
-                                console.log('目标 span 元素已出现:', span);
-                                localStorage.setItem('isFind', 1)
-
-                                callback(span);
-                                observer.disconnect();
-                                }
-                            });
-                            observer.disconnect(); // 找到目标元素后停止监听
-                            }
-                        });
-                        }
-                    }
-                    });
-
-                    const config = { childList: true, subtree: true };
-                    observer.observe(document.body, config);
-
-                }
-
-                // 使用示例：
-                observeSpan('Start 14-day trial', function (targetSpan) {
-                    // 在这里执行当目标 span 元素出现后的操作
-                    console.log('找到了目标 span 元素!', targetSpan);
-                    targetSpan.click();
-                    clearTimeout(timeoutId);
-                    setTimeout(() => {
-                    console.log('Notifying frontend to show window...');
-                    window.__TAURI_INTERNALS__.invoke('show_manual_bind_card_window');
-                    }, 100);
-                    // 例如：给它添加一个点击事件监听器
-                    // targetSpan.addEventListener('click', function () {
-                    //   console.log('目标 span 元素被点击了!');
-                    // });
-                });
-            })();
-            "#;
-        
-        if let Err(e) = _window.eval(cus_script) {
-            log_error!("❌ Failed to inject page load: {}", e);
-        } else {
-            log_info!("✅ Page load injected successfully on page load");
-        }
-    })
+    .visible(true)
     .build();
 
     match webview_window {
-        Ok(window) => {
-            // 添加窗口关闭事件监听器
-            let app_handle_clone = app_handle.clone();
-            window.on_window_event(move |event| {
-                match event {
-                    tauri::WindowEvent::CloseRequested { .. } => {
-                        log_info!("🔄 Manual bind card window close requested by user");
-                        // 用户手动关闭窗口时，调用失败处理
-                        let app_handle_clone = app_handle_clone.clone();
-                        tauri::async_runtime::spawn(async move {
-                            if let Err(e) = manual_bind_card_failed(app_handle_clone).await {
-                                log_error!("❌ Failed to handle window close: {}", e);
-                            }
-                        });
-                    }
-                    tauri::WindowEvent::Destroyed => {
-                        log_info!("🔄 Manual bind card window destroyed");
-                    }
-                    _ => {}
-                }
-            });
-            
-            log_info!("✅ Successfully opened WebView window");
+        Ok(_window) => {
+            log_info!("✅ Successfully opened bind card window");
             Ok(serde_json::json!({
                 "success": true,
-                "message": "已打开手动绑卡页面，正在自动登录..."
+                "message": "已打开手动绑卡页面"
             }))
         }
         Err(e) => {
@@ -2037,6 +2094,7 @@ async fn batch_register_with_email(
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
     btn_index: Option<u32>,
+    selected_card_indices: Option<Vec<u32>>, // 新增：选中的银行卡索引列表
 ) -> Result<serde_json::Value, String> {
     let email_type_str = email_type.as_deref().unwrap_or("custom");
     log_info!("🔄 批量注册 {} 个 Cursor 账户（串行模式，邮箱类型：{}）...", emails.len(), email_type_str);
@@ -2050,16 +2108,32 @@ async fn batch_register_with_email(
     let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
         .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
     
-    let cards = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+    let all_cards = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
         cards_array.clone()
     } else {
         // 如果是旧格式（单张卡），转换为数组
         vec![bank_card_data]
     };
 
+    // 如果提供了选中的银行卡索引，则只使用选中的卡片
+    let cards = if let Some(indices) = &selected_card_indices {
+        let mut selected_cards = Vec::new();
+        for &index in indices.iter() {
+            if (index as usize) < all_cards.len() {
+                selected_cards.push(all_cards[index as usize].clone());
+            } else {
+                return Err(format!("银行卡索引 {} 超出范围（总共 {} 张卡）", index, all_cards.len()));
+            }
+        }
+        selected_cards
+    } else {
+        // 如果没有提供索引，使用所有卡片（保持向后兼容）
+        all_cards
+    };
+
     if enable_bank_card_binding.unwrap_or(true) && cards.len() < emails.len() {
         return Err(format!(
-            "银行卡配置数量({})少于注册账户数量({})，请先配置足够的银行卡",
+            "选中的银行卡数量({})少于注册账户数量({})，请选择足够的银行卡",
             cards.len(),
             emails.len()
         ));
@@ -2067,8 +2141,8 @@ async fn batch_register_with_email(
 
     log_info!("📋 准备使用 {} 张银行卡进行批量注册", cards.len());
 
-    // 保存原始配置，以便注册完成后恢复
-    let original_config = bank_card_config.clone();
+    // 备份原始配置，以便注册完成后恢复（防止异常情况导致配置丢失）
+    let _backup_result = backup_bank_card_config().await;
 
     // 串行执行注册，一个接一个
     let mut results = Vec::new();
@@ -2082,24 +2156,27 @@ async fn batch_register_with_email(
         let email_display = if email.is_empty() { "自动生成" } else { &email };
         log_info!("🎯 [任务 {}/{}] 开始注册: {}", i + 1, emails.len(), email_display);
         
-        // 为当前注册任务设置对应的银行卡配置
-        if enable_bank_card_binding.unwrap_or(true) && i < cards.len() {
-            let card_config = cards[i].clone();
-            let temp_config = serde_json::json!(card_config);
-            let config_str = serde_json::to_string_pretty(&temp_config)
-                .unwrap_or_else(|_| "{}".to_string());
-            
-            if let Err(e) = save_bank_card_config(config_str).await {
-                log_error!("❌ [任务 {}/{}] 设置银行卡配置失败: {}", i + 1, emails.len(), e);
-            } else {
-                log_info!("✅ [任务 {}/{}] 已设置银行卡配置", i + 1, emails.len());
-            }
-        }
+        // 判断是否需要设置银行卡配置
+        let card_index_for_task = if enable_bank_card_binding.unwrap_or(true) && i < cards.len() {
+            Some(i as u32)
+        } else {
+            None
+        };
         
         // 根据邮箱类型调用不同的注册函数
         let result = match email_type_str {
             "cloudflare_temp" => {
                 log_info!("📧 [任务 {}/{}] 使用 Cloudflare 临时邮箱注册", i + 1, emails.len());
+                
+                // 临时设置当前任务的银行卡配置
+                if let Some(_) = card_index_for_task {
+                    let card_config = cards[i].clone();
+                    let temp_config = serde_json::json!(card_config);
+                    let config_str = serde_json::to_string_pretty(&temp_config)
+                        .unwrap_or_else(|_| "{}".to_string());
+                    let _ = save_bank_card_config(config_str).await;
+                }
+                
                 register_with_cloudflare_temp_email(
                     app.clone(),
                     first_name.clone(),
@@ -2108,11 +2185,22 @@ async fn batch_register_with_email(
                     enable_bank_card_binding,
                     skip_phone_verification,
                     btn_index,
+                    None, // 不传索引，因为已经临时设置了配置
                 )
                 .await
             }
             "outlook" => {
                 log_info!("📧 [任务 {}/{}] 使用 Outlook 邮箱注册: {}", i + 1, emails.len(), email);
+                
+                // 临时设置当前任务的银行卡配置
+                if let Some(_) = card_index_for_task {
+                    let card_config = cards[i].clone();
+                    let temp_config = serde_json::json!(card_config);
+                    let config_str = serde_json::to_string_pretty(&temp_config)
+                        .unwrap_or_else(|_| "{}".to_string());
+                    let _ = save_bank_card_config(config_str).await;
+                }
+                
                 register_with_outlook(
                     app.clone(),
                     email.clone(),
@@ -2122,12 +2210,23 @@ async fn batch_register_with_email(
                     enable_bank_card_binding,
                     skip_phone_verification,
                     btn_index,
+                    None, // 不传索引，因为已经临时设置了配置
                 )
                 .await
             }
             _ => {
                 // custom 或其他：使用指定邮箱
                 log_info!("📧 [任务 {}/{}] 使用自定义邮箱注册: {}", i + 1, emails.len(), email);
+                
+                // 临时设置当前任务的银行卡配置
+                if let Some(_) = card_index_for_task {
+                    let card_config = cards[i].clone();
+                    let temp_config = serde_json::json!(card_config);
+                    let config_str = serde_json::to_string_pretty(&temp_config)
+                        .unwrap_or_else(|_| "{}".to_string());
+                    let _ = save_bank_card_config(config_str).await;
+                }
+                
                 register_with_email(
                     app.clone(),
                     email.clone(),
@@ -2137,6 +2236,7 @@ async fn batch_register_with_email(
                     enable_bank_card_binding,
                     skip_phone_verification,
                     btn_index,
+                    None, // 不传索引，因为已经临时设置了配置
                 )
                 .await
             }
@@ -2184,7 +2284,8 @@ async fn batch_register_with_email(
     }
 
     // 恢复原始银行卡配置
-    if let Err(e) = save_bank_card_config(original_config).await {
+    // 恢复原始配置（从备份恢复）
+    if let Err(e) = restore_bank_card_config().await {
         log_warn!("⚠️ 恢复原始银行卡配置失败: {}", e);
     } else {
         log_info!("✅ 已恢复原始银行卡配置");
@@ -2216,6 +2317,7 @@ async fn register_with_email(
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
     btn_index: Option<u32>,
+    selected_card_index: Option<u32>, // 新增：选中的银行卡索引
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 [DEBUG] register_with_email 函数被调用");
     log_info!("🔄 使用指定邮箱注册 Cursor 账户...");
@@ -2223,36 +2325,48 @@ async fn register_with_email(
     log_info!("👤 姓名: {} {}", first_name, last_name);
     log_info!("🔍 跳过手机号验证: {:?}", skip_phone_verification);
 
-    // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
+    // 如果启用了银行卡绑定，先备份并设置银行卡配置
     if enable_bank_card_binding.unwrap_or(true) {
         log_info!("💳 准备设置银行卡配置...");
+        
+        // 备份原始配置
+        let _backup_result = backup_bank_card_config().await;
         
         // 读取银行卡配置
         let bank_card_config = read_bank_card_config().await?;
         let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
             .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
         
-        // 获取第一张卡的配置
-        let first_card = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
-            // 新格式：从 cards 数组中取第一张
-            if cards_array.is_empty() {
-                return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
-            }
-            cards_array[0].clone()
+        // 获取所有卡片
+        let all_cards = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+            cards_array.clone()
         } else {
             // 旧格式：整个配置就是一张卡
-            bank_card_data
+            vec![bank_card_data.clone()]
         };
         
-        // 将第一张卡的配置写入文件（旧格式，供 Python 脚本读取）
-        let config_str = serde_json::to_string_pretty(&first_card)
+        if all_cards.is_empty() {
+            return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
+        }
+        
+        // 根据索引选择卡片，如果没有提供索引则使用第一张
+        let card_index = selected_card_index.unwrap_or(0) as usize;
+        if card_index >= all_cards.len() {
+            return Err(format!("银行卡索引 {} 超出范围（总共 {} 张卡）", card_index, all_cards.len()));
+        }
+        
+        let selected_card = &all_cards[card_index];
+        log_info!("✅ 选择使用卡片 {} 进行注册", card_index + 1);
+        
+        // 将选中的卡片配置写入文件（旧格式，供 Python 脚本读取）
+        let config_str = serde_json::to_string_pretty(selected_card)
             .unwrap_or_else(|_| "{}".to_string());
         
         if let Err(e) = save_bank_card_config(config_str).await {
             log_error!("❌ 设置银行卡配置失败: {}", e);
             return Err(format!("设置银行卡配置失败: {}", e));
         } else {
-            log_info!("✅ 已设置银行卡配置为第一张卡");
+            log_info!("✅ 已设置选中的银行卡配置");
         }
     }
 
@@ -2509,6 +2623,11 @@ async fn register_with_email(
     //     }
     // }
 
+    // 恢复原始配置（从备份恢复）
+    if enable_bank_card_binding.unwrap_or(true) {
+        let _ = restore_bank_card_config().await;
+    }
+
     Ok(result)
 }
 
@@ -2521,6 +2640,7 @@ async fn register_with_cloudflare_temp_email(
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
     btn_index: Option<u32>,
+    selected_card_index: Option<u32>, // 新增：选中的银行卡索引
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 使用Cloudflare临时邮箱注册 Cursor 账户...");
     log_info!("👤 姓名: {} {}", first_name, last_name);
@@ -2530,29 +2650,41 @@ async fn register_with_cloudflare_temp_email(
     );
     log_info!("🔍 跳过手机号验证: {:?}", skip_phone_verification);
 
-    // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
+    // 如果启用了银行卡绑定，先备份并设置银行卡配置
     if enable_bank_card_binding.unwrap_or(true) {
         log_info!("💳 准备设置银行卡配置...");
+        
+        // 备份原始配置
+        let _backup_result = backup_bank_card_config().await;
         
         // 读取银行卡配置
         let bank_card_config = read_bank_card_config().await?;
         let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
             .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
         
-        // 获取第一张卡的配置
-        let first_card = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
-            // 新格式：从 cards 数组中取第一张
-            if cards_array.is_empty() {
-                return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
-            }
-            cards_array[0].clone()
+        // 获取所有卡片
+        let all_cards = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+            cards_array.clone()
         } else {
             // 旧格式：整个配置就是一张卡
-            bank_card_data
+            vec![bank_card_data.clone()]
         };
         
-        // 将第一张卡的配置写入文件（旧格式，供 Python 脚本读取）
-        let config_str = serde_json::to_string_pretty(&first_card)
+        if all_cards.is_empty() {
+            return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
+        }
+        
+        // 根据索引选择卡片，如果没有提供索引则使用第一张
+        let card_index = selected_card_index.unwrap_or(0) as usize;
+        if card_index >= all_cards.len() {
+            return Err(format!("银行卡索引 {} 超出范围（总共 {} 张卡）", card_index, all_cards.len()));
+        }
+        
+        let selected_card = &all_cards[card_index];
+        log_info!("✅ 选择使用卡片 {} 进行注册", card_index + 1);
+        
+        // 将选中的卡片配置写入文件（旧格式，供 Python 脚本读取）
+        let config_str = serde_json::to_string_pretty(selected_card)
             .unwrap_or_else(|_| "{}".to_string());
         
         if let Err(e) = save_bank_card_config(config_str).await {
@@ -2833,6 +2965,11 @@ async fn register_with_cloudflare_temp_email(
     //     }
     // }
 
+    // 恢复原始配置（从备份恢复）
+    if enable_bank_card_binding.unwrap_or(true) {
+        let _ = restore_bank_card_config().await;
+    }
+
     Ok(result)
 }
 
@@ -2847,6 +2984,7 @@ async fn register_with_outlook(
     enable_bank_card_binding: Option<bool>,
     skip_phone_verification: Option<bool>,
     btn_index: Option<u32>,
+    selected_card_index: Option<u32>, // 新增：选中的银行卡索引
 ) -> Result<serde_json::Value, String> {
     log_info!("🔄 使用Outlook邮箱注册 Cursor 账户...");
     log_info!("📧 邮箱: {}", email);
@@ -2857,36 +2995,48 @@ async fn register_with_outlook(
         use_incognito
     );
 
-    // 如果启用了银行卡绑定，先设置银行卡配置（使用第一张卡）
+    // 如果启用了银行卡绑定，先备份并设置银行卡配置（使用第一张卡）
     if enable_bank_card_binding.unwrap_or(true) {
         log_info!("💳 准备设置银行卡配置...");
+        
+        // 备份原始配置
+        let _backup_result = backup_bank_card_config().await;
         
         // 读取银行卡配置
         let bank_card_config = read_bank_card_config().await?;
         let bank_card_data: serde_json::Value = serde_json::from_str(&bank_card_config)
             .map_err(|e| format!("解析银行卡配置失败: {}", e))?;
         
-        // 获取第一张卡的配置
-        let first_card = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
-            // 新格式：从 cards 数组中取第一张
-            if cards_array.is_empty() {
-                return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
-            }
-            cards_array[0].clone()
+        // 获取所有卡片
+        let all_cards = if let Some(cards_array) = bank_card_data.get("cards").and_then(|v| v.as_array()) {
+            cards_array.clone()
         } else {
             // 旧格式：整个配置就是一张卡
-            bank_card_data
+            vec![bank_card_data.clone()]
         };
         
-        // 将第一张卡的配置写入文件（旧格式，供 Python 脚本读取）
-        let config_str = serde_json::to_string_pretty(&first_card)
+        if all_cards.is_empty() {
+            return Err("银行卡配置为空，请先配置至少一张银行卡".to_string());
+        }
+        
+        // 根据索引选择卡片，如果没有提供索引则使用第一张
+        let card_index = selected_card_index.unwrap_or(0) as usize;
+        if card_index >= all_cards.len() {
+            return Err(format!("银行卡索引 {} 超出范围（总共 {} 张卡）", card_index, all_cards.len()));
+        }
+        
+        let selected_card = &all_cards[card_index];
+        log_info!("✅ 选择使用卡片 {} 进行注册", card_index + 1);
+        
+        // 将选中的卡片配置写入文件（旧格式，供 Python 脚本读取）
+        let config_str = serde_json::to_string_pretty(selected_card)
             .unwrap_or_else(|_| "{}".to_string());
         
         if let Err(e) = save_bank_card_config(config_str).await {
             log_error!("❌ 设置银行卡配置失败: {}", e);
             return Err(format!("设置银行卡配置失败: {}", e));
         } else {
-            log_info!("✅ 已设置银行卡配置为第一张卡");
+            log_info!("✅ 已设置选中的银行卡配置");
         }
     }
 
@@ -3148,6 +3298,11 @@ async fn register_with_outlook(
         "email_type": "outlook-default"
     });
 
+    // 恢复原始配置（从备份恢复）
+    if enable_bank_card_binding.unwrap_or(true) {
+        let _ = restore_bank_card_config().await;
+    }
+
     Ok(result)
 }
 
@@ -3249,6 +3404,54 @@ async fn save_bank_card_config(config: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to save bank card config: {}", e))?;
 
     log_info!("✅ 银行卡配置已保存到: {:?}", config_path);
+    Ok(())
+}
+
+// 备份银行卡配置
+async fn backup_bank_card_config() -> Result<String, String> {
+    use std::fs;
+
+    let app_dir = get_app_dir()?;
+    let config_path = app_dir.join("bank_card_config.json");
+    let backup_path = app_dir.join("bank_card_config.backup.json");
+
+    if config_path.exists() {
+        let config_content = fs::read_to_string(&config_path)
+            .map_err(|e| format!("读取银行卡配置失败: {}", e))?;
+        
+        fs::write(&backup_path, &config_content)
+            .map_err(|e| format!("备份银行卡配置失败: {}", e))?;
+        
+        log_info!("✅ 银行卡配置已备份到: {:?}", backup_path);
+        Ok(config_content)
+    } else {
+        Ok(String::new())
+    }
+}
+
+// 恢复银行卡配置
+async fn restore_bank_card_config() -> Result<(), String> {
+    use std::fs;
+
+    let app_dir = get_app_dir()?;
+    let config_path = app_dir.join("bank_card_config.json");
+    let backup_path = app_dir.join("bank_card_config.backup.json");
+
+    if backup_path.exists() {
+        let backup_content = fs::read_to_string(&backup_path)
+            .map_err(|e| format!("读取备份配置失败: {}", e))?;
+        
+        if !backup_content.is_empty() {
+            fs::write(&config_path, backup_content)
+                .map_err(|e| format!("恢复银行卡配置失败: {}", e))?;
+            
+            log_info!("✅ 银行卡配置已从备份恢复");
+        }
+        
+        // 删除备份文件
+        let _ = fs::remove_file(&backup_path);
+    }
+
     Ok(())
 }
 
@@ -4016,7 +4219,6 @@ async fn open_cursor_dashboard(
     }
 
     // 创建新的 WebView 窗口
-    let app_handle = app.clone();
     let webview_window = tauri::WebviewWindowBuilder::new(
         &app,
         "cursor_dashboard",
@@ -4154,6 +4356,7 @@ pub fn run() {
             show_cancel_subscription_window,
             cancel_subscription_failed,
             open_manual_bind_card_page,
+            get_bind_card_url,
             show_manual_bind_card_window,
             manual_bind_card_failed,
             delete_cursor_account,
