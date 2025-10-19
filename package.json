@@ -21,6 +21,7 @@
     "@tauri-apps/plugin-opener": "^2",
     "@types/react-router-dom": "^5.3.3",
     "axios": "^1.11.0",
+    "lucide-react": "^0.546.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-markdown": "^10.1.0",

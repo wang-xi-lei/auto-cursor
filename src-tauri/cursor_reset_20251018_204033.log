@@ -1,0 +1,61 @@
+[2025-10-18 20:40:33.929] [INFO] === 系统信息 ===
+[2025-10-18 20:40:33.930] [INFO] 操作系统: macos
+[2025-10-18 20:40:33.930] [INFO] 架构: aarch64
+[2025-10-18 20:40:33.930] [INFO] 工作目录: "/Users/wangxilei/auto-cursor/src-tauri"
+[2025-10-18 20:40:33.930] [INFO] 存储文件路径: "/Users/wangxilei/Library/Application Support/Cursor/User/globalStorage/storage.json"
+[2025-10-18 20:40:33.931] [INFO] SQLite路径: "/Users/wangxilei/Library/Application Support/Cursor/User/globalStorage/state.vscdb"
+[2025-10-18 20:40:33.931] [INFO] 日志文件路径: "/Users/wangxilei/auto-cursor/src-tauri/cursor_reset_20251018_204033.log"
+[2025-10-18 20:40:33.931] [INFO] 存储文件是否存在: true
+[2025-10-18 20:40:33.931] [INFO] SQLite文件是否存在: true
+[2025-10-18 20:40:33.931] [INFO] 当前用户: wangxilei
+[2025-10-18 20:40:33.932] [INFO] === 系统信息结束 ===
+[2025-10-18 20:40:33.932] [INFO] 开始完整的 Cursor 重置流程...
+[2025-10-18 20:40:33.932] [INFO] === 步骤 1: 重置机器ID ===
+[2025-10-18 20:40:33.932] [INFO] 开始机器ID重置流程...
+[2025-10-18 20:40:33.932] [DEBUG] 检查存储文件: "/Users/wangxilei/Library/Application Support/Cursor/User/globalStorage/storage.json"
+[2025-10-18 20:40:33.932] [INFO] 存储文件存在，继续处理
+[2025-10-18 20:40:33.933] [INFO] 创建备份文件...
+[2025-10-18 20:40:33.933] [INFO] Created backup at: /Users/wangxilei/Library/Application Support/Cursor/User/globalStorage/storage.json.bak.20251018_204033
+[2025-10-18 20:40:33.933] [INFO] 生成新的机器ID...
+[2025-10-18 20:40:33.934] [INFO] 生成的新ID: dev_device_id=7a23aa89-7790-4796-86a8-ec5b402db757, machine_id长度=64, mac_machine_id长度=128, sqm_id={D4425FC8-0B7F-4929-A1A3-5EBBBA40A28E}
+[2025-10-18 20:40:33.934] [INFO] 更新存储文件...
+[2025-10-18 20:40:33.939] [INFO] Successfully updated storage.json
+[2025-10-18 20:40:33.939] [INFO] 更新SQLite数据库...
+[2025-10-18 20:40:33.939] [DEBUG] SQLite更新结果: SQLite database update skipped (feature not implemented)
+[2025-10-18 20:40:33.939] [INFO] 更新机器ID文件...
+[2025-10-18 20:40:33.940] [INFO] Successfully updated machine ID file
+[2025-10-18 20:40:33.940] [INFO] 更新系统ID...
+[2025-10-18 20:40:33.940] [DEBUG] 系统ID更新结果: macOS platform UUID file not found
+[2025-10-18 20:40:33.940] [INFO] 机器ID重置完成: Machine IDs reset successfully
+[2025-10-18 20:40:33.940] [INFO] 机器ID重置结果: success=true, message=Machine IDs reset successfully
+[2025-10-18 20:40:33.940] [DEBUG] 机器ID重置详情: Starting machine ID reset process...
+[2025-10-18 20:40:33.940] [DEBUG] 机器ID重置详情: Created backup at: /Users/wangxilei/Library/Application Support/Cursor/User/globalStorage/storage.json.bak.20251018_204033
+[2025-10-18 20:40:33.940] [DEBUG] 机器ID重置详情: Generated new machine IDs
+[2025-10-18 20:40:33.940] [DEBUG] 机器ID重置详情: Successfully updated storage.json
+[2025-10-18 20:40:33.941] [DEBUG] 机器ID重置详情: SQLite database update skipped (feature not implemented)
+[2025-10-18 20:40:33.941] [DEBUG] 机器ID重置详情: Successfully updated machine ID file
+[2025-10-18 20:40:33.941] [DEBUG] 机器ID重置详情: macOS platform UUID file not found
+[2025-10-18 20:40:33.941] [INFO] 机器ID重置成功
+[2025-10-18 20:40:33.941] [INFO] === 步骤 2: 修改 main.js ===
+[2025-10-18 20:40:33.941] [INFO] 找到Cursor应用路径: package.json="/Applications/Cursor.app/Contents/Resources/app/package.json", main.js="/Applications/Cursor.app/Contents/Resources/app/out/main.js"
+[2025-10-18 20:40:33.941] [INFO] package.json存在: true, main.js存在: true
+[2025-10-18 20:40:33.941] [INFO] 开始修改 main.js 文件...
+[2025-10-18 20:40:33.941] [INFO] 开始修改main.js文件: "/Applications/Cursor.app/Contents/Resources/app/out/main.js"
+[2025-10-18 20:40:33.941] [DEBUG] 读取main.js文件内容...
+[2025-10-18 20:40:33.942] [INFO] main.js文件大小: 1203108 字节
+[2025-10-18 20:40:33.943] [INFO] 创建main.js备份: /Applications/Cursor.app/Contents/Resources/app/out/main.js.backup.20251018_204033
+[2025-10-18 20:40:33.943] [WARN] Warning: Failed to modify main.js: Failed to create backup of main.js
+[2025-10-18 20:40:33.943] [INFO] === 步骤 3: 修改 workbench.desktop.main.js ===
+[2025-10-18 20:40:33.943] [INFO] 找到workbench路径: "/Applications/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js"
+[2025-10-18 20:40:33.943] [INFO] workbench文件存在: true
+[2025-10-18 20:40:33.944] [INFO] 开始修改 workbench.desktop.main.js 文件...
+[2025-10-18 20:40:33.944] [INFO] 开始修改workbench.desktop.main.js文件: "/Applications/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js"
+[2025-10-18 20:40:33.944] [DEBUG] 读取workbench.desktop.main.js文件内容...
+[2025-10-18 20:40:33.951] [INFO] workbench.desktop.main.js文件大小: 25210574 字节
+[2025-10-18 20:40:33.952] [INFO] 创建workbench.desktop.main.js备份: /Applications/Cursor.app/Contents/Resources/app/out/vs/workbench/workbench.desktop.main.js.backup.20251018_204033
+[2025-10-18 20:40:33.952] [WARN] Warning: Failed to modify workbench.desktop.main.js: Failed to create backup of workbench.desktop.main.js
+[2025-10-18 20:40:33.952] [INFO] === Cursor 重置流程完成 ===
+[2025-10-18 20:40:33.952] [INFO] 最终结果: Complete Cursor reset successful
+[2025-10-18 20:40:33.952] [INFO] 成功状态: true
+[2025-10-18 20:40:33.952] [INFO] 详细信息条目数: 10
+[2025-10-18 20:40:33.952] [INFO] 日志文件位置: "/Users/wangxilei/auto-cursor/src-tauri/cursor_reset_20251018_204033.log"

@@ -860,6 +860,72 @@ async fn open_log_directory() -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn read_log_file() -> Result<String, String> {
+    // 获取日志文件路径
+    let log_path = if let Some(path) = logger::Logger::get_log_path() {
+        path
+    } else {
+        // 如果日志器未初始化，尝试获取默认路径
+        let log_dir = match get_app_dir() {
+            Ok(app_dir) => app_dir.join("logs"),
+            Err(_) => std::env::temp_dir().join("auto-cursor-logs"),
+        };
+        log_dir.join("auto-cursor.log")
+    };
+
+    // 检查文件是否存在
+    if !log_path.exists() {
+        log_info!("日志文件不存在: {:?}", log_path);
+        return Ok(String::new()); // 返回空字符串而不是错误
+    }
+
+    // 读取日志文件内容
+    match std::fs::read_to_string(&log_path) {
+        Ok(content) => {
+            log_debug!("成功读取日志文件，大小: {} bytes", content.len());
+            Ok(content)
+        }
+        Err(e) => {
+            log_error!("读取日志文件失败: {}", e);
+            Err(format!("读取日志文件失败: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+async fn clear_log_file() -> Result<(), String> {
+    // 获取日志文件路径
+    let log_path = if let Some(path) = logger::Logger::get_log_path() {
+        path
+    } else {
+        // 如果日志器未初始化，尝试获取默认路径
+        let log_dir = match get_app_dir() {
+            Ok(app_dir) => app_dir.join("logs"),
+            Err(_) => std::env::temp_dir().join("auto-cursor-logs"),
+        };
+        log_dir.join("auto-cursor.log")
+    };
+
+    // 检查文件是否存在
+    if !log_path.exists() {
+        log_info!("日志文件不存在，无需清空: {:?}", log_path);
+        return Ok(()); // 如果文件不存在，认为清空成功
+    }
+
+    // 清空日志文件（通过写入空内容）
+    match std::fs::write(&log_path, "") {
+        Ok(_) => {
+            log_info!("日志文件已清空");
+            Ok(())
+        }
+        Err(e) => {
+            log_error!("清空日志文件失败: {}", e);
+            Err(format!("清空日志文件失败: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
 async fn get_current_machine_ids() -> Result<Option<MachineIds>, String> {
     let restorer =
         MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
@@ -3497,6 +3563,84 @@ async fn get_app_version(app: tauri::AppHandle) -> Result<String, String> {
     Ok(package_info.version.to_string())
 }
 
+// 获取已安装的 Cursor 版本（尽力探测）
+#[tauri::command]
+async fn get_cursor_version() -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+
+    // macOS: try Info.plist then package.json
+    #[cfg(target_os = "macos")]
+    {
+        let plist_path = PathBuf::from("/Applications/Cursor.app/Contents/Info.plist");
+        if plist_path.exists() {
+            if let Ok(content) = fs::read_to_string(&plist_path) {
+                if let Some(idx) = content.find("CFBundleShortVersionString") {
+                    if let Some(start) = content[idx..].find("<string>") {
+                        let s = &content[idx + start + 8..];
+                        if let Some(end) = s.find("</string>") {
+                            let v = s[..end].trim().to_string();
+                            if !v.is_empty() { return Ok(v); }
+                        }
+                    }
+                }
+            }
+        }
+        let pkg_path = PathBuf::from("/Applications/Cursor.app/Contents/Resources/app/package.json");
+        if pkg_path.exists() {
+            if let Ok(content) = fs::read_to_string(&pkg_path) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                    if let Some(v) = json.get("version").and_then(|v| v.as_str()) { return Ok(v.to_string()); }
+                    if let Some(v) = json.get("productVersion").and_then(|v| v.as_str()) { return Ok(v.to_string()); }
+                }
+            }
+        }
+    }
+
+    // Windows candidates
+    #[cfg(target_os = "windows")]
+    {
+        let candidates = vec![
+            std::env::var("LOCALAPPDATA").unwrap_or_default() + "\\Programs\\Cursor\\resources\\app\\package.json",
+            "C:\\Program Files\\Cursor\\resources\\app\\package.json".to_string(),
+            "C:\\Program Files (x86)\\Cursor\\resources\\app\\package.json".to_string(),
+        ];
+        for p in candidates {
+            let path = PathBuf::from(&p);
+            if path.exists() {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(v) = json.get("version").and_then(|v| v.as_str()) { return Ok(v.to_string()); }
+                        if let Some(v) = json.get("productVersion").and_then(|v| v.as_str()) { return Ok(v.to_string()); }
+                    }
+                }
+            }
+        }
+    }
+
+    // Linux candidates
+    #[cfg(target_os = "linux")]
+    {
+        let candidates = vec![
+            "/opt/cursor/resources/app/package.json",
+            "/usr/share/cursor/resources/app/package.json",
+        ];
+        for p in candidates {
+            let path = PathBuf::from(p);
+            if path.exists() {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                        if let Some(v) = json.get("version").and_then(|v| v.as_str()) { return Ok(v.to_string()); }
+                        if let Some(v) = json.get("productVersion").and_then(|v| v.as_str()) { return Ok(v.to_string()); }
+                    }
+                }
+            }
+        }
+    }
+
+    Err("未找到 Cursor 版本".to_string())
+}
+
 // 打开更新链接
 #[tauri::command]
 async fn open_update_url(url: String) -> Result<(), String> {
@@ -4336,6 +4480,8 @@ pub fn run() {
             clear_custom_cursor_path,
             open_log_file,
             open_log_directory,
+            read_log_file,
+            clear_log_file,
             get_current_machine_ids,
             get_machine_id_file_content,
             get_backup_directory_info,
@@ -4379,6 +4525,7 @@ pub fn run() {
             read_email_config,
             save_email_config,
             get_app_version,
+            get_cursor_version,
             open_update_url,
             copy_pybuild_resources,
             auto_login_and_get_cookie,

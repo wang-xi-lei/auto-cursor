@@ -12,6 +12,8 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { base64URLEncode, K, sha256 } from "../utils/cursorToken";
 import { confirm } from "@tauri-apps/plugin-dialog";
+import { PageHeader } from "../components/PageHeader";
+import { PageSection } from "../components/PageSection";
 
 export const TokenManagePage: React.FC = () => {
   const [accountData, setAccountData] = useState<AccountListResult | null>(
@@ -1499,11 +1501,8 @@ export const TokenManagePage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-5 sm:p-6">
-          <h3 className="mb-4 text-lg font-medium leading-6 text-gray-900">
-            🔐 Token 管理
-          </h3>
+      <PageHeader title="Token 管理" description="账户列表、切换与用量" />
+      <PageSection>
 
           {/* Current Account Section */}
           {accountData?.current_account && (
@@ -2323,8 +2322,7 @@ export const TokenManagePage: React.FC = () => {
               <p className="text-sm text-gray-500">暂无保存的账户</p>
             )}
           </div>
-        </div>
-      </div>
+      </PageSection>
 
       {/* Edit Account Modal */}
       {showEditForm && editingAccount && (

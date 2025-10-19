@@ -15,6 +15,14 @@ export class CursorService {
     return await invoke<string[]>("debug_cursor_paths");
   }
 
+  static async getCursorVersion(): Promise<string | null> {
+    try {
+      return await invoke<string>("get_cursor_version");
+    } catch {
+      return null;
+    }
+  }
+
   // Machine ID Management
   static async getCurrentMachineIds(): Promise<MachineIds> {
     return await invoke<MachineIds>("get_current_machine_ids");
@@ -82,6 +90,14 @@ export class CursorService {
 
   static async openLogDirectory(): Promise<string> {
     return await invoke<string>("open_log_directory");
+  }
+
+  static async readLogFile(): Promise<string> {
+    return await invoke<string>("read_log_file");
+  }
+
+  static async clearLogFile(): Promise<void> {
+    return await invoke<void>("clear_log_file");
   }
 
   static async debugWindowsCursorPaths(): Promise<string[]> {

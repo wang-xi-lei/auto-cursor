@@ -7,7 +7,9 @@ import { AuthCheckPage } from "./pages/AuthCheckPage";
 import { TokenManagePage } from "./pages/TokenManagePage";
 import { AutoRegisterPage } from "./pages/AutoRegisterPage";
 import { VirtualCardGeneratorPage } from "./pages/VirtualCardGeneratorPage";
+import { LogsPage } from "./pages/LogsPage";
 import { UsageProvider } from "./context/UsageContext";
+import { ThemeProvider } from "./context/ThemeContext";
 import { UpdateModal } from "./components/UpdateModal";
 import { checkForUpdates } from "./services/updateService";
 import { UpdateInfo } from "./types/update";
@@ -94,8 +96,9 @@ function App() {
   };
 
   return (
-    <UsageProvider>
-      <Router>
+    <ThemeProvider>
+      <UsageProvider>
+        <Router>
         <Layout>
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -107,15 +110,17 @@ function App() {
               path="/virtual-card"
               element={<VirtualCardGeneratorPage />}
             />
+            <Route path="/logs" element={<LogsPage />} />
           </Routes>
         </Layout>
-      </Router>
+        </Router>
 
-      {/* 更新弹窗 */}
-      {showUpdateModal && updateInfo && (
-        <UpdateModal updateInfo={updateInfo} onClose={handleCloseUpdateModal} />
-      )}
-    </UsageProvider>
+        {/* 更新弹窗 */}
+        {showUpdateModal && updateInfo && (
+          <UpdateModal updateInfo={updateInfo} onClose={handleCloseUpdateModal} />
+        )}
+      </UsageProvider>
+    </ThemeProvider>
   );
 }
 

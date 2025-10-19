@@ -4,6 +4,11 @@ import { LoadingSpinner } from "../components/LoadingSpinner";
 import { Button } from "../components/Button";
 import { useToast, ToastManager } from "../components/Toast";
 import { useConfirmDialog } from "../components/ConfirmDialog";
+import { PageHeader } from "../components/PageHeader";
+import { PageSection } from "../components/PageSection";
+import { InfoCard } from "../components/InfoCard";
+import { ActionCard } from "../components/ActionCard";
+import { StatusCard } from "../components/StatusCard";
 import {
   BackupInfo,
   MachineIds,
@@ -226,21 +231,19 @@ export const MachineIdPage: React.FC = () => {
     }
   };
 
-  const handleDebugWindowsPaths = async () => {
-    try {
-      const debugInfo = await CursorService.debugWindowsCursorPaths();
-      console.log("Windows路径调试信息:", debugInfo);
-
-      // 将调试信息显示在控制台和toast中
-      const formattedInfo = debugInfo.join("\n\n");
-      console.log(`Windows Cursor路径调试信息:\n\n${formattedInfo}`);
-
-      showSuccess("Windows路径调试完成，详细信息已输出到控制台");
-    } catch (error) {
-      console.error("Windows路径调试失败:", error);
-      showError(`Windows路径调试失败: ${error}`);
-    }
-  };
+  // Unused but kept for future debugging needs
+  // const handleDebugWindowsPaths = async () => {
+  //   try {
+  //     const debugInfo = await CursorService.debugWindowsCursorPaths();
+  //     console.log("Windows路径调试信息:", debugInfo);
+  //     const formattedInfo = debugInfo.join("\n\n");
+  //     console.log(`Windows Cursor路径调试信息:\n\n${formattedInfo}`);
+  //     showSuccess("Windows路径调试完成，详细信息已输出到控制台");
+  //   } catch (error) {
+  //     console.error("Windows路径调试失败:", error);
+  //     showError(`Windows路径调试失败: ${error}`);
+  //   }
+  // };
 
   const handleSetCustomPath = async () => {
     if (!customCursorPath.trim()) {
@@ -313,190 +316,144 @@ export const MachineIdPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Machine ID 管理</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          管理 Cursor 的 Machine ID，包括查看、备份、恢复和重置
-        </p>
-      </div>
+      <PageHeader
+        title="Machine ID 管理"
+        description="查看、备份、恢复和重置 Cursor 的 Machine ID"
+      />
 
-      {/* Current Machine IDs */}
+      {/* 当前 Machine IDs */}
       {currentMachineIds && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <h2 className="mb-4 text-lg font-medium text-gray-900">
-            📋 当前 Machine ID
-          </h2>
-          <div className="grid grid-cols-1 gap-4">
+        <PageSection title="📋 当前 Machine ID">
+          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
             {Object.entries(currentMachineIds).map(([key, value]) => (
-              <div key={key} className="p-3 rounded bg-gray-50">
-                <p className="text-sm font-medium text-gray-700">{key}</p>
-                <p className="font-mono text-xs text-gray-600 break-all">
-                  {value}
-                </p>
-              </div>
+              <InfoCard key={key} title={key} value={String(value)} copyable />
             ))}
           </div>
 
           {machineIdFileContent && (
-            <div className="p-3 mt-4 rounded bg-blue-50">
-              <p className="mb-2 text-sm font-medium text-blue-700">
-                machineId 文件内容:
-              </p>
-              <p className="font-mono text-xs text-blue-600 break-all">
-                {machineIdFileContent}
-              </p>
+            <div className="mt-3">
+              <InfoCard
+                title="machineId 文件内容"
+                value={machineIdFileContent}
+                copyable
+                variant="primary"
+              />
             </div>
           )}
-        </div>
+        </PageSection>
       )}
 
-      {/* Action Buttons */}
+      {/* 主要操作 */}
       {currentStep === "menu" && (
         <div className="space-y-6">
-          {/* 主要操作按钮 */}
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-            <Button
-              variant="primary"
-              onClick={loadBackups}
-              loading={loading}
-              className="flex-col h-20"
-            >
-              <span className="mb-1 text-lg">📁</span>
-              恢复备份
-            </Button>
-
-            <Button
-              variant="secondary"
-              onClick={showResetConfirm}
-              loading={loading}
-              className="flex-col h-20"
-            >
-              <span className="mb-1 text-lg">🔄</span>
-              重置 ID
-            </Button>
-
-            <Button
-              variant="danger"
-              onClick={showCompleteResetConfirm}
-              loading={loading}
-              className="flex-col h-20"
-            >
-              <span className="mb-1 text-lg">🗑️</span>
-              完全重置
-            </Button>
-          </div>
-
-          {/* 日志管理按钮 */}
-          <div className="p-4 bg-white rounded-lg shadow">
-            <h3 className="mb-3 text-sm font-medium text-gray-700">
-              📝 日志管理
-            </h3>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-              <Button
+          {/* 主要操作 */}
+          <PageSection title="🛠️ 主要操作">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <ActionCard
+                title="恢复备份"
+                description="从备份中恢复 Machine ID"
+                icon="📁"
+                onClick={loadBackups}
+                variant="primary"
+                loading={loading}
+              />
+              <ActionCard
+                title="重置 ID"
+                description="生成新的随机 Machine ID"
+                icon="🔄"
+                onClick={showResetConfirm}
                 variant="secondary"
-                onClick={handleGetLogPath}
-                className="flex-col h-16 text-sm"
-              >
-                <span className="mb-1">📍</span>
-                获取日志路径
-              </Button>
-
-              <Button
-                variant="secondary"
-                onClick={handleOpenLogDirectory}
-                className="flex-col h-16 text-sm"
-              >
-                <span className="mb-1">📂</span>
-                打开日志目录
-              </Button>
-
-              {isWindows && false && (
-                <Button
-                  variant="secondary"
-                  onClick={handleDebugWindowsPaths}
-                  className="flex-col h-16 text-sm"
-                >
-                  <span className="mb-1">🔍</span>
-                  调试Win路径
-                </Button>
-              )}
+              />
+              <ActionCard
+                title="完全重置"
+                description="清除所有 Cursor 数据与配置"
+                icon="🗑️"
+                onClick={showCompleteResetConfirm}
+                variant="danger"
+              />
             </div>
-          </div>
+          </PageSection>
+
+          {/* 日志管理 */}
+          <PageSection title="📝 日志管理">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <ActionCard
+                title="获取日志路径"
+                description="显示当前日志文件的存放位置"
+                icon="📍"
+                onClick={handleGetLogPath}
+                variant="secondary"
+              />
+              <ActionCard
+                title="打开日志目录"
+                description="在系统文件管理器中打开日志目录"
+                icon="📂"
+                onClick={handleOpenLogDirectory}
+                variant="secondary"
+              />
+            </div>
+          </PageSection>
 
           {/* 自定义路径配置按钮 - 仅Windows显示 */}
           {isWindows && (
-            <div className="p-4 bg-white rounded-lg shadow">
-              <h3 className="mb-3 text-sm font-medium text-gray-700">
-                ⚙️ 路径配置
-              </h3>
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-1">
-                <Button
-                  variant="secondary"
-                  onClick={() => setCurrentStep("custom_path_config")}
-                  className="flex-col h-16 text-sm"
-                >
-                  <span className="mb-1">📁</span>
-                  自定义Cursor路径
-                </Button>
-                {currentCustomPath && (
-                  <div className="p-2 mt-2 text-xs bg-gray-100 rounded">
-                    <span className="font-medium">当前自定义路径:</span>
-                    <br />
-                    <span className="text-gray-600">{currentCustomPath}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+            <PageSection title="⚙️ 路径配置">
+              <ActionCard
+                title="自定义 Cursor 路径"
+                description="手动设置 Cursor 安装路径 (resources/app)"
+                icon="📁"
+                onClick={() => setCurrentStep("custom_path_config")}
+                variant="secondary"
+              />
+              {currentCustomPath && (
+                <div className="p-3 mt-3 text-xs bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/50 rounded-lg">
+                  <span className="font-medium text-blue-900 dark:text-blue-300">当前自定义路径:</span>
+                  <br />
+                  <span className="text-blue-800 dark:text-blue-400 font-mono break-all">{currentCustomPath}</span>
+                </div>
+              )}
+            </PageSection>
           )}
         </div>
       )}
 
       {/* 自定义路径配置页面 */}
       {currentStep === "custom_path_config" && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold">自定义 Cursor 路径配置</h2>
+        <PageSection>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-bold">自定义 Cursor 路径配置</h2>
             <Button
               variant="secondary"
+              size="sm"
               onClick={() => setCurrentStep("menu")}
-              className="text-sm"
             >
-              ← 返回主菜单
+              ← 返回
             </Button>
           </div>
 
-          <div className="space-y-6">
+          <div className="space-y-4">
             {/* 说明文字 */}
-            <div className="p-4 rounded-lg bg-blue-50">
-              <h3 className="mb-2 font-medium text-blue-800">
+            <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20">
+              <h3 className="mb-1.5 text-sm font-medium text-blue-800 dark:text-blue-200">
                 🔍 路径配置说明
               </h3>
-              <p className="text-sm text-blue-700">
+              <p className="text-xs text-blue-700 dark:text-blue-300 leading-snug">
                 如果自动检测无法找到 Cursor 安装路径，你可以手动指定。
                 <br />
-                路径应该指向 Cursor 的{" "}
-                <code className="px-1 bg-blue-100 rounded">
-                  resources/app
-                </code>{" "}
-                目录。
+                路径应该指向 Cursor 的 <code className="px-1 bg-blue-100 dark:bg-blue-800/40 rounded">resources/app</code> 目录。
                 <br />
-                例如:{" "}
-                <code className="px-1 bg-blue-100 rounded">
-                  C:\Users\用户名\AppData\Local\Programs\Cursor\resources\app
-                </code>
+                例如: <code className="px-1 bg-blue-100 dark:bg-blue-800/40 rounded">C:\\Users\\用户名\\AppData\\Local\\Programs\\Cursor\\resources\\app</code>
               </p>
             </div>
 
             {/* 当前状态 */}
-            <div className="p-4 rounded-lg bg-gray-50">
-              <h3 className="mb-2 font-medium text-gray-800">📍 当前状态</h3>
-              <div className="text-sm text-gray-600">
+            <div className="p-3 rounded-lg bg-gray-50 dark:bg-slate-800/50">
+              <h3 className="mb-1.5 text-sm font-medium text-gray-800 dark:text-white">📍 当前状态</h3>
+              <div className="text-xs text-gray-600 dark:text-slate-300">
                 {currentCustomPath ? (
                   <div>
                     <span className="font-medium">已设置自定义路径:</span>
                     <br />
-                    <span className="px-1 font-mono text-xs bg-gray-200 rounded">
+                    <span className="px-1 font-mono text-xs bg-gray-200 dark:bg-slate-700 rounded">
                       {currentCustomPath}
                     </span>
                   </div>
@@ -507,68 +464,53 @@ export const MachineIdPage: React.FC = () => {
             </div>
 
             {/* 路径输入 */}
-            <div className="space-y-3">
-              <h3 className="font-medium text-gray-800">📝 设置自定义路径</h3>
-              <div className="space-y-3">
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-gray-800 dark:text-white">📝 设置自定义路径</h3>
+              <div className="space-y-2">
                 <input
                   type="text"
                   value={customCursorPath}
                   onChange={(e) => setCustomCursorPath(e.target.value)}
                   placeholder="请输入 Cursor 的 resources/app 目录完整路径"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-2.5 py-1.5 text-sm border border-gray-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 text-gray-900 dark:text-white"
                 />
 
                 <div className="flex flex-wrap gap-2">
                   <Button
                     variant="primary"
+                    size="sm"
                     onClick={handleSetCustomPath}
-                    className="text-sm"
                   >
-                    💾 保存路径
+                    💾 保存
                   </Button>
 
                   <Button
                     variant="secondary"
+                    size="sm"
                     onClick={handleFillDetectedPath}
-                    className="text-sm"
                   >
-                    🔍 自动检测并填充
+                    🔍 自动检测
                   </Button>
 
                   <Button
                     variant="danger"
+                    size="sm"
                     onClick={handleClearCustomPath}
-                    className="text-sm"
                   >
-                    🗑️ 清除自定义路径
+                    🗑️ 清除
                   </Button>
                 </div>
               </div>
             </div>
-
-            {/* 调试工具 */}
-            {/* <div className="p-4 rounded-lg bg-yellow-50">
-              <h3 className="mb-2 font-medium text-yellow-800">🛠️ 调试工具</h3>
-              <p className="mb-3 text-sm text-yellow-700">
-                如果不确定正确的路径，可以使用调试工具查看所有可能的安装位置。
-              </p>
-              <Button
-                variant="secondary"
-                onClick={handleDebugWindowsPaths}
-                className="text-sm"
-              >
-                🔍 查看所有可能路径
-              </Button>
-            </div> */}
           </div>
-        </div>
+        </PageSection>
       )}
 
       {/* Backup Selection */}
       {currentStep === "select" && (
-        <div className="p-6 bg-white rounded-lg shadow">
+        <PageSection>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium text-gray-900">选择备份</h2>
+            <h2 className="text-base font-medium text-gray-900 dark:text-white">选择备份</h2>
             <Button
               variant="secondary"
               size="sm"
@@ -579,22 +521,22 @@ export const MachineIdPage: React.FC = () => {
           </div>
 
           {backups.length === 0 ? (
-            <p className="py-8 text-center text-gray-500">没有找到备份文件</p>
+            <p className="py-8 text-center text-gray-500 dark:text-slate-400">没有找到备份文件</p>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {backups.map((backup, index) => (
                 <div
                   key={index}
-                  className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50"
+                  className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700 transition-colors"
                   onClick={() => handleBackupSelect(backup)}
                 >
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <p className="font-medium text-gray-900">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 dark:text-white truncate">
                         {backup.date_formatted}
                       </p>
-                      <p className="text-sm text-gray-600">
-                        大小: {backup.size} bytes
+                      <p className="text-sm text-gray-600 dark:text-slate-400">
+                        大小: {(backup.size / 1024).toFixed(2)} KB
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -606,21 +548,21 @@ export const MachineIdPage: React.FC = () => {
                       >
                         🗑️ 删除
                       </Button>
-                      <span className="text-blue-600">→</span>
+                      <span className="text-blue-600 dark:text-blue-400">→</span>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </PageSection>
       )}
 
       {/* Preview Step */}
       {currentStep === "preview" && selectedBackup && selectedIds && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-medium text-gray-900">预览备份内容</h2>
+        <PageSection>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-base font-medium text-gray-900 dark:text-white">预览备份内容</h2>
             <Button
               variant="secondary"
               size="sm"
@@ -630,29 +572,22 @@ export const MachineIdPage: React.FC = () => {
             </Button>
           </div>
 
-          <div className="mb-6 space-y-4">
-            <div className="p-4 rounded-lg bg-blue-50">
-              <h3 className="mb-2 font-medium text-blue-800">备份信息</h3>
-              <p className="text-sm text-blue-700">
-                日期: {selectedBackup.date_formatted}
-              </p>
-              <p className="text-sm text-blue-700">
-                大小: {selectedBackup.size} bytes
-              </p>
-            </div>
+          <div className="mb-4 space-y-3">
+            <StatusCard
+              status="info"
+              title="备份信息"
+              message={`日期: ${selectedBackup.date_formatted} \n大小: ${selectedBackup.size} bytes`}
+            />
 
-            <div className="space-y-3">
-              <h3 className="font-medium text-gray-800">
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-gray-800 dark:text-white">
                 将要恢复的 Machine ID:
               </h3>
-              {Object.entries(selectedIds).map(([key, value]) => (
-                <div key={key} className="p-3 rounded bg-gray-50">
-                  <p className="text-sm font-medium text-gray-700">{key}</p>
-                  <p className="font-mono text-xs text-gray-600 break-all">
-                    {value}
-                  </p>
-                </div>
-              ))}
+              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                {Object.entries(selectedIds).map(([key, value]) => (
+                  <InfoCard key={key} title={key} value={String(value)} copyable />
+                ))}
+              </div>
             </div>
           </div>
 
@@ -667,135 +602,34 @@ export const MachineIdPage: React.FC = () => {
               取消
             </Button>
           </div>
-        </div>
+        </PageSection>
       )}
 
       {/* Confirm Step */}
       {currentStep === "confirm" && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <div className="text-center">
-            <div className="mb-4 text-4xl">⏳</div>
-            <h2 className="mb-2 text-lg font-medium text-gray-900">
-              正在恢复...
-            </h2>
-            <p className="text-gray-600">请稍候，正在恢复 Machine ID</p>
-          </div>
-        </div>
+        <StatusCard
+          status="loading"
+          title="正在恢复..."
+          message="请稍候，正在恢复 Machine ID"
+        />
       )}
 
       {/* Result Step */}
       {currentStep === "result" && restoreResult && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <div className="mb-6 text-center">
-            <div
-              className={`text-4xl mb-4 ${
-                restoreResult.success ? "text-green-500" : "text-red-500"
-              }`}
-            >
-              {restoreResult.success ? "✅" : "❌"}
-            </div>
-            <h2 className="mb-2 text-lg font-medium text-gray-900">
-              {restoreResult.success ? "恢复成功" : "恢复失败"}
-            </h2>
-            <p className="text-gray-600">{restoreResult.message}</p>
-          </div>
-
-          {restoreResult.details && restoreResult.details.length > 0 && (
-            <div className="mb-6">
-              <h3 className="mb-2 font-medium text-gray-700">详细信息:</h3>
-              <div className="space-y-1">
-                {restoreResult.details.map((detail, index) => (
-                  <p
-                    key={index}
-                    className="p-2 text-sm text-gray-600 rounded bg-gray-50"
-                  >
-                    {detail}
-                  </p>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-center gap-3">
-            <Button
-              variant="primary"
-              onClick={() => {
-                setCurrentStep("menu");
-                setRestoreResult(null);
-                setSelectedBackup(null);
-                setSelectedIds(null);
-              }}
-            >
-              返回主菜单
-            </Button>
-            <Button variant="secondary" onClick={loadCurrentMachineIds}>
-              刷新当前 ID
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {/* Reset Result */}
-      {(currentStep === "reset" || currentStep === "complete_reset") &&
-        resetResult && (
-          <div className="p-6 bg-white rounded-lg shadow">
-            <div className="mb-6 text-center">
-              <div
-                className={`text-4xl mb-4 ${
-                  resetResult.success ? "text-green-500" : "text-red-500"
-                }`}
-              >
-                {resetResult.success ? "✅" : "❌"}
-              </div>
-              <h2 className="mb-2 text-lg font-medium text-gray-900">
-                {currentStep === "complete_reset" ? "完全重置" : "重置"}
-                {resetResult.success ? "成功" : "失败"}
-              </h2>
-              <p className="text-gray-600">{resetResult.message}</p>
-            </div>
-
-            {resetResult.new_ids && (
-              <div className="mb-6">
-                <h3 className="mb-2 font-medium text-gray-700">
-                  新的 Machine ID:
-                </h3>
-                <div className="space-y-2">
-                  {Object.entries(resetResult.new_ids).map(([key, value]) => (
-                    <div key={key} className="p-3 rounded bg-green-50">
-                      <p className="text-sm font-medium text-green-700">
-                        {key}
-                      </p>
-                      <p className="font-mono text-xs text-green-600 break-all">
-                        {value}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {resetResult.details && resetResult.details.length > 0 && (
-              <div className="mb-6">
-                <h3 className="mb-2 font-medium text-gray-700">详细信息:</h3>
-                <div className="space-y-1">
-                  {resetResult.details.map((detail, index) => (
-                    <p
-                      key={index}
-                      className="p-2 text-sm text-gray-600 rounded bg-gray-50"
-                    >
-                      {detail}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-center gap-3">
+        <StatusCard
+          status={restoreResult.success ? "success" : "error"}
+          title={restoreResult.success ? "恢复成功" : "恢复失败"}
+          message={restoreResult.message}
+          details={restoreResult.details}
+          actions={
+            <>
               <Button
                 variant="primary"
                 onClick={() => {
                   setCurrentStep("menu");
-                  setResetResult(null);
+                  setRestoreResult(null);
+                  setSelectedBackup(null);
+                  setSelectedIds(null);
                 }}
               >
                 返回主菜单
@@ -803,79 +637,101 @@ export const MachineIdPage: React.FC = () => {
               <Button variant="secondary" onClick={loadCurrentMachineIds}>
                 刷新当前 ID
               </Button>
-            </div>
-          </div>
+            </>
+          }
+        />
+      )}
+
+      {/* Reset Result */}
+      {(currentStep === "reset" || currentStep === "complete_reset") &&
+        resetResult && (
+          <>
+            <StatusCard
+              status={resetResult.success ? "success" : "error"}
+              title={`${currentStep === "complete_reset" ? "完全重置" : "重置"}${
+                resetResult.success ? "成功" : "失败"
+              }`}
+              message={resetResult.message}
+              details={resetResult.details}
+              actions={
+                <>
+                  <Button
+                    variant="primary"
+                    onClick={() => {
+                      setCurrentStep("menu");
+                      setResetResult(null);
+                    }}
+                  >
+                    返回主菜单
+                  </Button>
+                  <Button variant="secondary" onClick={loadCurrentMachineIds}>
+                    刷新当前 ID
+                  </Button>
+                </>
+              }
+            />
+
+            {resetResult.new_ids && (
+              <PageSection className="mt-3" title="新的 Machine ID">
+                <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+                  {Object.entries(resetResult.new_ids).map(([key, value]) => (
+                    <InfoCard
+                      key={key}
+                      title={key}
+                      value={String(value)}
+                      variant="success"
+                      copyable
+                    />
+                  ))}
+                </div>
+              </PageSection>
+            )}
+          </>
         )}
 
       {/* Reset Confirmation */}
       {currentStep === "confirm_reset" && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <div className="mb-6 text-center">
-            <div className="mb-4 text-4xl">⚠️</div>
-            <h2 className="mb-2 text-lg font-medium text-gray-900">
-              确认重置 Machine ID
-            </h2>
-            <p className="mb-4 text-gray-600">
-              此操作将重置所有 Machine ID 为新的随机值。这可能会影响 Cursor
-              的授权状态。
-            </p>
-            <div className="p-4 mb-4 border border-yellow-200 rounded-md bg-yellow-50">
-              <p className="text-sm text-yellow-800">
-                <strong>注意：</strong>重置后您可能需要重新登录 Cursor 账户。
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-center gap-3">
-            <Button variant="danger" onClick={handleReset} loading={loading}>
-              确认重置
-            </Button>
-            <Button variant="secondary" onClick={() => setCurrentStep("menu")}>
-              取消
-            </Button>
-          </div>
-        </div>
+        <StatusCard
+          status="warning"
+          title="确认重置 Machine ID"
+          message="此操作将重置所有 Machine ID 为新的随机值。这可能会影响 Cursor 的授权状态。"
+          details={["注意：重置后您可能需要重新登录 Cursor 账户。"]}
+          actions={
+            <>
+              <Button variant="danger" onClick={handleReset} loading={loading}>
+                确认重置
+              </Button>
+              <Button variant="secondary" onClick={() => setCurrentStep("menu")}>
+                取消
+              </Button>
+            </>
+          }
+        />
       )}
 
       {/* Complete Reset Confirmation */}
       {currentStep === "confirm_complete_reset" && (
-        <div className="p-6 bg-white rounded-lg shadow">
-          <div className="mb-6 text-center">
-            <div className="mb-4 text-4xl">🚨</div>
-            <h2 className="mb-2 text-lg font-medium text-gray-900">
-              确认完全重置
-            </h2>
-            <p className="mb-4 text-gray-600">
-              此操作将完全清除 Cursor 的所有配置和数据，包括 Machine
-              ID，以及注入脚本等。
-            </p>
-            <div className="p-4 mb-4 border border-red-200 rounded-md bg-red-50">
-              <p className="text-sm text-red-800">
-                <strong>危险操作：</strong>这将删除所有 Cursor
-                相关数据，无法撤销！
-              </p>
-              <ul className="mt-2 text-sm text-red-700 list-disc list-inside">
-                <li>所有用户设置将被清除</li>
-                <li>已安装的扩展将被移除</li>
-                <li>需要重新配置 Cursor</li>
-                <li>需要重新登录账户</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="flex justify-center gap-3">
-            <Button
-              variant="danger"
-              onClick={handleCompleteReset}
-              loading={loading}
-            >
-              确认完全重置
-            </Button>
-            <Button variant="secondary" onClick={() => setCurrentStep("menu")}>
-              取消
-            </Button>
-          </div>
-        </div>
+        <StatusCard
+          status="error"
+          title="确认完全重置"
+          message="此操作将完全清除 Cursor 的所有配置和数据，包括 Machine ID，以及注入脚本等。"
+          details={[
+            "所有用户设置将被清除",
+            "已安装的扩展将被移除",
+            "需要重新配置 Cursor",
+            "需要重新登录账户",
+          ]}
+          actions={
+            <>
+              <Button variant="danger" onClick={handleCompleteReset} loading={loading}>
+                确认完全重置
+              </Button>
+              <Button variant="secondary" onClick={() => setCurrentStep("menu")}>
+                取消
+              </Button>
+            </>
+          }
+        />
       )}
 
       {/* Toast 管理器 */}

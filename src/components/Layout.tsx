@@ -2,7 +2,18 @@ import React, { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import logoSvg from "../assets/logo.svg";
 import { getCurrentVersion } from "../services/updateService";
-import { CursorService } from "../services/cursorService";
+import { useTheme } from "../context/ThemeContext";
+import { 
+  Home, 
+  Fingerprint, 
+  ShieldCheck, 
+  KeyRound, 
+  UserPlus, 
+  CreditCard, 
+  ScrollText,
+  Moon,
+  Sun
+} from "lucide-react";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,114 +22,88 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const [version, setVersion] = useState<string>("");
+  const { theme, toggleTheme } = useTheme();
 
   useEffect(() => {
     // 获取当前版本号
     getCurrentVersion().then(setVersion);
   }, []);
 
-  const handleOpenLogDirectory = async () => {
-    try {
-      await CursorService.openLogDirectory();
-    } catch (error) {
-      console.error("打开日志目录失败:", error);
-    }
-  };
-
   const navItems = [
-    { path: "/", label: "首页", icon: "🏠" },
-    { path: "/machine-id", label: "Machine ID 管理", icon: "🔧" },
-    { path: "/auth-check", label: "授权检查", icon: "🔐" },
-    { path: "/token-manage", label: "Token 管理", icon: "🎫" },
-    { path: "/auto-register", label: "自动注册", icon: "📝" },
-    { path: "/virtual-card", label: "生成虚拟卡", icon: "💳" },
+    { path: "/", label: "首页", Icon: Home },
+    { path: "/machine-id", label: "Machine ID 管理", Icon: Fingerprint },
+    { path: "/auth-check", label: "授权检查", Icon: ShieldCheck },
+    { path: "/token-manage", label: "Token 管理", Icon: KeyRound },
+    { path: "/auto-register", label: "自动注册", Icon: UserPlus },
+    { path: "/virtual-card", label: "生成虚拟卡", Icon: CreditCard },
+    { path: "/logs", label: "日志查看", Icon: ScrollText },
   ];
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Navigation */}
-      <nav className="bg-white border-b shadow-sm">
-        <div className="px-4 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex items-center flex-shrink-0">
-                <Link to="/" className="flex items-center space-x-3">
-                  <img
-                    src={logoSvg}
-                    alt="Cursor Manager Logo"
-                    className="w-8 h-8"
-                  />
-                  <h1 className="text-xl font-bold text-gray-900">
-                    Cursor Manager
-                  </h1>
-                </Link>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                {navItems.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-                      location.pathname === item.path
-                        ? "border-blue-500 text-gray-900"
-                        : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700"
-                    }`}
-                  >
-                    <span className="mr-2">{item.icon}</span>
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
+    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-gradient-to-br dark:from-[#0a0e27] dark:via-[#0f1419] dark:to-[#0a0e27]">
+      {/* Sidebar */}
+      <aside className="fixed top-0 left-0 z-40 flex flex-col w-72 h-full bg-white dark:bg-gradient-to-b dark:from-[#1a1f35] dark:to-[#151a2e] border-r border-gray-200 dark:border-[#2a3a5a]/50 shadow-sm dark:shadow-[0_0_30px_rgba(59,130,246,0.1)]">
+        <div className="flex items-center justify-between flex-shrink-0 h-20 px-5 border-b border-gray-200 dark:border-[#2a3a5a]/50 bg-white dark:bg-[#1a1f35]/80 dark:backdrop-blur-xl">
+          <Link to="/" className="flex items-center space-x-3">
+            <div className="p-2 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg dark:shadow-[0_0_20px_rgba(59,130,246,0.5)]">
+              <img src={logoSvg} alt="Cursor Tool Logo" className="w-7 h-7" />
             </div>
-          </div>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 dark:text-white">Cursor Tool</h1>
+              <p className="text-xs text-gray-500 dark:text-blue-300/60">专业管理工具</p>
+            </div>
+          </Link>
+          <button
+            onClick={toggleTheme}
+            className="p-2.5 rounded-lg text-gray-600 dark:text-blue-300 hover:bg-gray-50 dark:hover:bg-blue-500/20 transition-all dark:hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]"
+            title={theme === "light" ? "切换到暗黑模式" : "切换到明亮模式"}
+          >
+            {theme === "light" ? <Moon className="w-5 h-5" /> : <Sun className="w-5 h-5" />}
+          </button>
         </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="flex-1 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8 min-w-[85vw]">
-        <div className="px-4 py-6 sm:px-0">{children}</div>
-      </main>
-
-      {/* Footer with Disclaimer */}
-      <footer className="mt-auto bg-white border-t border-gray-200">
-        <div className="px-4 py-6 mx-auto max-w-7xl sm:px-6 lg:px-8">
-          <div className="space-y-4 text-center">
-            <div className="p-4 border border-yellow-200 rounded-lg bg-yellow-50">
-              <h3 className="mb-2 text-sm font-semibold text-yellow-800">
-                ⚠️ 免责声明
-              </h3>
-              <p className="text-xs leading-relaxed text-yellow-700">
-                本工具仅供学习和研究目的使用。使用本工具产生的任何后果由用户自行承担，开发者不承担任何法律责任。
-                请遵守相关服务条款和法律法规。如有任何问题或疑虑，请及时停止使用并联系开发者。
-              </p>
-            </div>
-            <div className="text-xs text-gray-500">
-              <p>
-                如有问题请联系：
-                <a
-                  href="mailto:wuqi_y@163.com"
-                  className="ml-1 text-blue-600 hover:text-blue-800"
-                >
-                  wuqi_y@163.com
-                </a>
-                <span className="mx-2">|</span>
-                <button
-                  onClick={handleOpenLogDirectory}
-                  className="text-blue-600 hover:text-blue-800 hover:underline"
-                >
-                  📂 打开日志目录
-                </button>
-              </p>
-              <p className="mt-1">
-                © 2025 Cursor Manager. 仅供学习研究使用。
-                {version && (
-                  <span className="ml-2 text-gray-400">v{version}</span>
+        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+          {navItems.map((item) => {
+            const active = location.pathname === item.path;
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={`group flex items-center px-4 py-3.5 rounded-xl text-sm font-medium transition-all ${
+                  active
+                    ? "bg-gradient-to-r from-blue-600 to-cyan-500 text-white shadow-lg dark:shadow-[0_0_25px_rgba(59,130,246,0.5)] scale-[1.02]"
+                    : "text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white hover:scale-[1.01] dark:hover:shadow-[0_0_15px_rgba(255,255,255,0.1)]"
+                }`}
+              >
+                <div className={`p-2 rounded-lg mr-3 transition-all ${
+                  active 
+                    ? "bg-white/20 shadow-inner" 
+                    : "bg-gray-100 dark:bg-white/5 group-hover:bg-gray-200 dark:group-hover:bg-white/10"
+                }`}>
+                  <item.Icon className="w-5 h-5" strokeWidth={2} />
+                </div>
+                <span className="flex-1">{item.label}</span>
+                {active && (
+                  <div className="w-1.5 h-1.5 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]" />
                 )}
-              </p>
-            </div>
+              </Link>
+            );
+          })}
+        </nav>
+        
+        {/* Sidebar Footer (compact info only) */}
+        <div className="flex-shrink-0 px-4 py-4 border-t border-gray-200 dark:border-[#2a3a5a]/50 bg-white dark:bg-gradient-to-t dark:from-[#151a2e] dark:to-[#1a1f35]/50">
+          <div className="w-full text-center text-xs text-gray-700 dark:text-slate-200">
+            {version ? `v${version}` : ""}
           </div>
         </div>
-      </footer>
+      </aside>
+
+      {/* Content */}
+      <div className="flex flex-col flex-1 min-w-0 ml-72 h-full">
+        <main className="flex-1 overflow-y-auto bg-gradient-to-b from-gray-50 to-gray-100 dark:from-[#0f1419] dark:via-[#0a0e27] dark:to-[#0f1419] overscroll-y-contain">
+          <div className="px-4 py-5 mx-auto sm:px-6 lg:px-8 max-w-screen-2xl h-full min-h-full flex flex-col">{children}</div>
+        </main>
+      </div>
     </div>
   );
 };

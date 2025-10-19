@@ -3,6 +3,8 @@ import { CursorService } from "../services/cursorService";
 import { Button } from "../components/Button";
 import { AuthCheckResult, TokenInfo } from "../types/auth";
 import { AggregatedUsageDisplay } from "../components/AggregatedUsageDisplay";
+import { PageHeader } from "../components/PageHeader";
+import { PageSection } from "../components/PageSection";
 
 export const AuthCheckPage: React.FC = () => {
   const [userToken, setUserToken] = useState<string>("");
@@ -52,19 +54,10 @@ export const AuthCheckPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">授权检查</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          检查 Cursor 账户的授权状态和订阅信息
-        </p>
-      </div>
+      <PageHeader title="授权检查" description="检查 Cursor 账户的授权状态和订阅信息" />
 
-      {/* Token Input Section */}
-      <div className="p-6 bg-white rounded-lg shadow">
-        <h2 className="mb-4 text-lg font-medium text-gray-900">
-          🔑 Token 输入
-        </h2>
+      {/* Token 输入 */}
+      <PageSection title="🔑 Token 输入">
 
         {/* Auto Token Info */}
         {tokenInfo && (
@@ -134,11 +127,11 @@ export const AuthCheckPage: React.FC = () => {
             🔍 检查授权状态
           </Button>
         </div>
-      </div>
+      </PageSection>
 
-      {/* Auth Results */}
+      {/* 检查结果 */}
       {authResult && (
-        <div className="p-6 bg-white rounded-lg shadow">
+        <PageSection>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-medium text-gray-900">📊 检查结果</h2>
             <Button
@@ -290,7 +283,7 @@ export const AuthCheckPage: React.FC = () => {
               </div>
             </div>
           )}
-        </div>
+        </PageSection>
       )}
     </div>
   );
