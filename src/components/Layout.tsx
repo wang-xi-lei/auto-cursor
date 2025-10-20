@@ -11,7 +11,8 @@ import {
   UserPlus, 
   ScrollText,
   Moon,
-  Sun
+  Sun,
+  Trash2
 } from "lucide-react";
 
 interface LayoutProps {
@@ -35,6 +36,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: "/token-manage", label: "Token 管理", Icon: KeyRound },
     { path: "/auto-register", label: "自动注册", Icon: UserPlus },
     { path: "/logs", label: "日志查看", Icon: ScrollText },
+    { path: "/warp-clean", label: "Warp 清理", Icon: Trash2 },
   ];
 
   return (

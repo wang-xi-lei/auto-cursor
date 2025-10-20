@@ -4445,6 +4445,843 @@ async fn show_auto_login_window(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// Warp清理相关结构体
+#[derive(Debug, Serialize)]
+struct WarpCleanResult {
+    success: bool,
+    message: String,
+    cleaned_items: Vec<String>,
+    errors: Vec<String>,
+}
+
+/// 清理 SQLite 数据库中的用户数据表（保留架构）
+fn clean_warp_database(db_path: &Path) -> Result<Vec<String>, String> {
+    use rusqlite::Connection;
+    
+    let mut cleaned_tables = Vec::new();
+    
+    if !db_path.exists() {
+        return Ok(vec!["数据库文件不存在".to_string()]);
+    }
+    
+    let conn = Connection::open(db_path)
+        .map_err(|e| format!("打开数据库失败: {}", e))?;
+    
+    // 需要清理的用户数据表
+    let user_tables = vec![
+        "users", "user_profiles", "current_user_information",
+        "windows", "tabs", "terminal_panes", "pane_nodes", "pane_leaves",
+        "blocks", "commands", "ai_queries", "ai_blocks",
+        "agent_conversations", "agent_tasks", "projects",
+        "notebooks", "workflows", "teams", "workspaces",
+        "object_metadata", "object_permissions", "folders",
+        "server_experiments", "active_mcp_servers", "mcp_environment_variables",
+        "sessions", "bookmarks", "snippets", "themes",
+        "keybindings", "launch_configurations", "ssh_configs",
+        "environment_variables", "aliases", "recent_files"
+    ];
+    
+    for table in user_tables {
+        match conn.execute(&format!("DELETE FROM {}", table), []) {
+            Ok(rows_deleted) => {
+                if rows_deleted > 0 {
+                    cleaned_tables.push(format!("{}({} 行)", table, rows_deleted));
+                    log_info!("✅ 已清理表 {}: {} 行", table, rows_deleted);
+                }
+            }
+            Err(e) => {
+                // 表可能不存在，跳过
+                log_debug!("跳过表 {}: {}", table, e);
+            }
+        }
+    }
+    
+    // 重置 app 表的 active_window_id
+    let _ = conn.execute("UPDATE app SET active_window_id = NULL WHERE id = 1", []);
+    
+    Ok(cleaned_tables)
+}
+
+/// 生成随机用户名
+fn generate_random_username() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    
+    let patterns = vec![
+        format!("User{}", rng.gen_range(1000..99999)),
+        format!("PC{}User", rng.gen_range(100..9999)),
+        format!("Windows{}", rng.gen_range(10..999)),
+        format!("Local{}", rng.gen_range(100..9999)),
+        format!("Admin{}", rng.gen_range(100..9999)),
+    ];
+    
+    patterns[rng.gen_range(0..patterns.len())].clone()
+}
+
+/// 验证清理结果
+fn verify_warp_cleanup(warp_data_dir: &Path) -> Vec<String> {
+    let mut warnings = Vec::new();
+    
+    log_info!("🔍 验证清理结果...");
+    
+    // 检查数据库
+    let db_path = warp_data_dir.join("Warp").join("data").join("warp.sqlite");
+    if db_path.exists() {
+        if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+            let check_tables = vec!["users", "current_user_information", "windows", "tabs"];
+            for table in check_tables {
+                if let Ok(mut stmt) = conn.prepare(&format!("SELECT COUNT(*) FROM {}", table)) {
+                    if let Ok(count) = stmt.query_row([], |row| row.get::<_, i64>(0)) {
+                        if count > 0 {
+                            let warning = format!("警告: {} 表仍有 {} 条记录", table, count);
+                            log_warn!("⚠️ {}", warning);
+                            warnings.push(warning);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 检查敏感文件
+    let sensitive_files = vec![
+        "Warp/data/dev.warp.Warp-User",
+        "Warp/data/rudder_telemetry_events.json",
+        "Warp/cache",
+    ];
+    
+    for file_path in sensitive_files {
+        let full_path = warp_data_dir.join(file_path);
+        if full_path.exists() {
+            let warning = format!("警告: {} 仍然存在", file_path);
+            log_warn!("⚠️ {}", warning);
+            warnings.push(warning);
+        }
+    }
+    
+    if warnings.is_empty() {
+        log_info!("✅ 验证通过：所有敏感数据已清理");
+    }
+    
+    warnings
+}
+
+/// 清理Warp数据（支持 Windows/macOS/Linux）
+#[tauri::command]
+async fn clean_warp_data(force: bool) -> Result<WarpCleanResult, String> {
+    log_info!("🧹 开始Warp清理流程 (force: {})", force);
+
+    let mut cleaned_items = Vec::new();
+    let mut errors = Vec::new();
+    let mut overall_success = true;
+
+    #[cfg(target_os = "windows")]
+    {
+        use winreg::enums::*;
+        use winreg::RegKey;
+
+        // 1. 更新安装注册表（生成随机用户信息）
+        log_info!("📝 更新Warp安装注册表...");
+        let hkcu = RegKey::predef(HKEY_CURRENT_USER);
+        let install_reg_key = r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\warp-terminal-stable_is1";
+        
+        match hkcu.open_subkey_with_flags(install_reg_key, KEY_WRITE) {
+            Ok(key) => {
+                let new_username = generate_random_username();
+                let install_date = chrono::Local::now().format("%Y%m%d").to_string();
+                
+                let _ = key.set_value("Inno Setup: User", &new_username);
+                let _ = key.set_value("InstallDate", &install_date);
+                
+                log_info!("✅ 已更新安装注册表: 用户名={}, 安装日期={}", new_username, install_date);
+                cleaned_items.push(format!("安装注册表用户信息 -> {}", new_username));
+            }
+            Err(_) => {
+                log_info!("ℹ️ 未找到安装注册表项，跳过");
+            }
+        }
+        
+        // 2. 清理主配置注册表
+        log_info!("📝 清理Warp主配置注册表...");
+        let registry_paths = vec![
+            r"Software\Warp.dev\Warp",
+            r"Software\Warp.dev\Warp-Preview",
+        ];
+
+        for path in registry_paths {
+            match hkcu.delete_subkey_all(path) {
+                Ok(_) => {
+                    log_info!("✅ 已删除注册表项: {}", path);
+                    cleaned_items.push(format!("主配置注册表: {}", path));
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+                    log_info!("ℹ️ 注册表项不存在: {}", path);
+                }
+                Err(e) => {
+                    let error_msg = format!("删除注册表项 {} 失败: {}", path, e);
+                    log_error!("❌ {}", error_msg);
+                    errors.push(error_msg);
+                    overall_success = false;
+                }
+            }
+        }
+
+        // 3. 精细清理用户数据（数据库 + 特定文件）
+        log_info!("📁 精细清理Warp用户数据...");
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            let warp_base_dir = PathBuf::from(&local_app_data).join("warp");
+            
+            for variant in ["Warp", "Warp-Preview"] {
+                let warp_dir = warp_base_dir.join(variant);
+                if !warp_dir.exists() {
+                    continue;
+                }
+                
+                // 3.1 清理数据库（保留架构）
+                let db_path = warp_dir.join("data").join("warp.sqlite");
+                if db_path.exists() {
+                    log_info!("🗃️ 清理 {} 数据库表...", variant);
+                    match clean_warp_database(&db_path) {
+                        Ok(tables) => {
+                            if !tables.is_empty() {
+                                cleaned_items.push(format!("{}数据库: {}", variant, tables.join(", ")));
+                            }
+                        }
+                        Err(e) => {
+                            let error_msg = format!("{}数据库清理失败: {}", variant, e);
+                            log_error!("❌ {}", error_msg);
+                            errors.push(error_msg);
+                        }
+                    }
+                }
+                
+                // 3.2 清理认证和遥测文件
+                let files_to_delete = vec![
+                    warp_dir.join("data").join("dev.warp.Warp-User"),
+                    warp_dir.join("data").join("rudder_telemetry_events.json"),
+                    warp_dir.join("data").join("warp.sqlite-shm"),
+                    warp_dir.join("data").join("warp.sqlite-wal"),
+                    warp_dir.join("data").join("warp.lock"),
+                ];
+                
+                for file in files_to_delete {
+                    if file.exists() {
+                        if let Err(e) = fs::remove_file(&file) {
+                            log_warn!("⚠️ 删除文件 {:?} 失败: {}", file, e);
+                        } else {
+                            log_info!("✅ 已删除文件: {:?}", file);
+                        }
+                    }
+                }
+                
+                // 3.3 清理缓存目录（包括 Electron 缓存）
+                let cache_dirs = vec![
+                    warp_dir.join("cache"),
+                    warp_dir.join("GPUCache"),
+                    warp_dir.join("Code Cache"),
+                    warp_dir.join("DawnCache"),
+                    warp_dir.join("Service Worker"),
+                    warp_dir.join("IndexedDB"),
+                    warp_dir.join("Local Storage"),
+                    warp_dir.join("Session Storage"),
+                    warp_dir.join("Cookies"),
+                    warp_dir.join("Network"),
+                    warp_dir.join("Crashpad"),
+                    warp_dir.join("data").join("codebase_index_snapshots"),
+                ];
+                
+                for cache_dir in cache_dirs {
+                    if cache_dir.exists() {
+                        if let Err(e) = fs::remove_dir_all(&cache_dir) {
+                            log_warn!("⚠️ 删除缓存 {:?} 失败: {}", cache_dir, e);
+                        } else {
+                            log_info!("✅ 已删除缓存: {:?}", cache_dir);
+                            cleaned_items.push(format!("{}缓存", cache_dir.file_name().unwrap().to_string_lossy()));
+                        }
+                    }
+                }
+                
+                // 3.4 清空日志文件
+                let log_files = vec![
+                    warp_dir.join("data").join("logs").join("warp.log"),
+                    warp_dir.join("data").join("logs").join("warp_network.log"),
+                ];
+                
+                for log_file in log_files {
+                    if log_file.exists() {
+                        let _ = fs::write(&log_file, "");
+                        log_info!("✅ 已清空日志: {:?}", log_file);
+                    }
+                }
+            }
+            
+            cleaned_items.push("用户数据和缓存（精细清理）".to_string());
+        } else {
+            let error_msg = "无法获取LOCALAPPDATA环境变量".to_string();
+            log_error!("❌ {}", error_msg);
+            errors.push(error_msg);
+            overall_success = false;
+        }
+
+        // 4. 清理 APPDATA 中的主题和配置
+        log_info!("🎨 清理Warp主题和启动配置...");
+        if let Ok(app_data) = std::env::var("APPDATA") {
+            let warp_paths = vec![
+                PathBuf::from(&app_data).join("warp").join("Warp"),
+                PathBuf::from(&app_data).join("warp").join("Warp-Preview"),
+            ];
+
+            for path in warp_paths {
+                if path.exists() {
+                    match fs::remove_dir_all(&path) {
+                        Ok(_) => {
+                            log_info!("✅ 已删除目录: {:?}", path);
+                            cleaned_items.push(format!("APPDATA配置目录: {:?}", path));
+                        }
+                        Err(e) => {
+                            let error_msg = format!("删除目录 {:?} 失败: {}", path, e);
+                            log_error!("❌ {}", error_msg);
+                            errors.push(error_msg);
+                            overall_success = false;
+                        }
+                    }
+                } else {
+                    log_info!("ℹ️ 目录不存在: {:?}", path);
+                }
+            }
+        } else {
+            let error_msg = "无法获取APPDATA环境变量".to_string();
+            log_error!("❌ {}", error_msg);
+            errors.push(error_msg);
+            overall_success = false;
+        }
+        
+        // 5. 验证清理结果
+        if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
+            let warp_base_dir = PathBuf::from(&local_app_data).join("warp");
+            let verification_warnings = verify_warp_cleanup(&warp_base_dir);
+            if !verification_warnings.is_empty() {
+                errors.extend(verification_warnings);
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::path::PathBuf;
+
+        log_info!("📁 清理Warp macOS 用户数据与配置...");
+        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+
+        // 1. 精细清理 Application Support 中的数据（保留目录结构）
+        let app_support_variants = vec![
+            ("dev.warp.Warp", "Warp"),
+            ("dev.warp.Warp-Stable", "Warp-Stable"),
+            ("dev.warp.Warp-Preview", "Warp-Preview"),
+        ];
+
+        for (dir_name, label) in app_support_variants {
+            let warp_dir = PathBuf::from(&home)
+                .join("Library/Application Support")
+                .join(dir_name);
+
+            if !warp_dir.exists() {
+                continue;
+            }
+
+            log_info!("🗃️ 精细清理 {} 数据...", label);
+
+            // 1.1 清理数据库（保留架构）
+            let db_path = warp_dir.join("warp.sqlite");
+            if db_path.exists() {
+                log_info!("🗃️ 清理 {} 数据库表...", label);
+                match clean_warp_database(&db_path) {
+                    Ok(tables) => {
+                        if !tables.is_empty() {
+                            cleaned_items.push(format!("{}数据库: {}", label, tables.join(", ")));
+                        }
+                    }
+                    Err(e) => {
+                        let error_msg = format!("{}数据库清理失败: {}", label, e);
+                        log_error!("❌ {}", error_msg);
+                        errors.push(error_msg);
+                    }
+                }
+            }
+
+            // 1.2 删除 SQLite 临时文件
+            let sqlite_temp_files = vec![
+                warp_dir.join("warp.sqlite-shm"),
+                warp_dir.join("warp.sqlite-wal"),
+            ];
+
+            for file in sqlite_temp_files {
+                if file.exists() {
+                    if let Err(e) = fs::remove_file(&file) {
+                        log_warn!("⚠️ 删除文件 {:?} 失败: {}", file, e);
+                    } else {
+                        log_info!("✅ 已删除SQLite临时文件: {:?}", file.file_name());
+                    }
+                }
+            }
+
+            // 1.3 删除特定目录
+            let dirs_to_delete = vec![
+                warp_dir.join("autoupdate"),
+                warp_dir.join("codebase_index_snapshots"),
+                warp_dir.join("mcp"),
+            ];
+
+            for dir in dirs_to_delete {
+                if dir.exists() {
+                    if let Err(e) = fs::remove_dir_all(&dir) {
+                        log_warn!("⚠️ 删除目录 {:?} 失败: {}", dir, e);
+                    } else {
+                        log_info!("✅ 已删除目录: {:?}", dir.file_name());
+                        cleaned_items.push(format!("{}: {:?}", label, dir.file_name().unwrap()));
+                    }
+                }
+            }
+
+            // 1.4 清空特定文件（不删除）
+            let files_to_clear = vec![
+                warp_dir.join("warp_network.log"),
+                warp_dir.join("rudder_telemetry_events.json"),
+            ];
+
+            for file in files_to_clear {
+                if file.exists() {
+                    if let Err(e) = fs::write(&file, "") {
+                        log_warn!("⚠️ 清空文件 {:?} 失败: {}", file, e);
+                    } else {
+                        log_info!("✅ 已清空文件: {:?}", file.file_name());
+                    }
+                }
+            }
+
+            // 1.5 删除随机16位文件名的文件（设备标识）
+            if let Ok(entries) = fs::read_dir(&warp_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file() {
+                        if let Some(file_name) = path.file_name() {
+                            let name = file_name.to_string_lossy();
+                            // 删除类似 "4897515f2ff5aca7" 的随机文件
+                            if name.len() == 16 && name.chars().all(|c| c.is_ascii_alphanumeric()) {
+                                if let Err(e) = fs::remove_file(&path) {
+                                    log_warn!("⚠️ 删除随机文件 {:?} 失败: {}", name, e);
+                                } else {
+                                    log_info!("✅ 已删除随机文件: {}", name);
+                                    cleaned_items.push(format!("{}随机文件: {}", label, name));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 1.6 重新创建必要的空目录
+            let _ = fs::create_dir_all(warp_dir.join("codebase_index_snapshots"));
+        }
+
+        // 2. 清理其他系统目录（全部删除）
+        let mac_system_paths: Vec<(PathBuf, &'static str)> = vec![
+            // Caches
+            (PathBuf::from(&home).join("Library/Caches/dev.warp.Warp"), "Caches"),
+            (PathBuf::from(&home).join("Library/Caches/dev.warp.Warp-Stable"), "Caches (Stable)"),
+            (PathBuf::from(&home).join("Library/Caches/dev.warp.Warp-Preview"), "Caches (Preview)"),
+            // WebKit
+            (PathBuf::from(&home).join("Library/WebKit/dev.warp.Warp-Stable"), "WebKit (Stable)"),
+            (PathBuf::from(&home).join("Library/WebKit/dev.warp.Warp"), "WebKit"),
+            // Saved Application State
+            (PathBuf::from(&home).join("Library/Saved Application State/dev.warp.Warp.savedState"), "Saved Application State"),
+            (PathBuf::from(&home).join("Library/Saved Application State/dev.warp.Warp-Stable.savedState"), "Saved Application State (Stable)"),
+        ];
+
+        for (path, label) in mac_system_paths {
+            if path.exists() {
+                let res = if path.is_file() { fs::remove_file(&path) } else { fs::remove_dir_all(&path) };
+                match res {
+                    Ok(_) => {
+                        log_info!("✅ 已删除: {:?} ({})", path, label);
+                        cleaned_items.push(format!("{}: {:?}", label, path));
+                    }
+                    Err(e) => {
+                        let error_msg = format!("删除 {:?} 失败: {}", path, e);
+                        log_error!("❌ {}", error_msg);
+                        errors.push(error_msg);
+                        overall_success = false;
+                    }
+                }
+            }
+        }
+
+        // 3. 清理 plist 偏好设置文件
+        log_info!("📝 清理macOS偏好设置...");
+        let plist_files = vec![
+            PathBuf::from(&home).join("Library/Preferences/dev.warp.Warp.plist"),
+            PathBuf::from(&home).join("Library/Preferences/dev.warp.Warp-Stable.plist"),
+            PathBuf::from(&home).join("Library/Preferences/dev.warp.Warp-Preview.plist"),
+        ];
+
+        let mut deleted_plists = Vec::new();
+        for plist_path in plist_files {
+            if plist_path.exists() {
+                match fs::remove_file(&plist_path) {
+                    Ok(_) => {
+                        log_info!("✅ 已删除plist: {:?}", plist_path.file_name());
+                        deleted_plists.push(plist_path.file_name().unwrap().to_string_lossy().to_string());
+                    }
+                    Err(e) => {
+                        let error_msg = format!("删除plist {:?} 失败: {}", plist_path, e);
+                        log_error!("❌ {}", error_msg);
+                        errors.push(error_msg);
+                    }
+                }
+            }
+        }
+
+        if !deleted_plists.is_empty() {
+            cleaned_items.push(format!("偏好设置文件: {}", deleted_plists.join(", ")));
+
+            // 4. 刷新 macOS 偏好设置缓存
+            log_info!("🔄 刷新偏好设置缓存...");
+            match std::process::Command::new("killall")
+                .arg("cfprefsd")
+                .output()
+            {
+                Ok(_) => {
+                    log_info!("✅ 已刷新偏好设置缓存");
+                    cleaned_items.push("刷新cfprefsd".to_string());
+                }
+                Err(e) => {
+                    log_warn!("⚠️ 刷新偏好设置缓存失败: {}", e);
+                }
+            }
+        }
+
+        // 5. 验证清理结果
+        log_info!("🔍 验证macOS清理结果...");
+        for (dir_name, label) in [("dev.warp.Warp-Stable", "Warp-Stable")] {
+            let warp_dir = PathBuf::from(&home)
+                .join("Library/Application Support")
+                .join(dir_name);
+
+            if !warp_dir.exists() {
+                continue;
+            }
+
+            // 检查数据库
+            let db_path = warp_dir.join("warp.sqlite");
+            if db_path.exists() {
+                if let Ok(conn) = rusqlite::Connection::open(&db_path) {
+                    let check_tables = vec!["users", "current_user_information", "windows", "tabs"];
+                    for table in check_tables {
+                        if let Ok(mut stmt) = conn.prepare(&format!("SELECT COUNT(*) FROM {}", table)) {
+                            if let Ok(count) = stmt.query_row([], |row| row.get::<_, i64>(0)) {
+                                if count > 0 {
+                                    let warning = format!("{} 表仍有 {} 条记录", table, count);
+                                    log_warn!("⚠️ {}", warning);
+                                    errors.push(warning);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 检查敏感文件
+            let sensitive_files = vec!["rudder_telemetry_events.json", "mcp", "autoupdate"];
+            for file_name in sensitive_files {
+                let file_path = warp_dir.join(file_name);
+                if file_path.exists() {
+                    let warning = format!("{} 仍然存在: {:?}", label, file_name);
+                    log_warn!("⚠️ {}", warning);
+                    errors.push(warning);
+                }
+            }
+        }
+
+        // 检查 plist 文件
+        for plist_file in &plist_files {
+            if plist_file.exists() {
+                let warning = format!("plist文件仍然存在: {:?}", plist_file.file_name());
+                log_warn!("⚠️ {}", warning);
+                errors.push(warning);
+            }
+        }
+
+        if errors.is_empty() {
+            log_info!("✅ macOS验证通过：所有敏感数据已清理");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::path::PathBuf;
+        log_info!("📁 清理Warp Linux 用户数据与配置...");
+
+        let home = std::env::var("HOME").unwrap_or_else(|_| "~".to_string());
+        let xdg_config_home = std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", home));
+        let xdg_data_home = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| format!("{}/.local/share", home));
+        let xdg_cache_home = std::env::var("XDG_CACHE_HOME").unwrap_or_else(|_| format!("{}/.cache", home));
+
+        let mut linux_paths: Vec<(PathBuf, &'static str)> = vec![
+            (PathBuf::from(&xdg_config_home).join("dev.warp.Warp"), "Config (dev.warp.Warp)"),
+            (PathBuf::from(&xdg_config_home).join("warp"), "Config (warp)"),
+            (PathBuf::from(&xdg_data_home).join("dev.warp.Warp"), "Data (dev.warp.Warp)"),
+            (PathBuf::from(&xdg_data_home).join("warp"), "Data (warp)"),
+            (PathBuf::from(&xdg_cache_home).join("dev.warp.Warp"), "Cache (dev.warp.Warp)"),
+            (PathBuf::from(&xdg_cache_home).join("warp"), "Cache (warp)"),
+            // Flatpak 目录
+            (PathBuf::from(&home).join(".var/app/dev.warp.Warp"), "Flatpak app data"),
+        ];
+
+        for (path, label) in linux_paths.drain(..) {
+            if path.exists() {
+                let res = if path.is_file() { fs::remove_file(&path) } else { fs::remove_dir_all(&path) };
+                match res {
+                    Ok(_) => {
+                        log_info!("✅ 已删除: {:?} ({})", path, label);
+                        cleaned_items.push(format!("{}: {:?}", label, path));
+                    }
+                    Err(e) => {
+                        let error_msg = format!("删除 {:?} 失败: {}", path, e);
+                        log_error!("❌ {}", error_msg);
+                        errors.push(error_msg);
+                        overall_success = false;
+                    }
+                }
+            } else {
+                log_info!("ℹ️ 路径不存在: {:?}", path);
+            }
+        }
+    }
+
+    let result = WarpCleanResult {
+        success: overall_success,
+        message: if overall_success {
+            format!("清理完成！共清理 {} 项", cleaned_items.len())
+        } else {
+            format!("清理完成，但存在 {} 个错误", errors.len())
+        },
+        cleaned_items,
+        errors,
+    };
+
+    log_info!("🧹 Warp清理流程完成: success={}, cleaned={}, errors={}", 
+        result.success, result.cleaned_items.len(), result.errors.len());
+
+    Ok(result)
+}
+
+/// 检查Warp是否正在运行
+#[tauri::command]
+async fn check_warp_running() -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        
+        // 基础检测：使用 tasklist
+        let output = Command::new("tasklist")
+            .args(&["/FI", "IMAGENAME eq Warp.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+            .map_err(|e| format!("执行tasklist命令失败: {}", e))?;
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let mut is_running = stdout.contains("Warp.exe");
+        
+        // 详细检测：使用 wmic 获取命令行参数
+        if !is_running {
+            let wmic_output = Command::new("wmic")
+                .args(&["process", "get", "name,commandline", "/format:csv"])
+                .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                .output();
+            
+            if let Ok(output) = wmic_output {
+                let wmic_stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                // 检查进程名或命令行是否包含 warp 相关关键词
+                is_running = wmic_stdout.contains("warp.exe") 
+                    || wmic_stdout.contains("warpterminal") 
+                    || wmic_stdout.contains("warp-terminal");
+                
+                if is_running {
+                    log_info!("🔍 通过wmic检测到Warp相关进程");
+                }
+            }
+        }
+        
+        log_info!("🔍 Warp运行状态检查: {}", is_running);
+        Ok(is_running)
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        
+        // 基础检测：使用 pgrep
+        let mut running = Command::new("pgrep")
+            .args(["-x", "Warp"]) // 按进程名精确匹配
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        
+        // 详细检测：使用 ps aux 获取详细进程信息
+        if !running {
+            if let Ok(output) = Command::new("ps").args(["aux"]).output() {
+                let stdout = String::from_utf8_lossy(&output.stdout).to_lowercase();
+                
+                // 检查进程命令行是否包含 Warp 相关关键词
+                running = stdout.contains("/applications/warp.app")
+                    || stdout.contains("warp.app/contents/macos")
+                    || stdout.contains("warpterminal");
+                
+                if running {
+                    log_info!("🔍 通过ps aux检测到Warp相关进程");
+                }
+            }
+        }
+        
+        log_info!("🔍 Warp运行状态检查(macOS): {}", running);
+        Ok(running)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        // 尝试匹配常见的进程名
+        let mut running = Command::new("pgrep").args(["-x", "warp"]).status().map(|s| s.success()).unwrap_or(false);
+        if !running {
+            running = Command::new("pgrep").args(["-x", "Warp"]).status().map(|s| s.success()).unwrap_or(false);
+        }
+        if !running {
+            running = Command::new("pgrep").args(["-f", "dev.warp.Warp"]).status().map(|s| s.success()).unwrap_or(false);
+        }
+        log_info!("🔍 Warp运行状态检查(Linux): {}", running);
+        Ok(running)
+    }
+}
+
+/// 强制关闭Warp进程
+#[tauri::command]
+async fn kill_warp_process() -> Result<bool, String> {
+    #[cfg(target_os = "windows")]
+    {
+        use std::process::Command;
+        
+        log_info!("🔪 尝试关闭Warp进程...");
+        
+        // 尝试关闭 Warp.exe
+        let output = Command::new("taskkill")
+            .args(&["/F", "/IM", "Warp.exe"])
+            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+            .output()
+            .map_err(|e| format!("执行taskkill命令失败: {}", e))?;
+
+        let mut success = output.status.success();
+        
+        if success {
+            log_info!("✅ Warp.exe 进程已关闭");
+        } else {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log_info!("ℹ️ 关闭 Warp.exe: {}", stderr);
+        }
+        
+        // 等待进程完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        
+        // 验证是否还有进程运行
+        let check_output = Command::new("tasklist")
+            .args(&["/FI", "IMAGENAME eq Warp.exe"])
+            .creation_flags(0x08000000)
+            .output();
+        
+        if let Ok(output) = check_output {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            if stdout.contains("Warp.exe") {
+                log_warn!("⚠️ Warp进程仍在运行，尝试再次关闭...");
+                // 再次尝试
+                let _ = Command::new("taskkill")
+                    .args(&["/F", "/IM", "Warp.exe", "/T"]) // 添加 /T 关闭子进程
+                    .creation_flags(0x08000000)
+                    .output();
+                tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                success = false;
+            }
+        }
+        
+        Ok(success)
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        log_info!("🔪 尝试关闭Warp进程(macOS)...");
+        
+        // 第一次尝试：使用 pkill 精确匹配
+        let mut success = Command::new("pkill")
+            .args(["-x", "Warp"]) // 精确匹配进程名
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        
+        if success {
+            log_info!("✅ Warp 进程已关闭");
+        } else {
+            // 尝试模糊匹配
+            log_info!("🔄 尝试模糊匹配关闭...");
+            let _ = Command::new("pkill").args(["-f", "Warp.app"]).status();
+            let _ = Command::new("pkill").args(["-f", "warp"]).status();
+        }
+        
+        // 等待进程完全关闭
+        tokio::time::sleep(tokio::time::Duration::from_secs(3)).await;
+        
+        // 验证是否还有进程运行
+        let still_running = Command::new("pgrep")
+            .args(["-x", "Warp"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false);
+        
+        if still_running {
+            log_warn!("⚠️ Warp进程仍在运行，尝试强制关闭...");
+            // 使用 -9 信号强制关闭
+            let _ = Command::new("pkill").args(["-9", "-x", "Warp"]).status();
+            let _ = Command::new("pkill").args(["-9", "-f", "Warp.app"]).status();
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            success = false;
+        } else {
+            success = true;
+        }
+        
+        if success {
+            log_info!("✅ Warp进程已完全关闭(macOS)");
+        }
+        
+        Ok(success)
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        log_info!("🔪 尝试关闭Warp进程(Linux)...");
+        let mut success = Command::new("pkill").args(["-x", "warp"]).status().map(|s| s.success()).unwrap_or(false);
+        if !success {
+            success = Command::new("pkill").args(["-x", "Warp"]).status().map(|s| s.success()).unwrap_or(false);
+        }
+        if !success {
+            success = Command::new("pkill").args(["-f", "dev.warp.Warp"]).status().map(|s| s.success()).unwrap_or(false);
+        }
+        if success {
+            tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+            log_info!("✅ Warp进程已关闭(Linux)");
+        }
+        Ok(success)
+    }
+}
+
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -4550,6 +5387,9 @@ pub fn run() {
             open_cursor_dashboard,
             verification_code_login,
             check_verification_login_cookies,
+            clean_warp_data,
+            check_warp_running,
+            kill_warp_process,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

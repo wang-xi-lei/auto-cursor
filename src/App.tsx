@@ -7,6 +7,7 @@ import { AuthCheckPage } from "./pages/AuthCheckPage";
 import { TokenManagePage } from "./pages/TokenManagePage";
 import { AutoRegisterPage } from "./pages/AutoRegisterPage";
 import { LogsPage } from "./pages/LogsPage";
+import { WarpCleanPage } from "./pages/WarpCleanPage";
 import { UsageProvider } from "./context/UsageContext";
 import { ThemeProvider } from "./context/ThemeContext";
 import { UpdateModal } from "./components/UpdateModal";
@@ -106,6 +107,7 @@ function App() {
             <Route path="/token-manage" element={<TokenManagePage />} />
             <Route path="/auto-register" element={<AutoRegisterPage />} />
             <Route path="/logs" element={<LogsPage />} />
+            <Route path="/warp-clean" element={<WarpCleanPage />} />
           </Routes>
         </Layout>
         </Router>
