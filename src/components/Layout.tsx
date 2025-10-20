@@ -9,7 +9,6 @@ import {
   ShieldCheck, 
   KeyRound, 
   UserPlus, 
-  CreditCard, 
   ScrollText,
   Moon,
   Sun
@@ -35,7 +34,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { path: "/auth-check", label: "授权检查", Icon: ShieldCheck },
     { path: "/token-manage", label: "Token 管理", Icon: KeyRound },
     { path: "/auto-register", label: "自动注册", Icon: UserPlus },
-    { path: "/virtual-card", label: "生成虚拟卡", Icon: CreditCard },
     { path: "/logs", label: "日志查看", Icon: ScrollText },
   ];
 

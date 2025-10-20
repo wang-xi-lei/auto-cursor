@@ -58,32 +58,50 @@ impl Logger {
 
     /// 写入日志
     pub fn write_log(level: &str, message: &str) {
-        // 尝试获取已初始化的logger
-        if let Ok(logger_guard) = LOGGER.lock() {
-            if let Some(logger) = logger_guard.as_ref() {
-                if let Err(e) = logger.write_log_internal(level, message) {
-                    eprintln!("Failed to write log: {}", e);
+        // 使用单一的锁获取避免死锁
+        let logger_result = {
+            if let Ok(logger_guard) = LOGGER.lock() {
+                if logger_guard.is_some() {
+                    Some(())
+                } else {
+                    None
                 }
+            } else {
+                None
+            }
+        };
+
+        // 如果logger未初始化，尝试延迟初始化
+        if logger_result.is_none() {
+            if let Err(_) = Self::lazy_init() {
+                // 初始化失败，回退到控制台输出
+                Self::fallback_console_log(level, message);
                 return;
             }
         }
 
-        // 如果logger未初始化，尝试延迟初始化
-        if let Err(_) = Self::lazy_init() {
-            // 初始化失败，回退到控制台输出
-            let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
-            println!("[{}] [{}] {}", timestamp, level, message);
-            return;
-        }
-
-        // 初始化成功后再次尝试写入
+        // 尝试写入日志
         if let Ok(logger_guard) = LOGGER.lock() {
             if let Some(logger) = logger_guard.as_ref() {
                 if let Err(e) = logger.write_log_internal(level, message) {
                     eprintln!("Failed to write log: {}", e);
+                    // 写入失败时回退到控制台输出
+                    Self::fallback_console_log(level, message);
                 }
+            } else {
+                // Logger仍然未初始化，使用控制台输出
+                Self::fallback_console_log(level, message);
             }
+        } else {
+            // 无法获取锁，使用控制台输出
+            Self::fallback_console_log(level, message);
         }
+    }
+
+    /// 回退到控制台输出
+    fn fallback_console_log(level: &str, message: &str) {
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
+        println!("[{}] [{}] {}", timestamp, level, message);
     }
 
     /// 内部写入日志方法
@@ -155,12 +173,17 @@ impl Logger {
         // 替换原文件
         std::fs::rename(&temp_path, &self.log_file_path)?;
 
-        // 记录清理操作
+        // 记录清理操作（直接写入文件避免递归）
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S%.3f");
         let cleanup_message = format!(
-            "Log file trimmed, kept approximately {}% of original content",
-            60
+            "[{}] [INFO] Log file trimmed, kept approximately {}% of original content\n",
+            timestamp, 60
         );
-        self.write_log_internal("INFO", &cleanup_message)?;
+        
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(&self.log_file_path) {
+            let _ = file.write_all(cleanup_message.as_bytes());
+            let _ = file.flush();
+        }
 
         Ok(())
     }

@@ -1,0 +1,63 @@
+[2025-10-20 14:14:59.647] [INFO] === 系统信息 ===
+[2025-10-20 14:14:59.648] [INFO] 操作系统: windows
+[2025-10-20 14:14:59.651] [INFO] 架构: x86_64
+[2025-10-20 14:14:59.652] [INFO] 工作目录: "D:\\auto-cursor\\src-tauri"
+[2025-10-20 14:14:59.654] [INFO] 存储文件路径: "C:\\Users\\Administrator\\AppData\\Roaming\\Cursor\\User\\globalStorage\\storage.json"
+[2025-10-20 14:14:59.656] [INFO] SQLite路径: "C:\\Users\\Administrator\\AppData\\Roaming\\Cursor\\User\\globalStorage\\state.vscdb"
+[2025-10-20 14:14:59.658] [INFO] 日志文件路径: "D:\\auto-cursor\\src-tauri\\cursor_reset_20251020_141459.log"
+[2025-10-20 14:14:59.660] [INFO] 存储文件是否存在: true
+[2025-10-20 14:14:59.662] [INFO] SQLite文件是否存在: true
+[2025-10-20 14:14:59.664] [INFO] 当前用户: Administrator
+[2025-10-20 14:14:59.666] [INFO] === 系统信息结束 ===
+[2025-10-20 14:14:59.667] [INFO] 开始完整的 Cursor 重置流程...
+[2025-10-20 14:14:59.669] [INFO] === 步骤 1: 重置机器ID ===
+[2025-10-20 14:14:59.670] [INFO] 开始机器ID重置流程...
+[2025-10-20 14:14:59.672] [DEBUG] 检查存储文件: "C:\\Users\\Administrator\\AppData\\Roaming\\Cursor\\User\\globalStorage\\storage.json"
+[2025-10-20 14:14:59.673] [INFO] 存储文件存在，继续处理
+[2025-10-20 14:14:59.674] [INFO] 创建备份文件...
+[2025-10-20 14:14:59.677] [INFO] Created backup at: C:\Users\Administrator\AppData\Roaming\Cursor\User\globalStorage\storage.json.bak.20251020_141459
+[2025-10-20 14:14:59.679] [INFO] 生成新的机器ID...
+[2025-10-20 14:14:59.681] [INFO] 生成的新ID: dev_device_id=9846b441-c634-45a5-9d51-98c7dd3fa5c3, machine_id长度=64, mac_machine_id长度=128, sqm_id={F48D94AB-3759-4AE6-893E-6131FE762429}
+[2025-10-20 14:14:59.682] [INFO] 更新存储文件...
+[2025-10-20 14:14:59.685] [INFO] Successfully updated storage.json
+[2025-10-20 14:14:59.686] [INFO] 更新SQLite数据库...
+[2025-10-20 14:14:59.688] [DEBUG] SQLite更新结果: SQLite database update skipped (feature not implemented)
+[2025-10-20 14:14:59.689] [INFO] 更新机器ID文件...
+[2025-10-20 14:14:59.692] [INFO] Successfully updated machine ID file
+[2025-10-20 14:14:59.694] [INFO] 更新系统ID...
+[2025-10-20 14:14:59.696] [DEBUG] 系统ID更新结果: Permission denied: Cannot update Windows MachineGuid
+[2025-10-20 14:14:59.697] [DEBUG] 系统ID更新结果: SQMClient registry key not found or permission denied
+[2025-10-20 14:14:59.699] [INFO] 机器ID重置完成: Machine IDs reset successfully
+[2025-10-20 14:14:59.701] [INFO] 机器ID重置结果: success=true, message=Machine IDs reset successfully
+[2025-10-20 14:14:59.703] [DEBUG] 机器ID重置详情: Starting machine ID reset process...
+[2025-10-20 14:14:59.705] [DEBUG] 机器ID重置详情: Created backup at: C:\Users\Administrator\AppData\Roaming\Cursor\User\globalStorage\storage.json.bak.20251020_141459
+[2025-10-20 14:14:59.706] [DEBUG] 机器ID重置详情: Generated new machine IDs
+[2025-10-20 14:14:59.709] [DEBUG] 机器ID重置详情: Successfully updated storage.json
+[2025-10-20 14:14:59.710] [DEBUG] 机器ID重置详情: SQLite database update skipped (feature not implemented)
+[2025-10-20 14:14:59.712] [DEBUG] 机器ID重置详情: Successfully updated machine ID file
+[2025-10-20 14:14:59.714] [DEBUG] 机器ID重置详情: Permission denied: Cannot update Windows MachineGuid
+[2025-10-20 14:14:59.715] [DEBUG] 机器ID重置详情: SQMClient registry key not found or permission denied
+[2025-10-20 14:14:59.717] [INFO] 机器ID重置成功
+[2025-10-20 14:14:59.719] [INFO] === 步骤 2: 修改 main.js ===
+[2025-10-20 14:14:59.741] [INFO] 找到Cursor应用路径: package.json="C:\\Program Files\\Cursor\\resources\\app\\package.json", main.js="C:\\Program Files\\Cursor\\resources\\app\\out\\main.js"
+[2025-10-20 14:14:59.743] [INFO] package.json存在: true, main.js存在: true
+[2025-10-20 14:14:59.745] [INFO] 开始修改 main.js 文件...
+[2025-10-20 14:14:59.746] [INFO] 开始修改main.js文件: "C:\\Program Files\\Cursor\\resources\\app\\out\\main.js"
+[2025-10-20 14:14:59.748] [DEBUG] 读取main.js文件内容...
+[2025-10-20 14:14:59.752] [INFO] main.js文件大小: 1187585 字节
+[2025-10-20 14:14:59.753] [INFO] 创建main.js备份: C:\Program Files\Cursor\resources\app\out\main.js.backup.20251020_141459
+[2025-10-20 14:14:59.757] [WARN] Warning: Failed to modify main.js: Failed to create backup of main.js
+[2025-10-20 14:14:59.759] [INFO] === 步骤 3: 修改 workbench.desktop.main.js ===
+[2025-10-20 14:14:59.774] [INFO] 找到workbench路径: "C:\\Program Files\\Cursor\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js"
+[2025-10-20 14:14:59.776] [INFO] workbench文件存在: true
+[2025-10-20 14:14:59.778] [INFO] 开始修改 workbench.desktop.main.js 文件...
+[2025-10-20 14:14:59.780] [INFO] 开始修改workbench.desktop.main.js文件: "C:\\Program Files\\Cursor\\resources\\app\\out\\vs\\workbench\\workbench.desktop.main.js"
+[2025-10-20 14:14:59.782] [DEBUG] 读取workbench.desktop.main.js文件内容...
+[2025-10-20 14:14:59.809] [INFO] workbench.desktop.main.js文件大小: 24016449 字节
+[2025-10-20 14:14:59.810] [INFO] 创建workbench.desktop.main.js备份: C:\Program Files\Cursor\resources\app\out\vs\workbench\workbench.desktop.main.js.backup.20251020_141459
+[2025-10-20 14:14:59.818] [WARN] Warning: Failed to modify workbench.desktop.main.js: Failed to create backup of workbench.desktop.main.js
+[2025-10-20 14:14:59.819] [INFO] === Cursor 重置流程完成 ===
+[2025-10-20 14:14:59.821] [INFO] 最终结果: Complete Cursor reset successful
+[2025-10-20 14:14:59.822] [INFO] 成功状态: true
+[2025-10-20 14:14:59.823] [INFO] 详细信息条目数: 11
+[2025-10-20 14:14:59.825] [INFO] 日志文件位置: "D:\\auto-cursor\\src-tauri\\cursor_reset_20251020_141459.log"

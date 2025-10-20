@@ -9,6 +9,7 @@ import { PageSection } from "../components/PageSection";
 import { InfoCard } from "../components/InfoCard";
 import { ActionCard } from "../components/ActionCard";
 import { StatusCard } from "../components/StatusCard";
+import { BackupSelectModal } from "../components/BackupSelectModal";
 import {
   BackupInfo,
   MachineIds,
@@ -18,14 +19,9 @@ import {
 
 type Step =
   | "menu"
-  | "select"
-  | "preview"
-  | "confirm"
   | "result"
   | "reset"
   | "complete_reset"
-  | "confirm_reset"
-  | "confirm_complete_reset"
   | "custom_path_config";
 
 export const MachineIdPage: React.FC = () => {
@@ -49,6 +45,7 @@ export const MachineIdPage: React.FC = () => {
     null
   );
   const [isWindows, setIsWindows] = useState<boolean>(false);
+  const [showBackupModal, setShowBackupModal] = useState(false);
 
   // Toast 和确认对话框
   const { toasts, removeToast, showSuccess, showError } = useToast();
@@ -97,55 +94,104 @@ export const MachineIdPage: React.FC = () => {
       setLoading(true);
       const backupList = await CursorService.getBackups();
       setBackups(backupList);
-      setCurrentStep("select");
+      setShowBackupModal(true);
     } catch (error) {
       console.error("加载备份失败:", error);
+      showError("加载备份列表失败");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleBackupSelect = async (backup: BackupInfo) => {
+  const handleBackupSelect = async (backup: BackupInfo | null) => {
+    if (!backup) {
+      // 返回列表
+      setSelectedBackup(null);
+      setSelectedIds(null);
+      return;
+    }
+
     try {
       setLoading(true);
       setSelectedBackup(backup);
       const ids = await CursorService.extractBackupIds(backup.path);
       setSelectedIds(ids);
-      setCurrentStep("preview");
     } catch (error) {
       console.error("解析备份内容失败:", error);
-      alert("无法从备份中提取机器ID信息");
+      showError("无法从备份中提取机器ID信息");
+      setSelectedBackup(null);
+      setSelectedIds(null);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRestore = async () => {
+  const showRestoreConfirm = () => {
+    if (!selectedBackup || !selectedIds) return;
+
+    const idsPreview = Object.entries(selectedIds)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+
+    showConfirm({
+      title: "确认恢复备份",
+      message: `确定要恢复此备份吗？这将替换当前的 Machine ID。\n\n备份日期: ${selectedBackup.date_formatted}\n\n将要恢复的 Machine ID:\n${idsPreview}`,
+      confirmText: "确认恢复",
+      cancelText: "取消",
+      type: "warning",
+      onConfirm: handleRestoreConfirm,
+    });
+  };
+
+  const handleRestoreConfirm = async () => {
     if (!selectedBackup) return;
 
     try {
-      setLoading(true);
-      setCurrentStep("confirm");
       const result = await CursorService.restoreMachineIds(selectedBackup.path);
       setRestoreResult(result);
       setCurrentStep("result");
+      setShowBackupModal(false); // 关闭模态框
 
       if (result.success) {
         await loadCurrentMachineIds();
+        showSuccess("Machine ID 恢复成功");
+      } else {
+        showError(`恢复失败: ${result.message}`);
       }
     } catch (error) {
       console.error("恢复失败:", error);
-    } finally {
-      setLoading(false);
+      showError("恢复过程中发生错误");
     }
   };
 
+  const handleCloseBackupModal = () => {
+    setShowBackupModal(false);
+    setSelectedBackup(null);
+    setSelectedIds(null);
+  };
+
   const showResetConfirm = () => {
-    setCurrentStep("confirm_reset");
+    showConfirm({
+      title: "确认重置 Machine ID",
+      message:
+        "此操作将重置所有 Machine ID 为新的随机值，这可能会影响 Cursor 的授权状态。是否继续？",
+      confirmText: "确认重置",
+      cancelText: "取消",
+      type: "warning",
+      onConfirm: handleReset,
+    });
   };
 
   const showCompleteResetConfirm = () => {
-    setCurrentStep("confirm_complete_reset");
+    showConfirm({
+      title: "确认完全清理",
+      message:
+        "此操作将完全清除 Cursor 的所有配置和数据（包括 Machine ID、用户设置、扩展、注入脚本等）。该操作不可撤销，且需要重新登录并重新配置。是否继续？",
+      confirmText: "确认完全清理",
+      cancelText: "取消",
+      type: "danger",
+      onConfirm: handleCompleteReset,
+    });
   };
 
   const handleReset = async () => {
@@ -182,9 +228,7 @@ export const MachineIdPage: React.FC = () => {
     }
   };
 
-  const handleDeleteBackup = (backup: BackupInfo, event?: React.MouseEvent) => {
-    event?.stopPropagation(); // 防止触发选择备份
-
+  const handleDeleteBackup = (backup: BackupInfo) => {
     showConfirm({
       title: "删除备份",
       message: `确定要删除备份 "${backup.date_formatted}" 吗？此操作无法撤销。`,
@@ -506,114 +550,6 @@ export const MachineIdPage: React.FC = () => {
         </PageSection>
       )}
 
-      {/* Backup Selection */}
-      {currentStep === "select" && (
-        <PageSection>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-medium text-gray-900 dark:text-white">选择备份</h2>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setCurrentStep("menu")}
-            >
-              返回
-            </Button>
-          </div>
-
-          {backups.length === 0 ? (
-            <p className="py-8 text-center text-gray-500 dark:text-slate-400">没有找到备份文件</p>
-          ) : (
-            <div className="space-y-2">
-              {backups.map((backup, index) => (
-                <div
-                  key={index}
-                  className="p-4 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 border-gray-200 dark:border-slate-700 transition-colors"
-                  onClick={() => handleBackupSelect(backup)}
-                >
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 dark:text-white truncate">
-                        {backup.date_formatted}
-                      </p>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">
-                        大小: {(backup.size / 1024).toFixed(2)} KB
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={(e) => handleDeleteBackup(backup, e)}
-                        className="text-xs"
-                      >
-                        🗑️ 删除
-                      </Button>
-                      <span className="text-blue-600 dark:text-blue-400">→</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </PageSection>
-      )}
-
-      {/* Preview Step */}
-      {currentStep === "preview" && selectedBackup && selectedIds && (
-        <PageSection>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-base font-medium text-gray-900 dark:text-white">预览备份内容</h2>
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setCurrentStep("select")}
-            >
-              返回
-            </Button>
-          </div>
-
-          <div className="mb-4 space-y-3">
-            <StatusCard
-              status="info"
-              title="备份信息"
-              message={`日期: ${selectedBackup.date_formatted} \n大小: ${selectedBackup.size} bytes`}
-            />
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-gray-800 dark:text-white">
-                将要恢复的 Machine ID:
-              </h3>
-              <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-                {Object.entries(selectedIds).map(([key, value]) => (
-                  <InfoCard key={key} title={key} value={String(value)} copyable />
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <Button variant="primary" onClick={handleRestore} loading={loading}>
-              确认恢复
-            </Button>
-            <Button
-              variant="secondary"
-              onClick={() => setCurrentStep("select")}
-            >
-              取消
-            </Button>
-          </div>
-        </PageSection>
-      )}
-
-      {/* Confirm Step */}
-      {currentStep === "confirm" && (
-        <StatusCard
-          status="loading"
-          title="正在恢复..."
-          message="请稍候，正在恢复 Machine ID"
-        />
-      )}
-
       {/* Result Step */}
       {currentStep === "result" && restoreResult && (
         <StatusCard
@@ -689,50 +625,20 @@ export const MachineIdPage: React.FC = () => {
           </>
         )}
 
-      {/* Reset Confirmation */}
-      {currentStep === "confirm_reset" && (
-        <StatusCard
-          status="warning"
-          title="确认重置 Machine ID"
-          message="此操作将重置所有 Machine ID 为新的随机值。这可能会影响 Cursor 的授权状态。"
-          details={["注意：重置后您可能需要重新登录 Cursor 账户。"]}
-          actions={
-            <>
-              <Button variant="danger" onClick={handleReset} loading={loading}>
-                确认重置
-              </Button>
-              <Button variant="secondary" onClick={() => setCurrentStep("menu")}>
-                取消
-              </Button>
-            </>
-          }
-        />
-      )}
+      
 
-      {/* Complete Reset Confirmation */}
-      {currentStep === "confirm_complete_reset" && (
-        <StatusCard
-          status="error"
-          title="确认完全重置"
-          message="此操作将完全清除 Cursor 的所有配置和数据，包括 Machine ID，以及注入脚本等。"
-          details={[
-            "所有用户设置将被清除",
-            "已安装的扩展将被移除",
-            "需要重新配置 Cursor",
-            "需要重新登录账户",
-          ]}
-          actions={
-            <>
-              <Button variant="danger" onClick={handleCompleteReset} loading={loading}>
-                确认完全重置
-              </Button>
-              <Button variant="secondary" onClick={() => setCurrentStep("menu")}>
-                取消
-              </Button>
-            </>
-          }
-        />
-      )}
+      {/* 备份选择模态框 */}
+      <BackupSelectModal
+        isOpen={showBackupModal}
+        backups={backups}
+        selectedBackup={selectedBackup}
+        selectedIds={selectedIds}
+        loading={loading}
+        onClose={handleCloseBackupModal}
+        onSelectBackup={handleBackupSelect}
+        onConfirmRestore={showRestoreConfirm}
+        onDeleteBackup={handleDeleteBackup}
+      />
 
       {/* Toast 管理器 */}
       <ToastManager toasts={toasts} removeToast={removeToast} />

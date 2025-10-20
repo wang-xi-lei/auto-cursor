@@ -721,12 +721,26 @@ async fn get_log_config() -> Result<serde_json::Value, String> {
 
 #[tauri::command]
 async fn test_logging() -> Result<String, String> {
+    // 初始化日志系统（如果尚未初始化）
+    logger::Logger::init().map_err(|e| format!("Failed to initialize logger: {}", e))?;
+    
+    // 生成各种级别的测试日志
+    log_error!("🔴 这是一条 ERROR 级别的测试日志");
+    log_warn!("🟡 这是一条 WARN 级别的测试日志");
+    log_info!("🔵 这是一条 INFO 级别的测试日志");
+    log_debug!("🟢 这是一条 DEBUG 级别的测试日志");
+    
+    // 也调用原来的测试函数
     let restorer =
         MachineIdRestorer::new().map_err(|e| format!("Failed to initialize restorer: {}", e))?;
 
-    restorer
+    let original_result = restorer
         .test_logging()
-        .map_err(|e| format!("Failed to test logging: {}", e))
+        .map_err(|e| format!("Failed to test logging: {}", e))?;
+    
+    log_info!("✅ 日志测试完成，已生成所有级别的测试日志");
+    
+    Ok(format!("{}\n✅ 已生成 ERROR、WARN、INFO、DEBUG 级别的测试日志", original_result))
 }
 
 #[tauri::command]
@@ -4536,63 +4550,8 @@ pub fn run() {
             open_cursor_dashboard,
             verification_code_login,
             check_verification_login_cookies,
-            generate_virtual_card
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
 
-// 生成虚拟卡
-#[tauri::command]
-async fn generate_virtual_card(
-    cdk_code: String,
-    custom_prefix: String,
-) -> Result<serde_json::Value, String> {
-    log_info!("🔄 开始生成虚拟卡...");
-    log_info!("📧 CDK码: {}", cdk_code);
-    log_info!("💳 卡头: {}", custom_prefix);
-
-    let client = reqwest::Client::new();
-    
-    let request_body = serde_json::json!({
-        "cdkCode": cdk_code,
-        "count": 1,
-        "customPrefix": custom_prefix
-    });
-
-    log_info!("📤 请求体: {}", request_body);
-
-    match client
-        .post("https://api.anify.cn/virtual-card/generate")
-        .header("Content-Type", "application/json")
-        .json(&request_body)
-        .send()
-        .await
-    {
-        Ok(response) => {
-            let status = response.status();
-            log_info!("📥 响应状态: {}", status);
-
-            if status.is_success() {
-                match response.json::<serde_json::Value>().await {
-                    Ok(data) => {
-                        log_info!("✅ 虚拟卡生成成功");
-                        Ok(data)
-                    }
-                    Err(e) => {
-                        log_error!("❌ 解析响应失败: {}", e);
-                        Err(format!("解析响应失败: {}", e))
-                    }
-                }
-            } else {
-                let error_text = response.text().await.unwrap_or_else(|_| "未知错误".to_string());
-                log_error!("❌ API请求失败: {} - {}", status, error_text);
-                Err(error_text)
-            }
-        }
-        Err(e) => {
-            log_error!("❌ 网络请求失败: {}", e);
-            Err(format!("网络请求失败: {}", e))
-        }
-    }
-}

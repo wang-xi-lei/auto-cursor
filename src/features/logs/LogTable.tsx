@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
-import { LogEntry } from "./types";
+import { LogEntry, LOG_LEVEL_COLORS } from "./types";
+import { formatTimestamp, generateLogLineText } from "./utils";
 
 interface LogTableProps {
   logs: LogEntry[];
@@ -8,21 +9,8 @@ interface LogTableProps {
 }
 
 function getLevelColor(level: string): string {
-  const lvl = level.toUpperCase();
-  switch (lvl) {
-    case "ERROR":
-      return "text-red-600 dark:text-red-400";
-    case "WARN":
-      return "text-amber-600 dark:text-amber-300";
-    case "INFO":
-      return "text-blue-600 dark:text-blue-300";
-    case "DEBUG":
-      return "text-green-600 dark:text-green-300";
-    case "TRACE":
-      return "text-gray-600 dark:text-gray-400";
-    default:
-      return "text-slate-800 dark:text-slate-200";
-  }
+  const upperLevel = level.toUpperCase();
+  return LOG_LEVEL_COLORS[upperLevel] || "text-slate-800 dark:text-slate-200";
 }
 
 export const LogTable: React.FC<LogTableProps> = ({ logs, onCopyLine, containerProps }) => {
@@ -33,23 +21,21 @@ export const LogTable: React.FC<LogTableProps> = ({ logs, onCopyLine, containerP
       {/* Rows */}
       <div className="divide-y divide-gray-200 dark:divide-gray-800">
         {rows.map((log, i) => {
-          const dOk = !isNaN(Date.parse(log.timestamp));
-          const d = dOk ? new Date(log.timestamp) : null;
-          const timeStr = d
-            ? d.toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })
-            : log.timestamp;
-
-          const lineText = `[${timeStr}] [${log.level}] ${log.message}`;
+          const timeStr = formatTimestamp(log.timestamp);
+          const lineText = generateLogLineText(log);
 
           return (
             <div
               key={i}
               className="group px-4 py-2 hover:bg-gray-50 dark:hover:bg-gray-900/60 transition-colors"
             >
-              <div className={`flex items-start font-mono whitespace-pre-wrap break-words`}>
+              <div className={`flex items-start font-mono whitespace-pre-wrap break-words gap-2`}>
                 <span className="flex-1 min-w-0 text-[13px] leading-6">
-                  <span className="text-slate-800 dark:text-slate-200">{`[${timeStr}] [${log.level}] `}</span>
-                  <span className={`${getLevelColor(log.level)}`}>{log.message}</span>
+                  <span className="text-slate-600 dark:text-slate-400">[{timeStr}]</span>
+                  <span className={`ml-1 px-1.5 py-0.5 rounded text-xs font-medium ${getLevelColor(log.level)}`}>
+                    [{log.level}]
+                  </span>
+                  <span className="ml-2 text-slate-800 dark:text-slate-200">{log.message}</span>
                 </span>
                 <span className="ml-auto pl-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button

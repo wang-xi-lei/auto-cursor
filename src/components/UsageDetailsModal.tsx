@@ -148,29 +148,29 @@ export const UsageDetailsModal: React.FC<UsageDetailsModalProps> = ({
         />
 
         {/* Modal */}
-        <div className="inline-block w-full max-w-6xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white rounded-lg shadow-xl">
+        <div className="inline-block w-full max-w-6xl p-6 my-8 overflow-hidden text-left align-middle transition-all transform bg-white dark:bg-gray-800 rounded-lg shadow-xl">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
               📊 使用详情 (最近30天)
             </h3>
             <button
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 focus:outline-none"
+              className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 focus:outline-none"
             >
               ✕
             </button>
           </div>
 
           {/* Tab Navigation */}
-          <div className="mb-4 border-b border-gray-200">
+          <div className="mb-4 border-b border-gray-200 dark:border-gray-700">
             <nav className="flex -mb-px space-x-8">
               <button
                 onClick={() => setActiveTab("events")}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === "events"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                 }`}
               >
                 🔍 使用事件明细
@@ -179,8 +179,8 @@ export const UsageDetailsModal: React.FC<UsageDetailsModalProps> = ({
                 onClick={() => setActiveTab("analytics")}
                 className={`py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === "analytics"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                    ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                    : "border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
                 }`}
               >
                 📈 用户分析数据
@@ -212,13 +212,13 @@ export const UsageDetailsModal: React.FC<UsageDetailsModalProps> = ({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  <span className="text-sm text-gray-500">加载数据中...</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400">加载数据中...</span>
                 </div>
               </div>
             ) : error ? (
-              <div className="p-4 border border-red-200 rounded-md bg-red-50">
-                <p className="text-sm text-red-600">❌ {error}</p>
-                <div className="mt-2 text-xs text-gray-600">
+              <div className="p-4 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20">
+                <p className="text-sm text-red-600 dark:text-red-400">❌ {error}</p>
+                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
                   当前页码: {currentPage}, 页大小: {pageSize}
                   {eventsData && (
                     <span>, 总记录数: {eventsData.totalUsageEventsCount}</span>

@@ -750,135 +750,169 @@ export const AutoRegisterPage: React.FC = () => {
   }, [useRandomInfo]);
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="bg-white rounded-lg shadow">
-        <div className="px-4 py-5 sm:p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
-              📝 Cursor 自动注册
-            </h3>
-            <Button
-              onClick={() => setShowBankCardConfig(true)}
-              variant="secondary"
-              className="flex items-center"
+    <div className="space-y-6">
+      {/* 页面标题和配置按钮 */}
+      <div className="bg-white dark:bg-gradient-to-br dark:from-slate-800 dark:to-slate-900 rounded-2xl shadow-lg dark:shadow-blue-500/10 border border-gray-100 dark:border-slate-700/50 overflow-hidden">
+        <div className="px-6 py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
+                <span className="text-3xl">🚀</span>
+                自动注册
+              </h1>
+              <p className="mt-1.5 text-sm text-gray-600 dark:text-slate-400">快速创建和管理 Cursor 账户</p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={() => setShowEmailConfig(true)}
+                variant="secondary"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200"
+              >
+                <span>📧</span>
+                <span className="hidden sm:inline">邮箱配置</span>
+              </Button>
+              <Button
+                onClick={() => setShowBankCardConfig(true)}
+                variant="secondary"
+                className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200"
+              >
+                <span>💳</span>
+                <span className="hidden sm:inline">银行卡配置</span>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 基本信息卡片 */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-blue-500/5 border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <span className="text-xl">📋</span>
+            基本信息
+          </h2>
+        </div>
+        <div className="p-6 space-y-5">
+          {/* 使用随机信息选项 */}
+          <div className="flex items-center p-3.5 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-700/50">
+            <input
+              id="use-random"
+              type="checkbox"
+              checked={useRandomInfo}
+              onChange={(e) => setUseRandomInfo(e.target.checked)}
+              className="w-4 h-4 text-blue-600 dark:text-blue-500 border-gray-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <label
+              htmlFor="use-random"
+              className="ml-3 text-sm font-medium text-gray-900 dark:text-slate-200 cursor-pointer"
             >
-              💳 银行卡配置
-            </Button>
+              🎲 使用随机生成的账户信息
+            </label>
           </div>
 
-          <div className="space-y-6">
-            {/* 使用随机信息选项 */}
-            <div className="flex items-center">
-              <input
-                id="use-random"
-                type="checkbox"
-                checked={useRandomInfo}
-                onChange={(e) => setUseRandomInfo(e.target.checked)}
-                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-              />
+          {/* 表单 */}
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <div>
               <label
-                htmlFor="use-random"
-                className="block ml-2 text-sm text-gray-900"
+                htmlFor="firstName"
+                className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2"
               >
-                使用随机生成的账户信息
+                名字
               </label>
+              <input
+                type="text"
+                id="firstName"
+                value={form.firstName}
+                onChange={(e) =>
+                  handleInputChange("firstName", e.target.value)
+                }
+                disabled={useRandomInfo}
+                className="block w-full px-3.5 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed transition-colors"
+                placeholder="请输入名字"
+              />
             </div>
 
-            {/* 表单 */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="firstName"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  名字
-                </label>
-                <input
-                  type="text"
-                  id="firstName"
-                  value={form.firstName}
-                  onChange={(e) =>
-                    handleInputChange("firstName", e.target.value)
-                  }
-                  disabled={useRandomInfo}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                  placeholder="请输入名字"
-                />
-              </div>
+            <div>
+              <label
+                htmlFor="lastName"
+                className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2"
+              >
+                姓氏
+              </label>
+              <input
+                type="text"
+                id="lastName"
+                value={form.lastName}
+                onChange={(e) =>
+                  handleInputChange("lastName", e.target.value)
+                }
+                disabled={useRandomInfo}
+                className="block w-full px-3.5 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed transition-colors"
+                placeholder="请输入姓氏"
+              />
+            </div>
 
-              <div>
-                <label
-                  htmlFor="lastName"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  姓氏
-                </label>
-                <input
-                  type="text"
-                  id="lastName"
-                  value={form.lastName}
-                  onChange={(e) =>
-                    handleInputChange("lastName", e.target.value)
-                  }
-                  disabled={useRandomInfo}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                  placeholder="请输入姓氏"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block mb-3 text-sm font-medium text-gray-700">
-                  邮箱类型
-                </label>
-                <div className="space-y-2">
-                  <div className="flex items-center">
-                    <input
-                      id="email-custom"
-                      name="email-type"
-                      type="radio"
-                      value="custom"
-                      checked={emailType === "custom"}
-                      onChange={(e) =>
-                        setEmailType(
-                          e.target.value as
-                            | "custom"
-                            | "cloudflare_temp"
-                            | "outlook"
-                        )
-                      }
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <label
-                      htmlFor="email-custom"
-                      className="ml-2 text-sm text-gray-700"
-                    >
-                      自定义邮箱（手动输入验证码）
-                    </label>
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="email-cloudflare"
-                      name="email-type"
-                      type="radio"
-                      value="cloudflare_temp"
-                      checked={emailType === "cloudflare_temp"}
-                      onChange={(e) =>
-                        setEmailType(
-                          e.target.value as
-                            | "custom"
-                            | "cloudflare_temp"
-                            | "outlook"
-                        )
-                      }
-                      className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                    />
-                    <label
-                      htmlFor="email-cloudflare"
-                      className="ml-2 text-sm text-gray-700"
-                    >
-                      Cloudflare临时邮箱（自动获取验证码）
-                    </label>
-                  </div>
+            <div className="sm:col-span-2">
+              <label className="block mb-3 text-sm font-medium text-gray-700 dark:text-slate-300">
+                邮箱类型
+              </label>
+              <div className="space-y-2.5">
+                <div className={`flex items-center p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  emailType === "custom" 
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-600" 
+                    : "border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 hover:border-gray-300 dark:hover:border-slate-500"
+                }`} onClick={() => setEmailType("custom")}>
+                  <input
+                    id="email-custom"
+                    name="email-type"
+                    type="radio"
+                    value="custom"
+                    checked={emailType === "custom"}
+                    onChange={(e) =>
+                      setEmailType(
+                        e.target.value as
+                          | "custom"
+                          | "cloudflare_temp"
+                          | "outlook"
+                      )
+                    }
+                    className="w-4 h-4 text-blue-600 dark:text-blue-500 border-gray-300 dark:border-slate-600 focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="email-custom"
+                    className="ml-3 text-sm font-medium text-gray-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    ✉️ 自定义邮箱（手动输入验证码）
+                  </label>
+                </div>
+                <div className={`flex items-center p-3.5 rounded-xl border-2 cursor-pointer transition-all ${
+                  emailType === "cloudflare_temp" 
+                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-600" 
+                    : "border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-700/50 hover:border-gray-300 dark:hover:border-slate-500"
+                }`} onClick={() => setEmailType("cloudflare_temp")}>
+                  <input
+                    id="email-cloudflare"
+                    name="email-type"
+                    type="radio"
+                    value="cloudflare_temp"
+                    checked={emailType === "cloudflare_temp"}
+                    onChange={(e) =>
+                      setEmailType(
+                        e.target.value as
+                          | "custom"
+                          | "cloudflare_temp"
+                          | "outlook"
+                      )
+                    }
+                    className="w-4 h-4 text-blue-600 dark:text-blue-500 border-gray-300 dark:border-slate-600 focus:ring-blue-500"
+                  />
+                  <label
+                    htmlFor="email-cloudflare"
+                    className="ml-3 text-sm font-medium text-gray-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    ⚡ Cloudflare临时邮箱（自动获取验证码）
+                  </label>
+                </div>
                   {/* <div className="flex items-center">
                     <input
                       id="email-outlook"
@@ -903,37 +937,38 @@ export const AutoRegisterPage: React.FC = () => {
                       Outlook邮箱（自动获取验证码）
                     </label>
                   </div> */}
+              </div>
+            </div>
+
+            {emailType === "custom" && (
+              <div className="sm:col-span-2">
+                <label
+                  htmlFor="email"
+                  className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2"
+                >
+                  邮箱地址
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  value={form.email}
+                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  className="block w-full px-3.5 py-2.5 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
+                  placeholder="请输入邮箱地址"
+                />
+              </div>
+            )}
+
+            {emailType === "cloudflare_temp" && (
+              <div className="sm:col-span-2">
+                <div className="p-3.5 border-2 border-blue-300 dark:border-blue-700 rounded-xl bg-blue-50 dark:bg-blue-900/20">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-300 flex items-center gap-2">
+                    <span className="text-lg">⚡</span>
+                    将自动创建临时邮箱并获取验证码，无需手动输入
+                  </p>
                 </div>
               </div>
-
-              {emailType === "custom" && (
-                <div className="sm:col-span-2">
-                  <label
-                    htmlFor="email"
-                    className="block text-sm font-medium text-gray-700"
-                  >
-                    邮箱地址
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    value={form.email}
-                    onChange={(e) => handleInputChange("email", e.target.value)}
-                    className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    placeholder="请输入邮箱地址"
-                  />
-                </div>
-              )}
-
-              {emailType === "cloudflare_temp" && (
-                <div className="sm:col-span-2">
-                  <div className="p-3 border border-blue-200 rounded-md bg-blue-50">
-                    <p className="text-sm text-blue-700">
-                      📧 将自动创建临时邮箱并获取验证码，无需手动输入
-                    </p>
-                  </div>
-                </div>
-              )}
+            )}
 
               {emailType === "outlook" && (
                 <div className="space-y-4 sm:col-span-2">
@@ -1118,37 +1153,37 @@ export const AutoRegisterPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="sm:col-span-2">
-                <label
-                  htmlFor="password"
-                  className="block text-sm font-medium text-gray-700"
+            <div className="sm:col-span-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2"
+              >
+                密码
+              </label>
+              <div className="relative">
+                <input
+                  type={showPassword ? "text" : "password"}
+                  id="password"
+                  value={form.password}
+                  onChange={(e) =>
+                    handleInputChange("password", e.target.value)
+                  }
+                  disabled={useRandomInfo}
+                  className="block w-full px-3.5 py-2.5 pr-12 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-slate-800 disabled:cursor-not-allowed transition-colors"
+                  placeholder="请输入密码（至少8位）"
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex items-center pr-4 text-gray-400 hover:text-gray-600 transition-colors"
+                  onClick={() => setShowPassword(!showPassword)}
                 >
-                  密码
-                </label>
-                <div className="relative mt-1">
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    id="password"
-                    value={form.password}
-                    onChange={(e) =>
-                      handleInputChange("password", e.target.value)
-                    }
-                    disabled={useRandomInfo}
-                    className="block w-full pr-10 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm disabled:bg-gray-100"
-                    placeholder="请输入密码（至少8位）"
-                  />
-                  <button
-                    type="button"
-                    className="absolute inset-y-0 right-0 flex items-center pr-3"
-                    onClick={() => setShowPassword(!showPassword)}
-                  >
-                    {showPassword ? (
-                      <svg
-                        className="w-5 h-5 text-gray-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
+                  {showPassword ? (
+                    <svg
+                      className="w-5 h-5"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                         <path
                           strokeLinecap="round"
                           strokeLinejoin="round"
@@ -1158,7 +1193,7 @@ export const AutoRegisterPage: React.FC = () => {
                       </svg>
                     ) : (
                       <svg
-                        className="w-5 h-5 text-gray-400"
+                        className="w-5 h-5"
                         fill="none"
                         stroke="currentColor"
                         viewBox="0 0 24 24"
@@ -1177,379 +1212,531 @@ export const AutoRegisterPage: React.FC = () => {
                         />
                       </svg>
                     )}
-                  </button>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 配置状态卡片 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* 邮箱配置状态 */}
+        {emailConfig && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-green-500/5 overflow-hidden border border-green-200 dark:border-green-700/50">
+            <div className="bg-green-50 dark:bg-green-900/20 px-5 py-3 border-b border-green-200 dark:border-green-700/50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="text-lg">📧</span>
+                  邮箱配置状态
+                </h3>
+                <span className="px-2.5 py-1 text-xs font-medium bg-green-200 dark:bg-green-700 text-green-800 dark:text-green-100 rounded-full">
+                  已配置
+                </span>
+              </div>
+            </div>
+            <div className="p-5">
+              <div className="space-y-2 text-sm text-gray-700 dark:text-slate-300">
+                <div className="flex items-start">
+                  <span className="font-medium min-w-[80px]">Worker域名:</span>
+                  <span className="text-gray-600">{emailConfig.worker_domain || "未配置"}</span>
+                </div>
+                <div className="flex items-start">
+                  <span className="font-medium min-w-[80px]">邮箱域名:</span>
+                  <span className="text-gray-600">{emailConfig.email_domain || "未配置"}</span>
+                </div>
+                <div className="flex items-start">
+                  <span className="font-medium min-w-[80px]">密码:</span>
+                  <span className="text-gray-600">{emailConfig.admin_password ? "已配置" : "未配置"}</span>
                 </div>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* 邮箱配置状态 */}
-            {emailConfig && (
-              <div className="p-4 border border-green-200 rounded-md bg-green-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h5 className="text-sm font-medium text-green-800">
-                      📧 邮箱配置状态
-                    </h5>
-                    <p className="mt-1 text-sm text-green-700">
-                      Worker域名: {emailConfig.worker_domain || "未配置"} |
-                      邮箱域名: {emailConfig.email_domain || "未配置"} | 密码:{" "}
-                      {emailConfig.admin_password ? "已配置" : "未配置"}
-                    </p>
+        {/* 银行卡配置状态 */}
+        {bankCardConfig && (
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-blue-500/5 overflow-hidden border border-blue-200 dark:border-blue-700/50">
+            <div className="bg-blue-50 dark:bg-blue-900/20 px-5 py-3 border-b border-blue-200 dark:border-blue-700/50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
+                  <span className="text-lg">💳</span>
+                  银行卡配置状态
+                </h3>
+                <span className="px-2.5 py-1 text-xs font-medium bg-blue-200 dark:bg-blue-700 text-blue-800 dark:text-blue-100 rounded-full">
+                  已配置
+                </span>
+              </div>
+            </div>
+            <div className="p-5">
+              <div className="space-y-2 text-sm text-gray-700 dark:text-slate-300">
+                <div className="flex items-start">
+                  <span className="font-medium min-w-[80px]">卡号:</span>
+                  <span className="text-gray-600">
+                    {bankCardConfig.cardNumber
+                      ? `${bankCardConfig.cardNumber.slice(0, 4)}****${bankCardConfig.cardNumber.slice(-4)}`
+                      : "未配置"}
+                  </span>
+                </div>
+                <div className="flex items-start">
+                  <span className="font-medium min-w-[80px]">持卡人:</span>
+                  <span className="text-gray-600">{bankCardConfig.billingName || "未配置"}</span>
+                </div>
+                <div className="flex items-start">
+                  <span className="font-medium min-w-[80px]">地址:</span>
+                  <span className="text-gray-600">{bankCardConfig.billingAdministrativeArea || "未配置"}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 选项配置卡片 */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-purple-500/5 border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 px-6 py-4 border-b border-purple-100 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
+            <span className="text-xl">⚙️</span>
+            注册选项
+          </h2>
+        </div>
+        <div className="p-6 space-y-3">
+          {/* 无痕模式 */}
+          <div className="flex items-center p-3.5 bg-gray-50 dark:bg-slate-700/50 rounded-xl border border-gray-200 dark:border-slate-600 hover:border-gray-300 dark:hover:border-slate-500 transition-colors">
+            <input
+              id="use-incognito"
+              type="checkbox"
+              checked={useIncognito}
+              onChange={(e) => setUseIncognito(e.target.checked)}
+              className="w-4 h-4 text-blue-600 dark:text-blue-500 border-gray-300 dark:border-slate-600 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <div className="ml-3 flex-1">
+              <label
+                htmlFor="use-incognito"
+                className="text-sm font-medium text-gray-900 cursor-pointer flex items-center gap-2"
+              >
+                <span>🕵️</span>
+                使用无痕模式（推荐）
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                无痕模式可以避免浏览器缓存和历史记录影响注册过程
+              </p>
+            </div>
+          </div>
+
+          {/* 银行卡绑定 */}
+          <div className="flex items-center p-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors">
+            <input
+              id="enable-bank-card-binding"
+              type="checkbox"
+              checked={enableBankCardBinding}
+              onChange={(e) => setEnableBankCardBinding(e.target.checked)}
+              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <div className="ml-3 flex-1">
+              <label
+                htmlFor="enable-bank-card-binding"
+                className="text-sm font-medium text-gray-900 cursor-pointer flex items-center gap-2"
+              >
+                <span>💳</span>
+                自动绑定银行卡（默认）
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                勾选后将自动执行银行卡绑定流程，取消勾选则跳过银行卡绑定
+              </p>
+            </div>
+          </div>
+
+          {/* 美国账户 */}
+          <div className="flex items-center p-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors">
+            <input
+              id="is-us-account"
+              type="checkbox"
+              checked={isUsAccount}
+              onChange={(e) => setIsUsAccount(e.target.checked)}
+              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <div className="ml-3 flex-1">
+              <label
+                htmlFor="is-us-account"
+                className="text-sm font-medium text-gray-900 cursor-pointer flex items-center gap-2"
+              >
+                <span>🇺🇸</span>
+                注册美国账户
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                勾选后将选择美国地区的付款方式，否则使用默认地区
+              </p>
+            </div>
+          </div>
+
+          {/* 跳过手机验证 */}
+          <div className="flex items-center p-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-gray-300 transition-colors">
+            <input
+              id="skip-phone-verification"
+              type="checkbox"
+              checked={skipPhoneVerification}
+              onChange={(e) => setSkipPhoneVerification(e.target.checked)}
+              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 focus:ring-2"
+            />
+            <div className="ml-3 flex-1">
+              <label
+                htmlFor="skip-phone-verification"
+                className="text-sm font-medium text-gray-900 cursor-pointer flex items-center gap-2"
+              >
+                <span>📱</span>
+                跳过手机号验证（实验性功能）
+              </label>
+              <p className="mt-1 text-xs text-gray-500">
+                启用后将使用验证码登录方式跳过手机号验证，适用于无法接收短信的情况
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 银行卡选择（单个注册用） */}
+      {enableBankCardBinding && bankCardList.length > 0 && (
+        <div className="bg-white rounded-xl shadow-md overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 px-6 py-4 border-b border-blue-100">
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+                <span className="text-2xl">💳</span>
+                选择银行卡（单个注册）
+              </h2>
+              <span className="px-3 py-1 text-sm font-medium bg-blue-200 text-blue-800 rounded-full">
+                已选：卡片 {selectedCardIndex + 1}
+              </span>
+            </div>
+          </div>
+          <div className="p-6">
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {bankCardList.map((card, index) => (
+                <div
+                  key={index}
+                  className={`relative flex-shrink-0 min-w-[140px] p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-md ${
+                    selectedCardIndex === index
+                      ? "border-blue-500 bg-gradient-to-br from-blue-50 to-blue-100 shadow-md"
+                      : "border-gray-300 bg-white hover:border-blue-300"
+                  }`}
+                  onClick={() => handleSingleCardSelection(index)}
+                >
+                  <div className="text-base font-semibold text-gray-800">
+                    卡片 {index + 1}
                   </div>
-                  <Button
-                    onClick={() => setShowEmailConfig(true)}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    编辑
-                  </Button>
+                  <div className="mt-2 text-sm font-mono text-gray-600">
+                    {card.cardNumber
+                      ? `****${card.cardNumber.slice(-4)}`
+                      : "未设置"}
+                  </div>
+                  {selectedCardIndex === index && (
+                    <div className="absolute top-2 right-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center">
+                      <span className="text-white text-sm font-bold">✓</span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-sm text-gray-600 flex items-center gap-2">
+              <span>💡</span>
+              点击卡片选择，单个注册将使用选中的银行卡
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* 操作按钮 */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-blue-500/5 border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="p-6">
+          <div className="flex flex-wrap gap-3">
+            {useRandomInfo && (
+              <Button
+                onClick={handleGenerateRandom}
+                variant="secondary"
+                disabled={isLoading}
+                className="flex items-center gap-2 px-5 py-2.5 text-sm bg-gray-100 hover:bg-gray-200 dark:bg-slate-700 dark:hover:bg-slate-600 text-gray-700 dark:text-slate-200"
+              >
+                <span>🎲</span>
+                重新生成随机信息
+              </Button>
+            )}
+
+            <Button
+              onClick={handleRegister}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-6 py-2.5 text-sm bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 dark:from-blue-500 dark:to-blue-600 dark:hover:from-blue-600 dark:hover:to-blue-700 text-white font-medium"
+            >
+              {isLoading ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  注册中...
+                </>
+              ) : (
+                <>
+                  <span>🚀</span>
+                  开始注册
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* 批量注册 */}
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-purple-500/5 border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/20 dark:to-purple-900/20 px-6 py-4 border-b border-indigo-100 dark:border-slate-700">
+          <h2 className="text-lg font-semibold text-gray-800 dark:text-slate-200 flex items-center gap-2">
+            <span className="text-xl">📦</span>
+            批量注册（实验性功能）
+          </h2>
+        </div>
+        <div className="p-6">
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-4">
+              <div className="flex-1 w-full">
+                <label className="block mb-2 text-sm font-semibold text-gray-700">
+                  注册数量
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="10"
+                  value={batchCount}
+                  onChange={(e) =>
+                    setBatchCount(parseInt(e.target.value) || 1)
+                  }
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                  placeholder="输入注册数量 (1-10)"
+                  disabled={isLoading}
+                />
+                <p className="mt-2 text-xs text-gray-600 flex items-center gap-1">
+                  <span>⚠️</span>
+                  需要配置相同数量的银行卡{emailType === "custom" && "和邮箱"}
+                </p>
+              </div>
+              <div className="flex-shrink-0">
+                <Button
+                  onClick={handleBatchRegister}
+                  disabled={isLoading || batchCount < 1}
+                  className="flex items-center gap-2 px-6 py-2.5 text-base bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold"
+                >
+                  {isLoading ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      批量注册中...
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xl">🚀</span>
+                      批量注册 ({batchCount})
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {/* 自定义邮箱时显示邮箱输入列表 */}
+            {emailType === "custom" && (
+              <div className="space-y-3">
+                <label className="block text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <span className="text-lg">📧</span>
+                  邮箱列表
+                </label>
+                <div className="grid grid-cols-1 gap-3 p-4 overflow-y-auto rounded-xl bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-gray-200 max-h-64">
+                  {Array.from({ length: batchCount }).map((_, index) => (
+                    <div key={index} className="flex items-center gap-3 bg-white p-3 rounded-lg border border-gray-300">
+                      <span className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-500 text-white font-bold rounded-full text-sm">
+                        {index + 1}
+                      </span>
+                      <input
+                        type="email"
+                        value={batchEmails[index] || ""}
+                        onChange={(e) => {
+                          const newEmails = [...batchEmails];
+                          newEmails[index] = e.target.value;
+                          setBatchEmails(newEmails);
+                        }}
+                        className="flex-1 px-4 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+                        placeholder={`请输入第 ${index + 1} 个邮箱`}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
 
-            {/* 银行卡配置状态 */}
-            {bankCardConfig && (
-              <div className="p-4 border border-blue-200 rounded-md bg-blue-50">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h5 className="text-sm font-medium text-blue-800">
-                      💳 银行卡配置状态
-                    </h5>
-                    <p className="mt-1 text-sm text-blue-700">
-                      卡号:{" "}
-                      {bankCardConfig.cardNumber
-                        ? `${bankCardConfig.cardNumber.slice(
-                            0,
-                            4
-                          )}****${bankCardConfig.cardNumber.slice(-4)}`
-                        : "未配置"}{" "}
-                      | 持卡人: {bankCardConfig.billingName || "未配置"} | 地址:{" "}
-                      {bankCardConfig.billingAdministrativeArea || "未配置"}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => setShowBankCardConfig(true)}
-                    variant="secondary"
-                    size="sm"
-                  >
-                    编辑
-                  </Button>
-                </div>
+            {/* Cloudflare 和 Outlook 提示 */}
+            {emailType !== "custom" && (
+              <div className="p-4 rounded-lg bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200">
+                <p className="text-sm font-medium text-blue-800 flex items-center gap-2">
+                  <span className="text-xl">💡</span>
+                  {emailType === "cloudflare_temp"
+                    ? "将自动为每个账号生成独立的临时邮箱"
+                    : "将使用配置的 Outlook 邮箱进行批量注册"}
+                </p>
               </div>
             )}
 
-            {/* 银行卡选择（单个注册用） */}
+            {/* 银行卡选择（批量注册用） */}
             {enableBankCardBinding && bankCardList.length > 0 && (
-              <div className="p-4 border border-blue-200 rounded-md bg-blue-50">
-                <div className="flex items-center justify-between mb-3">
-                  <h5 className="text-sm font-medium text-blue-800">
-                    💳 选择银行卡（单个注册）
-                  </h5>
-                  <div className="text-xs text-blue-700">
-                    已选：卡片 {selectedCardIndex + 1}
-                  </div>
+              <div className="p-5 border-2 border-green-300 rounded-xl bg-gradient-to-br from-green-50 to-emerald-50">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-semibold text-gray-800 flex items-center gap-2">
+                    <span className="text-xl">💳</span>
+                    选择银行卡（批量注册）
+                  </h3>
+                  <span className="px-3 py-1 text-sm font-medium bg-green-200 text-green-800 rounded-full">
+                    已选 {selectedBatchCardIndices.length}/{bankCardList.length} 张
+                  </span>
                 </div>
-                <div className="flex gap-2 overflow-x-auto">
+                <div className="flex gap-3 overflow-x-auto pb-2">
                   {bankCardList.map((card, index) => (
                     <div
                       key={index}
-                      className={`relative flex-shrink-0 p-3 border-2 rounded-md cursor-pointer transition-all ${
-                        selectedCardIndex === index
-                          ? "border-blue-500 bg-blue-100"
-                          : "border-gray-300 bg-white hover:border-gray-400"
+                      className={`relative flex-shrink-0 min-w-[140px] p-4 border-2 rounded-xl cursor-pointer transition-all hover:shadow-md ${
+                        selectedBatchCardIndices.includes(index)
+                          ? "border-green-500 bg-gradient-to-br from-green-50 to-emerald-100 shadow-md"
+                          : "border-gray-300 bg-white hover:border-green-300"
                       }`}
-                      onClick={() => handleSingleCardSelection(index)}
+                      onClick={() => handleBatchCardSelection(index)}
                     >
-                      <div className="text-sm font-medium">
+                      <div className="text-base font-semibold text-gray-800">
                         卡片 {index + 1}
                       </div>
-                      <div className="mt-1 text-xs text-gray-600">
+                      <div className="mt-2 text-sm font-mono text-gray-600">
                         {card.cardNumber
                           ? `****${card.cardNumber.slice(-4)}`
                           : "未设置"}
                       </div>
-                      {selectedCardIndex === index && (
-                        <div className="absolute text-blue-600 top-1 right-1">
-                          ✓
+                      {selectedBatchCardIndices.includes(index) && (
+                        <div className="absolute top-2 right-2 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center">
+                          <span className="text-white text-sm font-bold">✓</span>
                         </div>
                       )}
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-gray-600">
-                  💡 点击卡片选择，单个注册将使用选中的银行卡
+                <p className="mt-3 text-sm text-gray-700 flex items-center gap-2">
+                  <span>💡</span>
+                  点击卡片选择/取消选择，批量注册将按顺序使用选中的银行卡
                 </p>
               </div>
             )}
-
-            {/* 操作按钮 */}
-            <div className="flex space-x-4">
-              {useRandomInfo && (
-                <Button
-                  onClick={handleGenerateRandom}
-                  variant="secondary"
-                  disabled={isLoading}
-                >
-                  🎲 重新生成随机信息
-                </Button>
-              )}
-
-              <Button
-                onClick={handleRegister}
-                disabled={isLoading}
-                className="flex items-center"
-              >
-                {isLoading ? (
-                  <>
-                    <LoadingSpinner size="sm" />
-                    注册中...
-                  </>
-                ) : (
-                  "🚀 开始注册"
-                )}
-              </Button>
-            </div>
-
-            {/* 批量注册 */}
-            <div className="p-4 mt-6 border-t-2 border-blue-200">
-              <h4 className="mb-3 text-sm font-medium text-gray-700">
-                📦 批量注册（实验性功能）
-              </h4>
-              <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <label className="block mb-1 text-sm text-gray-600">
-                      注册数量
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={batchCount}
-                      onChange={(e) =>
-                        setBatchCount(parseInt(e.target.value) || 1)
-                      }
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      placeholder="输入注册数量 (1-10)"
-                      disabled={isLoading}
-                    />
-                    <p className="mt-1 text-xs text-gray-500">
-                      ⚠️ 需要配置相同数量的银行卡
-                      {emailType === "custom" && " 和邮箱"}
-                    </p>
-                  </div>
-                  <div className="flex-shrink-0 pt-6">
-                    <Button
-                      onClick={handleBatchRegister}
-                      disabled={isLoading || batchCount < 1}
-                      className="flex items-center"
-                    >
-                      {isLoading ? (
-                        <>
-                          <LoadingSpinner size="sm" />
-                          批量注册中...
-                        </>
-                      ) : (
-                        `🚀 批量注册 (${batchCount})`
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* 自定义邮箱时显示邮箱输入列表 */}
-                {emailType === "custom" && (
-                  <div className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      📧 邮箱列表
-                    </label>
-                    <div className="grid grid-cols-1 gap-2 p-3 overflow-y-auto rounded-md bg-gray-50 max-h-60">
-                      {Array.from({ length: batchCount }).map((_, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <span className="flex-shrink-0 w-8 text-xs font-medium text-gray-500">
-                            #{index + 1}
-                          </span>
-                          <input
-                            type="email"
-                            value={batchEmails[index] || ""}
-                            onChange={(e) => {
-                              const newEmails = [...batchEmails];
-                              newEmails[index] = e.target.value;
-                              setBatchEmails(newEmails);
-                            }}
-                            className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            placeholder={`请输入第 ${index + 1} 个邮箱`}
-                            disabled={isLoading}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Cloudflare 和 Outlook 提示 */}
-                {emailType !== "custom" && (
-                  <div className="p-3 rounded-md bg-blue-50">
-                    <p className="text-sm text-blue-700">
-                      {emailType === "cloudflare_temp"
-                        ? "💡 将自动为每个账号生成独立的临时邮箱"
-                        : "💡 将使用配置的 Outlook 邮箱进行批量注册"}
-                    </p>
-                  </div>
-                )}
-
-                {/* 银行卡选择（批量注册用） */}
-                {enableBankCardBinding && bankCardList.length > 0 && (
-                  <div className="p-4 border border-green-200 rounded-md bg-green-50">
-                    <div className="flex items-center justify-between mb-3">
-                      <h5 className="text-sm font-medium text-green-800">
-                        💳 选择银行卡（批量注册）
-                      </h5>
-                      <div className="text-xs text-green-700">
-                        已选 {selectedBatchCardIndices.length}/
-                        {bankCardList.length} 张
-                      </div>
-                    </div>
-                    <div className="flex gap-2 overflow-x-auto">
-                      {bankCardList.map((card, index) => (
-                        <div
-                          key={index}
-                          className={`relative flex-shrink-0 p-3 border-2 rounded-md cursor-pointer transition-all ${
-                            selectedBatchCardIndices.includes(index)
-                              ? "border-green-500 bg-green-100"
-                              : "border-gray-300 bg-white hover:border-gray-400"
-                          }`}
-                          onClick={() => handleBatchCardSelection(index)}
-                        >
-                          <div className="text-sm font-medium">
-                            卡片 {index + 1}
-                          </div>
-                          <div className="mt-1 text-xs text-gray-600">
-                            {card.cardNumber
-                              ? `****${card.cardNumber.slice(-4)}`
-                              : "未设置"}
-                          </div>
-                          {selectedBatchCardIndices.includes(index) && (
-                            <div className="absolute text-green-600 top-1 right-1">
-                              ✓
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-xs text-gray-600">
-                      💡 点击卡片选择/取消选择，批量注册将按顺序使用选中的银行卡
-                    </p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* 注册结果 */}
-            {registrationResult && (
-              <div
-                className={`p-4 rounded-md ${
-                  registrationResult.success
-                    ? "bg-green-50 border border-green-200"
-                    : "bg-red-50 border border-red-200"
-                }`}
-              >
-                <h4
-                  className={`text-sm font-medium ${
-                    registrationResult.success
-                      ? "text-green-800"
-                      : "text-red-800"
-                  }`}
-                >
-                  {registrationResult.success ? "✅ 注册成功" : "❌ 注册失败"}
-                </h4>
-                <p
-                  className={`mt-1 text-sm ${
-                    registrationResult.success
-                      ? "text-green-700"
-                      : "text-red-700"
-                  }`}
-                >
-                  {registrationResult.message}
-                </p>
-                {registrationResult.accountInfo && (
-                  <div className="p-3 mt-3 bg-white border rounded">
-                    <h5 className="mb-2 text-sm font-medium text-gray-900">
-                      账户信息：
-                    </h5>
-                    <div className="space-y-1 text-sm text-gray-700">
-                      <div>
-                        <strong>邮箱：</strong>{" "}
-                        {registrationResult.accountInfo.email}
-                      </div>
-                      <div>
-                        <strong>Token：</strong>{" "}
-                        <span className="font-mono text-xs break-all">
-                          {registrationResult.accountInfo.token}
-                        </span>
-                      </div>
-                      <div>
-                        <strong>使用限制：</strong>{" "}
-                        {registrationResult.accountInfo.usage}
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {registrationResult.details &&
-                  registrationResult.details.length > 0 && (
-                    <div className="mt-3">
-                      <h5 className="mb-1 text-sm font-medium text-gray-900">
-                        详细信息：
-                      </h5>
-                      <ul className="space-y-1 text-sm text-gray-700 list-disc list-inside">
-                        {registrationResult.details.map((detail, index) => (
-                          <li key={index}>{detail}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-              </div>
-            )}
-            {/* 显示实时Python脚本输出 */}
-            {(isRegistering || realtimeOutput.length > 0) && (
-              <div className="mt-3">
-                <h5 className="mb-2 text-sm font-medium text-gray-900">
-                  脚本执行日志：
-                  {isRegistering && (
-                    <span className="ml-2 text-xs text-blue-600">
-                      (实时更新中...)
-                    </span>
-                  )}
-                </h5>
-                <div className="p-3 overflow-y-auto bg-gray-900 rounded-md max-h-64">
-                  <div className="space-y-1 font-mono text-xs text-green-400">
-                    {Array.from(new Set(realtimeOutput)).map((line, index) => (
-                      <div key={index} className="whitespace-pre-wrap">
-                        {line}
-                      </div>
-                    ))}
-                    {isRegistering && realtimeOutput.length === 0 && (
-                      <div className="text-yellow-400">等待脚本输出...</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-            {/* 显示错误输出 */}
-            {/* {registrationResult.error_output && (
-                  <div className="mt-3">
-                    <h5 className="mb-2 text-sm font-medium text-red-700">
-                      错误信息：
-                    </h5>
-                    <div className="p-3 overflow-y-auto border border-red-200 rounded-md bg-red-50 max-h-32">
-                      <pre className="text-xs text-red-700 whitespace-pre-wrap">
-                        {registrationResult.error_output}
-                      </pre>
-                    </div>
-                  </div>
-                )} */}
           </div>
         </div>
       </div>
+
+      {/* 注册结果 */}
+      {registrationResult && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-blue-500/5 border border-gray-200 dark:border-slate-700 overflow-hidden">
+          <div
+            className={`px-6 py-4 border-b ${
+              registrationResult.success
+                ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700/50"
+                : "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-700/50"
+            }`}
+          >
+            <h3
+              className={`text-lg font-semibold flex items-center gap-2 ${
+                registrationResult.success
+                  ? "text-green-800 dark:text-green-300"
+                  : "text-red-800 dark:text-red-300"
+              }`}
+            >
+              <span className="text-xl">
+                {registrationResult.success ? "✅" : "❌"}
+              </span>
+              {registrationResult.success ? "注册成功" : "注册失败"}
+            </h3>
+          </div>
+          <div className="p-6">
+            <p
+              className={`text-base mb-4 ${
+                registrationResult.success
+                  ? "text-green-700"
+                  : "text-red-700"
+              }`}
+            >
+              {registrationResult.message}
+            </p>
+            {registrationResult.accountInfo && (
+              <div className="p-4 bg-gradient-to-br from-gray-50 to-blue-50 border-2 border-blue-200 rounded-xl">
+                <h4 className="mb-3 text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <span className="text-xl">📊</span>
+                  账户信息
+                </h4>
+                <div className="space-y-3 text-sm text-gray-700">
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold min-w-[80px]">邮箱：</span>
+                    <span className="text-gray-600">{registrationResult.accountInfo.email}</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold min-w-[80px]">Token：</span>
+                    <span className="font-mono text-xs break-all text-gray-600">
+                      {registrationResult.accountInfo.token}
+                    </span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold min-w-[80px]">使用限制：</span>
+                    <span className="text-gray-600">{registrationResult.accountInfo.usage}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            {registrationResult.details &&
+              registrationResult.details.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="mb-2 text-base font-semibold text-gray-900 flex items-center gap-2">
+                    <span className="text-xl">📝</span>
+                    详细信息
+                  </h4>
+                  <ul className="space-y-2 text-sm text-gray-700">
+                    {registrationResult.details.map((detail, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <span className="text-blue-500 mt-0.5">•</span>
+                        <span>{detail}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+          </div>
+        </div>
+      )}
+      {/* 显示实时Python脚本输出 */}
+      {(isRegistering || realtimeOutput.length > 0) && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm dark:shadow-blue-500/5 border border-gray-200 dark:border-slate-700 overflow-hidden">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-700 dark:from-slate-900 dark:to-slate-800 px-6 py-3.5 border-b border-gray-600 dark:border-slate-700">
+            <h3 className="text-sm font-semibold text-white dark:text-slate-100 flex items-center gap-2">
+              <span>💻</span>
+              脚本执行日志
+              {isRegistering && (
+                <span className="ml-2 px-2 py-0.5 text-xs bg-blue-500 text-white rounded-full animate-pulse">
+                  实时更新中
+                </span>
+              )}
+            </h3>
+          </div>
+          <div className="p-4 bg-gray-900 dark:bg-slate-950">
+            <div className="overflow-y-auto rounded-lg bg-black dark:bg-slate-950 p-4 max-h-96">
+              <div className="space-y-1 font-mono text-xs text-green-400 dark:text-green-300">
+                {Array.from(new Set(realtimeOutput)).map((line, index) => (
+                  <div key={index} className="whitespace-pre-wrap hover:bg-gray-800 px-2 py-1 rounded">
+                    {line}
+                  </div>
+                ))}
+                {isRegistering && realtimeOutput.length === 0 && (
+                  <div className="text-yellow-400 animate-pulse flex items-center gap-2">
+                    <span>⏳</span>
+                    等待脚本输出...
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Toast 通知 */}
       {toast && (
@@ -1562,42 +1749,58 @@ export const AutoRegisterPage: React.FC = () => {
 
       {/* 验证码输入弹窗 */}
       {showVerificationModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="max-w-md p-6 mx-4 bg-white rounded-lg w-96">
-            <h3 className="mb-4 text-lg font-medium text-gray-900">
-              输入验证码
-            </h3>
-            <p className="mb-4 text-sm text-gray-600">
-              请检查您的邮箱并输入6位验证码(请确认页面已经在输入验证码页面否则输入无效！)
-            </p>
-            <input
-              type="text"
-              value={verificationCode}
-              onChange={(e) => {
-                const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                setVerificationCode(value);
-              }}
-              placeholder="请输入6位验证码"
-              className="w-full px-3 py-2 text-lg tracking-widest text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              maxLength={6}
-              autoFocus
-            />
-            <div className="flex justify-end mt-6 space-x-3">
-              <button
-                type="button"
-                onClick={handleCancelRegistration}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
-              >
-                取消注册
-              </button>
-              <button
-                type="button"
-                onClick={handleVerificationCodeSubmit}
-                disabled={verificationCode.length !== 6}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                提交
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 dark:bg-black/80 backdrop-blur-sm">
+          <div className="max-w-lg mx-4 bg-white dark:bg-slate-800 rounded-2xl shadow-2xl dark:shadow-blue-500/20 border border-gray-200 dark:border-slate-700 overflow-hidden animate-scale-in">
+            <div className="bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 px-6 py-5">
+              <h3 className="text-xl font-bold text-white flex items-center gap-3">
+                <span className="text-2xl">🔒</span>
+                输入验证码
+              </h3>
+            </div>
+            <div className="p-6">
+              <div className="mb-5 p-3.5 bg-yellow-50 dark:bg-yellow-900/20 border-2 border-yellow-200 dark:border-yellow-700/50 rounded-xl">
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium flex items-center gap-2">
+                  <span>⚠️</span>
+                  请确认页面已经在输入验证码页面，否则输入无效！
+                </p>
+              </div>
+              <div className="mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                  请输入6位验证码
+                </label>
+                <input
+                  type="text"
+                  value={verificationCode}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setVerificationCode(value);
+                  }}
+                  placeholder="000000"
+                  className="w-full px-4 py-3.5 text-2xl font-bold tracking-[0.5em] text-center border-2 border-gray-300 dark:border-slate-600 rounded-xl bg-white dark:bg-slate-700 text-gray-900 dark:text-white focus:outline-none focus:ring-4 focus:ring-blue-500 focus:border-blue-500 transition-all"
+                  maxLength={6}
+                  autoFocus
+                />
+              </div>
+              <p className="text-xs text-gray-500 dark:text-slate-400 text-center mb-5">
+                请检查您的邮箱并输入收到的6位验证码
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={handleCancelRegistration}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-200 bg-gray-100 dark:bg-slate-700 border border-gray-300 dark:border-slate-600 rounded-xl hover:bg-gray-200 dark:hover:bg-slate-600 focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-slate-500 transition-all"
+                >
+                  取消注册
+                </button>
+                <button
+                  type="button"
+                  onClick={handleVerificationCodeSubmit}
+                  disabled={verificationCode.length !== 6}
+                  className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-500 dark:to-blue-600 border border-transparent rounded-xl hover:from-blue-700 hover:to-blue-600 dark:hover:from-blue-600 dark:hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  ✅ 提交
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -96,30 +96,30 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
 
   if (!token) {
     return (
-      <div className={`p-4 bg-gray-50 rounded-lg ${className}`}>
-        <p className="text-sm text-gray-500">请先登录以查看用量数据</p>
+      <div className={`p-4 bg-gray-50 dark:bg-gray-800 rounded-lg ${className}`}>
+        <p className="text-sm text-gray-500 dark:text-gray-400">请先登录以查看用量数据</p>
       </div>
     );
   }
 
   return (
-    <div className={`bg-white rounded-lg shadow ${className}`}>
+    <div className={`bg-white dark:bg-gray-800 rounded-lg shadow ${className}`}>
       <div className="px-4 py-5 sm:p-6">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-medium leading-6 text-gray-900">
+          <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
             📊 用量统计
           </h3>
           <div className="flex space-x-2">
             <button
               onClick={handleManualRefresh}
               disabled={loading}
-              className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-700 bg-blue-100 border border-transparent rounded hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="inline-flex items-center px-3 py-1 text-sm font-medium text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-900/20 border border-transparent rounded hover:bg-blue-200 dark:hover:bg-blue-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? "🔄 刷新中..." : "🔄 刷新"}
             </button>
             <button
               onClick={() => setIsModalOpen(true)}
-              className="inline-flex items-center px-3 py-1 text-sm font-medium text-green-700 bg-green-100 border border-transparent rounded hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+              className="inline-flex items-center px-3 py-1 text-sm font-medium text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/20 border border-transparent rounded hover:bg-green-200 dark:hover:bg-green-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               📋 查看明细
             </button>
@@ -129,7 +129,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
         {/* Time Period Selection */}
         <div className="mb-4 space-y-3">
           <div>
-            <label className="block mb-2 text-sm font-medium text-gray-700">
+            <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               时间段选择
             </label>
             <div className="flex flex-wrap gap-2 mb-3">
@@ -138,7 +138,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                 className={`px-3 py-1 text-sm rounded ${
                   presetPeriod === "7days"
                     ? "bg-blue-500 text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                 }`}
               >
                 最近7天
@@ -148,7 +148,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                 className={`px-3 py-1 text-sm rounded ${
                   presetPeriod === "30days"
                     ? "bg-blue-500 text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                 }`}
               >
                 最近30天
@@ -158,7 +158,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                 className={`px-3 py-1 text-sm rounded ${
                   presetPeriod === "current_month"
                     ? "bg-blue-500 text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                 }`}
               >
                 本月
@@ -168,7 +168,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                 className={`px-3 py-1 text-sm rounded ${
                   presetPeriod === "custom"
                     ? "bg-blue-500 text-white"
-                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                    : "bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600"
                 }`}
               >
                 自定义
@@ -179,7 +179,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
           {presetPeriod === "custom" && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   开始日期
                 </label>
                 <input
@@ -192,12 +192,12 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                       endDate: dateRange.endDate,
                     });
                   }}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   aria-label="开始日期"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   结束日期
                 </label>
                 <input
@@ -210,7 +210,7 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                       endDate: newEndDate,
                     });
                   }}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   aria-label="结束日期"
                 />
               </div>
@@ -238,15 +238,15 @@ export const UsageDisplay: React.FC<UsageDisplayProps> = ({
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              <span className="text-sm text-gray-500">加载用量数据中...</span>
+              <span className="text-sm text-gray-500 dark:text-gray-400">加载用量数据中...</span>
             </div>
           </div>
         )}
 
         {/* Error State */}
         {error && !loading && (
-          <div className="p-4 border border-red-200 rounded-md bg-red-50">
-            <p className="text-sm text-red-600">❌ {error}</p>
+          <div className="p-4 border border-red-200 dark:border-red-800 rounded-md bg-red-50 dark:bg-red-900/20">
+            <p className="text-sm text-red-600 dark:text-red-400">❌ {error}</p>
           </div>
         )}
 

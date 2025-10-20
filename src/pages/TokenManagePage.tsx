@@ -545,9 +545,27 @@ export const TokenManagePage: React.FC = () => {
                     authResult.user_info?.account_info?.trial_days_remaining,
                 };
 
+                // 如果更新的账户是当前账户，也同步更新 current_account
+                let updatedCurrentAccount = prevData.current_account;
+                if (
+                  prevData.current_account &&
+                  prevData.current_account.token === account.token
+                ) {
+                  updatedCurrentAccount = {
+                    ...prevData.current_account,
+                    subscription_type:
+                      authResult.user_info?.account_info?.subscription_type,
+                    subscription_status:
+                      authResult.user_info?.account_info?.subscription_status,
+                    trial_days_remaining:
+                      authResult.user_info?.account_info?.trial_days_remaining,
+                  };
+                }
+
                 return {
                   ...prevData,
                   accounts: updatedAccounts,
+                  current_account: updatedCurrentAccount,
                 };
               });
             }
@@ -1506,9 +1524,9 @@ export const TokenManagePage: React.FC = () => {
 
           {/* Current Account Section */}
           {accountData?.current_account && (
-            <div className="p-4 mb-6 border border-blue-200 rounded-lg bg-blue-50">
+            <div className="p-4 mb-6 border border-blue-200 dark:border-blue-800 rounded-lg bg-blue-50 dark:bg-blue-900/20">
               <div className="flex items-center justify-between">
-                <h4 className="mb-2 font-medium text-blue-900 text-md">
+                <h4 className="mb-2 font-medium text-blue-900 dark:text-blue-100 text-md">
                   📧 当前账户
                 </h4>
                 <button
@@ -1519,7 +1537,7 @@ export const TokenManagePage: React.FC = () => {
                   🚪 退出登录
                 </button>
               </div>
-              <div className="text-sm text-blue-800">
+              <div className="text-sm text-blue-800 dark:text-blue-200">
                 <p>
                   <strong>邮箱:</strong> {accountData.current_account.email}
                 </p>
@@ -1575,14 +1593,14 @@ export const TokenManagePage: React.FC = () => {
 
           {/* Add Account Form */}
           {showAddForm && (
-            <div className="p-4 mb-6 border rounded-lg bg-gray-50">
-              <h4 className="mb-3 font-medium text-gray-900 text-md">
+            <div className="p-4 mb-6 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800">
+              <h4 className="mb-3 font-medium text-gray-900 dark:text-gray-100 text-md">
                 添加新账户
               </h4>
 
               {/* 添加类型选择 */}
               <div className="mb-4">
-                <label className="block mb-2 text-sm font-medium text-gray-700">
+                <label className="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">
                   添加方式
                 </label>
                 <div className="flex flex-col space-y-2">
@@ -1602,7 +1620,7 @@ export const TokenManagePage: React.FC = () => {
                       }
                       className="mr-2"
                     />
-                    <span className="text-sm text-gray-700">🔑 使用Token</span>
+                    <span className="text-sm text-gray-700 dark:text-gray-300">🔑 使用Token</span>
                   </label>
                   <label className="flex items-center">
                     <input
@@ -1620,9 +1638,9 @@ export const TokenManagePage: React.FC = () => {
                       }
                       className="mr-2"
                     />
-                    <span className="text-sm text-gray-700">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
                       📧 使用邮箱密码{" "}
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         （ip需要纯净最好是直连或者干净的代理不然容易失败）
                       </span>
                     </span>
@@ -1643,9 +1661,9 @@ export const TokenManagePage: React.FC = () => {
                       }
                       className="mr-2"
                     />
-                    <span className="text-sm text-gray-700">
+                    <span className="text-sm text-gray-700 dark:text-gray-300">
                       📱 使用验证码{" "}
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
                         （需要手动从邮箱获取验证码）
                       </span>
                     </span>
@@ -1655,7 +1673,7 @@ export const TokenManagePage: React.FC = () => {
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     邮箱地址
                   </label>
                   <input
@@ -1665,37 +1683,37 @@ export const TokenManagePage: React.FC = () => {
                       setNewEmail(e.target.value);
                       currentEmailRef.current = e.target.value; // 同时更新ref
                     }}
-                    className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="请输入邮箱地址"
                   />
                 </div>
                 {/* 根据添加类型显示不同的输入框 */}
                 {addAccountType === "token" ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       Token
                     </label>
                     <textarea
                       value={newToken}
                       onChange={(e) => setNewToken(e.target.value)}
                       rows={3}
-                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       placeholder="请输入Token"
                     />
                   </div>
                 ) : addAccountType === "email" ? (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       密码
                     </label>
                     <input
                       type="password"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       placeholder="请输入密码"
                     />
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       将自动登录获取所有Token并保存账户：
                       <br />
                       1. 获取 WorkOS Session Token
@@ -1714,7 +1732,7 @@ export const TokenManagePage: React.FC = () => {
                           onChange={(e) => setShowLoginWindow(e.target.checked)}
                           className="mr-2 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                         />
-                        <span className="text-xs text-gray-600">
+                        <span className="text-xs text-gray-600 dark:text-gray-400">
                           显示登录窗口 (如果获取失败可勾选此项查看原因)
                         </span>
                       </label>
@@ -1722,8 +1740,8 @@ export const TokenManagePage: React.FC = () => {
                   </div>
                 ) : (
                   <div>
-                    <div className="p-3 mb-3 border border-blue-200 rounded-md bg-blue-50">
-                      <p className="text-sm text-blue-800">
+                    <div className="p-3 mb-3 border border-blue-200 dark:border-blue-800 rounded-md bg-blue-50 dark:bg-blue-900/20">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
                         <strong>📱 验证码登录流程：</strong>
                         <br />
                         1. 点击"验证码登录并添加"按钮
@@ -1740,20 +1758,20 @@ export const TokenManagePage: React.FC = () => {
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Refresh Token (可选)
                   </label>
                   <textarea
                     value={newRefreshToken}
                     onChange={(e) => setNewRefreshToken(e.target.value)}
                     rows={3}
-                    className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="请输入Refresh Token (可选)"
                   />
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       WorkOS Session Token (可选)
                     </label>
                     <button
@@ -1783,7 +1801,7 @@ export const TokenManagePage: React.FC = () => {
                     value={newWorkosSessionToken}
                     onChange={(e) => setNewWorkosSessionToken(e.target.value)}
                     rows={3}
-                    className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="请输入WorkOS Session Token (可选，用于获取账号用量)"
                   />
                   {addAccountType === "token" &&
@@ -1860,7 +1878,7 @@ export const TokenManagePage: React.FC = () => {
                       setAddAccountType("token");
                       setShowLoginWindow(false);
                     }}
-                    className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     ❌ 取消
                   </button>
@@ -1871,16 +1889,16 @@ export const TokenManagePage: React.FC = () => {
 
           {/* Quick Switch Form */}
           {showQuickSwitchForm && (
-            <div className="p-4 mb-6 border rounded-lg bg-green-50">
-              <h4 className="mb-3 font-medium text-gray-900 text-md">
+            <div className="p-4 mb-6 border border-green-300 dark:border-green-800 rounded-lg bg-green-50 dark:bg-green-900/20">
+              <h4 className="mb-3 font-medium text-gray-900 dark:text-gray-100 text-md">
                 🚀 快速切换账户
               </h4>
-              <p className="mb-3 text-sm text-gray-600">
+              <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
                 直接输入邮箱和Token进行账户切换，无需先添加到账户列表
               </p>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     邮箱地址
                   </label>
                   <input
@@ -1888,11 +1906,11 @@ export const TokenManagePage: React.FC = () => {
                     value={quickSwitchEmail}
                     onChange={(e) => setQuickSwitchEmail(e.target.value)}
                     placeholder="your-email@example.com"
-                    className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     Access Token
                   </label>
                   <textarea
@@ -1900,13 +1918,13 @@ export const TokenManagePage: React.FC = () => {
                     onChange={(e) => setQuickSwitchToken(e.target.value)}
                     placeholder="eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..."
                     rows={3}
-                    className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
                 <div>
                   <label
                     htmlFor="auth-type-select"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     认证类型
                   </label>
@@ -1914,7 +1932,7 @@ export const TokenManagePage: React.FC = () => {
                     id="auth-type-select"
                     value={quickSwitchAuthType}
                     onChange={(e) => setQuickSwitchAuthType(e.target.value)}
-                    className="block w-full px-3 py-2 mt-1 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    className="block w-full px-3 py-2 mt-1 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   >
                     <option value="Auth_0">Auth_0 (默认)</option>
                     <option value="Google">Google</option>
@@ -1937,7 +1955,7 @@ export const TokenManagePage: React.FC = () => {
                       setQuickSwitchToken("");
                       setQuickSwitchAuthType("Auth_0");
                     }}
-                    className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    className="inline-flex items-center px-3 py-2 text-sm font-medium leading-4 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                   >
                     ❌ 取消
                   </button>
@@ -1948,7 +1966,7 @@ export const TokenManagePage: React.FC = () => {
 
           {/* Account List */}
           <div>
-            <h4 className="mb-3 font-medium text-gray-900 text-md">账户列表</h4>
+            <h4 className="mb-3 font-medium text-gray-900 dark:text-gray-100 text-md">账户列表</h4>
             {accountData?.accounts && accountData.accounts.length > 0 ? (
               <div className="space-y-3">
                 {accountData.accounts.map((account, index) => (
@@ -1958,14 +1976,14 @@ export const TokenManagePage: React.FC = () => {
                       account.is_current &&
                       accountData?.current_account &&
                       account.token == accountData?.current_account.token
-                        ? "bg-green-50 border-green-200"
-                        : "bg-white border-gray-200"
+                        ? "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                        : "bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                     }`}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {account.email}
                           </span>
                           {account.is_current &&
@@ -1979,7 +1997,7 @@ export const TokenManagePage: React.FC = () => {
                           {/* 订阅类型标签 */}
                           {account.subscription_type === undefined ? (
                             // Loading 状态
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                               <svg
                                 className="animate-spin -ml-0.5 mr-1.5 h-3 w-3 text-gray-500"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -2011,12 +2029,12 @@ export const TokenManagePage: React.FC = () => {
                                 account.subscription_type
                                   .toLowerCase()
                                   .includes("business")
-                                  ? "bg-purple-100 text-purple-800"
+                                  ? "bg-purple-100 dark:bg-purple-900/20 text-purple-800 dark:text-purple-300"
                                   : account.subscription_type
                                       .toLowerCase()
                                       .includes("trial")
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-gray-100 text-gray-800"
+                                  ? "bg-yellow-100 dark:bg-yellow-900/20 text-yellow-800 dark:text-yellow-300"
+                                  : "bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300"
                               }`}
                             >
                               {account.subscription_type}
@@ -2025,7 +2043,7 @@ export const TokenManagePage: React.FC = () => {
                           {/* 试用剩余天数 */}
                           {account.subscription_type === undefined ? (
                             // Loading 状态
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                               <svg
                                 className="animate-spin -ml-0.5 mr-1.5 h-3 w-3 text-gray-500"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -2050,19 +2068,19 @@ export const TokenManagePage: React.FC = () => {
                             </span>
                           ) : account.trial_days_remaining !== undefined &&
                             account.trial_days_remaining !== null ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 dark:bg-orange-900/20 text-orange-800 dark:text-orange-300">
                               ⏰ 剩余 {account.trial_days_remaining} 天
                             </span>
                           ) : null}
                         </div>
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           添加时间: {formatDate(account.created_at)}
                         </p>
                         {/* 订阅状态 */}
                         {account.subscription_type === undefined ? (
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             订阅状态:{" "}
-                            <span className="inline-flex items-center text-gray-400">
+                            <span className="inline-flex items-center text-gray-400 dark:text-gray-500">
                               <svg
                                 className="animate-spin -ml-0.5 mr-1 h-3 w-3"
                                 xmlns="http://www.w3.org/2000/svg"
@@ -2087,7 +2105,7 @@ export const TokenManagePage: React.FC = () => {
                             </span>
                           </p>
                         ) : account.subscription_status ? (
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             订阅状态:{" "}
                             <span
                               className={
@@ -2180,7 +2198,7 @@ export const TokenManagePage: React.FC = () => {
                                     : account.email
                                 );
                               }}
-                              className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-700 bg-gray-100 border border-transparent rounded hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                              className="inline-flex items-center px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 border border-transparent rounded hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
                             >
                               ⚙️ 更多操作
                               <svg
@@ -2200,7 +2218,7 @@ export const TokenManagePage: React.FC = () => {
 
                             {/* 下拉菜单内容 */}
                             {openMenuEmail === account.email && (
-                              <div className="absolute right-0 z-50 w-48 mt-1 bg-white border border-gray-200 rounded-md shadow-lg">
+                              <div className="absolute right-0 z-50 w-48 mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-600 rounded-md shadow-lg">
                                 <div className="py-1">
                                   <button
                                     type="button"
@@ -2210,7 +2228,7 @@ export const TokenManagePage: React.FC = () => {
                                       handleEditAccount(account);
                                       setOpenMenuEmail(null);
                                     }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                                   >
                                     ✏️ 编辑账户
                                   </button>
@@ -2222,7 +2240,7 @@ export const TokenManagePage: React.FC = () => {
                                       handleViewUsage(account);
                                       setOpenMenuEmail(null);
                                     }}
-                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                                   >
                                     📊 查看用量
                                   </button>
@@ -2237,7 +2255,7 @@ export const TokenManagePage: React.FC = () => {
                                           handleViewDashboard(account);
                                           setOpenMenuEmail(null);
                                         }}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                                       >
                                         🏠 查看主页
                                       </button>
@@ -2253,7 +2271,7 @@ export const TokenManagePage: React.FC = () => {
                                           manualBindCardLoading ===
                                           account.email
                                         }
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
                                         {manualBindCardLoading === account.email
                                           ? "🔄 处理中..."
@@ -2268,7 +2286,7 @@ export const TokenManagePage: React.FC = () => {
                                           handleCopyBindCardUrl(account);
                                           setOpenMenuEmail(null);
                                         }}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                                       >
                                         📋 复制绑卡链接
                                       </button>
@@ -2287,7 +2305,7 @@ export const TokenManagePage: React.FC = () => {
                                           cancelSubscriptionLoading ===
                                           account.email
                                         }
-                                        className="flex items-center w-full px-4 py-2 text-sm text-orange-700 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-900/20 disabled:opacity-50 disabled:cursor-not-allowed"
                                       >
                                         {cancelSubscriptionLoading ===
                                         account.email
@@ -2302,7 +2320,7 @@ export const TokenManagePage: React.FC = () => {
                                           handleDeleteCursorAccount(account);
                                           setOpenMenuEmail(null);
                                         }}
-                                        className="flex items-center w-full px-4 py-2 text-sm text-red-700 hover:bg-red-50"
+                                        className="flex items-center w-full px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
                                       >
                                         🚨 注销账户
                                       </button>
@@ -2319,7 +2337,7 @@ export const TokenManagePage: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-gray-500">暂无保存的账户</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">暂无保存的账户</p>
             )}
           </div>
       </PageSection>
@@ -2327,44 +2345,44 @@ export const TokenManagePage: React.FC = () => {
       {/* Edit Account Modal */}
       {showEditForm && editingAccount && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="w-full max-w-md p-6 bg-white rounded-lg shadow-lg">
-            <h3 className="mb-4 text-lg font-medium text-gray-900">
+          <div className="w-full max-w-md p-6 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+            <h3 className="mb-4 text-lg font-medium text-gray-900 dark:text-gray-100">
               编辑账户: {editingAccount.email}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Token
                 </label>
                 <textarea
                   value={editToken}
                   onChange={(e) => setEditToken(e.target.value)}
                   rows={3}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="请输入Token"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Refresh Token (可选)
                 </label>
                 <textarea
                   value={editRefreshToken}
                   onChange={(e) => setEditRefreshToken(e.target.value)}
                   rows={3}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="请输入Refresh Token (可选)"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   WorkOS Session Token (可选)
                 </label>
                 <textarea
                   value={editWorkosSessionToken}
                   onChange={(e) => setEditWorkosSessionToken(e.target.value)}
                   rows={3}
-                  className="block w-full mt-1 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  className="block w-full mt-1 border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   placeholder="请输入WorkOS Session Token (可选，用于注销账户)"
                 />
               </div>
@@ -2372,7 +2390,7 @@ export const TokenManagePage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCancelEdit}
-                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="inline-flex items-center px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   取消
                 </button>
